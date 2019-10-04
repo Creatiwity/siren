@@ -1,9 +1,25 @@
+use chrono::{DateTime, Utc};
 use diesel::deserialize::{self, FromSql};
 use diesel::pg::Pg;
 use diesel::serialize::{self, IsNull, Output, ToSql};
 use diesel::sql_types::Text;
 use serde::{Deserialize, Serialize};
 use std::io::Write;
+
+#[derive(Queryable)]
+pub struct Metadata {
+    pub id: i32,
+    pub group_type: GroupType,
+    pub insee_name: String,
+    pub file_name: String,
+    pub last_imported_timestamp: Option<DateTime<Utc>>,
+    pub last_file_timestamp: Option<DateTime<Utc>>,
+    pub staging_imported_timestamp: Option<DateTime<Utc>>,
+    pub staging_file_timestamp: Option<DateTime<Utc>>,
+    pub url: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, FromSqlRow, AsExpression)]
 #[sql_type = "Text"]

@@ -1,4 +1,5 @@
 use crate::connectors::Connectors;
+use crate::models;
 use crate::models::metadata;
 use crate::models::metadata::common::GroupType;
 use chrono::{DateTime, Utc};
@@ -69,7 +70,7 @@ pub fn step_unzip_file(
 
 pub fn step_insert_data(groups: &Vec<GroupType>, db_folder: &String, connectors: &Connectors) {
     for group in groups {
-        insert_data(&group);
+        insert_data(*group, db_folder, connectors);
     }
 }
 
@@ -183,7 +184,28 @@ fn unzip_file(
     println!("[Unzip] Unzip of {:#?} finished", group);
 }
 
-fn insert_data(group: &GroupType) {}
+fn insert_data(group: GroupType, db_folder: &String, connectors: &Connectors) {
+    println!("[Insert] Insert {:#?}", group);
+
+    let group_metadata = metadata::get(connectors, group).unwrap();
+
+    // Get CSV path
+    let mut csv_path = PathBuf::from(db_folder);
+    csv_path.push(group_metadata.file_name);
+    csv_path.set_extension("csv");
+    let csv_path_str = csv_path.into_os_string().into_string().unwrap();
+
+    match group {
+        GroupType::Etablissements => {
+            models::etablissement::insert_in_staging(connectors, csv_path_str).unwrap();
+        }
+        GroupType::UnitesLegales => {
+            models::unite_legale::insert_in_staging(connectors, csv_path_str).unwrap();
+        }
+    }
+
+    println!("[Insert] Finished insert of {:#?}", group);
+}
 
 fn swap_data(group: &GroupType, force: bool) {}
 
