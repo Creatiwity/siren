@@ -30,25 +30,24 @@ pub fn insert_in_staging(connectors: &Connectors, file_path: String) -> Result<b
         .map_err(|error| error.into())
 }
 
-pub fn swap(connectors: &Connectors) -> Result<bool, Error> {
+pub fn swap(connectors: &Connectors) -> Result<(), Error> {
     let connection = connectors.local.pool.get()?;
-    sql_query(
-        r#"
-        BEGIN;
-        ALTER TABLE unite_legale RENAME TO unite_legale_temp;
-        ALTER TABLE unite_legale_staging RENAME TO unite_legale;
-        ALTER TABLE unite_legale_temp RENAME TO unite_legale_staging;
-        TRUNCATE unite_legale_staging;
-        UPDATE group_metadata
-        SET last_imported_timestamp = staging_imported_timestamp, last_file_timestamp = staging_file_timestamp
-        WHERE group_type = 'unites_legales';
-        UPDATE group_metadata
-        SET staging_imported_timestamp = NULL
-        WHERE group_type = 'unites_legales';
-        COMMIT;
-        "#,
-    )
-    .execute(&connection)
-    .map(|count| count > 0)
-    .map_err(|error| error.into())
+    connection.build_transaction().read_write().run(|| {
+        sql_query("ALTER TABLE unite_legale RENAME TO unite_legale_temp").execute(&connection)?;
+        sql_query("ALTER TABLE unite_legale_staging RENAME TO unite_legale").execute(&connection)?;
+        sql_query("ALTER TABLE unite_legale_temp RENAME TO unite_legale_staging").execute(&connection)?;
+        sql_query("TRUNCATE unite_legale_staging").execute(&connection)?;
+        sql_query(r#"
+            UPDATE group_metadata
+            SET last_imported_timestamp = staging_imported_timestamp, last_file_timestamp = staging_file_timestamp
+            WHERE group_type = 'unites_legales'
+        "#).execute(&connection)?;
+        sql_query(r#"
+            UPDATE group_metadata
+            SET staging_imported_timestamp = NULL
+            WHERE group_type = 'unites_legales'
+        "#).execute(&connection)?;
+
+        Ok(())
+    })
 }

@@ -76,7 +76,7 @@ pub fn step_insert_data(groups: &Vec<GroupType>, db_folder: &String, connectors:
 
 pub fn step_swap_data(groups: &Vec<GroupType>, force: bool, connectors: &Connectors) {
     for group in groups {
-        swap_data(&group, force);
+        swap_data(&group, force, connectors);
     }
 }
 
@@ -207,6 +207,19 @@ fn insert_data(group: GroupType, db_folder: &String, connectors: &Connectors) {
     println!("[Insert] Finished insert of {:#?}", group);
 }
 
-fn swap_data(group: &GroupType, force: bool) {}
+fn swap_data(group: &GroupType, force: bool, connectors: &Connectors) {
+    println!("[Insert] Swapping {:#?}", group);
+
+    match group {
+        GroupType::Etablissements => {
+            models::etablissement::swap(connectors).unwrap();
+        }
+        GroupType::UnitesLegales => {
+            models::unite_legale::swap(connectors).unwrap();
+        }
+    }
+
+    println!("[Insert] Swap of {:#?} finished", group);
+}
 
 fn clean_file(group: &GroupType) {}
