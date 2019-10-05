@@ -7,7 +7,7 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-chrono = "0.4"
+chrono = { version = "0.4", features = ["serde"] }
 clap = { git = "https://github.com/clap-rs/clap.git" }
 custom_error = "1.7"
 diesel = { version = "1.4", features = ["postgres", "chrono", "r2d2", "64-column-tables"] }

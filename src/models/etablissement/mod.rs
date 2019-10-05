@@ -2,20 +2,42 @@ mod columns;
 pub mod common;
 mod error;
 
-use super::schema::group_metadata::dsl;
+use super::schema::etablissement::dsl;
 use crate::connectors::Connectors;
 use common::Etablissement;
 use diesel::prelude::*;
 use diesel::sql_query;
 use error::Error;
 
-/*pub fn get(connectors: &Connectors, siret: String) -> Result<Etablissement, Error> {
+pub fn get(connectors: &Connectors, siret: &String) -> Result<Etablissement, Error> {
     let connection = connectors.local.pool.get()?;
     dsl::etablissement
         .find(siret)
         .first::<Etablissement>(&connection)
         .map_err(|error| error.into())
-}*/
+}
+
+pub fn get_with_siren(
+    connectors: &Connectors,
+    siren: &String,
+) -> Result<Vec<Etablissement>, Error> {
+    let connection = connectors.local.pool.get()?;
+    dsl::etablissement
+        .filter(dsl::siren.eq(siren))
+        .load::<Etablissement>(&connection)
+        .map_err(|error| error.into())
+}
+
+pub fn get_siege_with_siren(
+    connectors: &Connectors,
+    siren: &String,
+) -> Result<Etablissement, Error> {
+    let connection = connectors.local.pool.get()?;
+    dsl::etablissement
+        .filter(dsl::siren.eq(siren).and(dsl::etablissement_siege.eq(true)))
+        .first::<Etablissement>(&connection)
+        .map_err(|error| error.into())
+}
 
 pub fn insert_in_staging(connectors: &Connectors, file_path: String) -> Result<bool, Error> {
     let connection = connectors.local.pool.get()?;

@@ -2,20 +2,20 @@ mod columns;
 pub mod common;
 mod error;
 
-use super::schema::group_metadata::dsl;
+use super::schema::unite_legale::dsl;
 use crate::connectors::Connectors;
 use common::UniteLegale;
 use diesel::prelude::*;
 use diesel::sql_query;
 use error::Error;
 
-/*pub fn get(connectors: &Connectors, siret: String) -> Result<UniteLegale, Error> {
+pub fn get(connectors: &Connectors, siren: &String) -> Result<UniteLegale, Error> {
     let connection = connectors.local.pool.get()?;
     dsl::unite_legale
-        .find(siret)
+        .find(siren)
         .first::<UniteLegale>(&connection)
         .map_err(|error| error.into())
-}*/
+}
 
 pub fn insert_in_staging(connectors: &Connectors, file_path: String) -> Result<bool, Error> {
     let connection = connectors.local.pool.get()?;

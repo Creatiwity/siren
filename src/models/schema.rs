@@ -10,7 +10,7 @@ table! {
         activite_principale_registre_metiers -> Nullable<Text>,
         date_dernier_traitement -> Nullable<Timestamp>,
         etablissement_siege -> Bool,
-        nombre_periodes -> Nullable<Int8>,
+        nombre_periodes -> Nullable<Int4>,
         complement_adresse -> Nullable<Text>,
         numero_voie -> Nullable<Text>,
         indice_repetition -> Nullable<Text>,
@@ -46,7 +46,7 @@ table! {
         enseigne_3 -> Nullable<Text>,
         denomination_usuelle -> Nullable<Text>,
         activite_principale -> Nullable<Text>,
-        nomenclature_activitePrincipale -> Nullable<Text>,
+        nomenclature_activite_principale -> Nullable<Text>,
         caractere_employeur -> Nullable<Text>,
     }
 }
@@ -63,7 +63,7 @@ table! {
         activite_principale_registre_metiers -> Nullable<Text>,
         date_dernier_traitement -> Nullable<Timestamp>,
         etablissement_siege -> Bool,
-        nombre_periodes -> Nullable<Int8>,
+        nombre_periodes -> Nullable<Int4>,
         complement_adresse -> Nullable<Text>,
         numero_voie -> Nullable<Text>,
         indice_repetition -> Nullable<Text>,
@@ -99,7 +99,7 @@ table! {
         enseigne_3 -> Nullable<Text>,
         denomination_usuelle -> Nullable<Text>,
         activite_principale -> Nullable<Text>,
-        nomenclature_activitePrincipale -> Nullable<Text>,
+        nomenclature_activite_principale -> Nullable<Text>,
         caractere_employeur -> Nullable<Text>,
     }
 }
@@ -138,7 +138,7 @@ table! {
         tranche_effectifs -> Nullable<Varchar>,
         annee_effectifs -> Nullable<Int4>,
         date_dernier_traitement -> Nullable<Timestamp>,
-        nombre_periodes -> Nullable<Int8>,
+        nombre_periodes -> Nullable<Int4>,
         categorie_entreprise -> Nullable<Text>,
         annee_categorie_entreprise -> Nullable<Int4>,
         date_debut -> Nullable<Date>,
@@ -176,7 +176,7 @@ table! {
         tranche_effectifs -> Nullable<Varchar>,
         annee_effectifs -> Nullable<Int4>,
         date_dernier_traitement -> Nullable<Timestamp>,
-        nombre_periodes -> Nullable<Int8>,
+        nombre_periodes -> Nullable<Int4>,
         categorie_entreprise -> Nullable<Text>,
         annee_categorie_entreprise -> Nullable<Int4>,
         date_debut -> Nullable<Date>,

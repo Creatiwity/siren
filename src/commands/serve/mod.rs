@@ -71,5 +71,5 @@ pub fn run(flags: ServeFlags, builders: ConnectorsBuilders) {
         .port(port)
         .finalize();
 
-    runner::run(config.unwrap())
+    runner::run(config.unwrap(), builders)
 }
