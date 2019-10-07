@@ -1,3 +1,4 @@
+use super::super::schema::group_metadata;
 use chrono::{DateTime, Utc};
 use diesel::deserialize::{self, FromSql};
 use diesel::pg::Pg;
@@ -12,13 +13,22 @@ pub struct Metadata {
     pub group_type: GroupType,
     pub insee_name: String,
     pub file_name: String,
-    pub last_imported_timestamp: Option<DateTime<Utc>>,
-    pub last_file_timestamp: Option<DateTime<Utc>>,
-    pub staging_imported_timestamp: Option<DateTime<Utc>>,
     pub staging_file_timestamp: Option<DateTime<Utc>>,
+    pub staging_csv_file_timestamp: Option<DateTime<Utc>>,
+    pub staging_imported_timestamp: Option<DateTime<Utc>>,
+    pub last_imported_timestamp: Option<DateTime<Utc>>,
     pub url: String,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+}
+
+#[derive(AsChangeset)]
+#[table_name = "group_metadata"]
+#[changeset_options(treat_none_as_null = "true")]
+pub struct MetadataTimestamps {
+    pub staging_file_timestamp: Option<DateTime<Utc>>,
+    pub staging_csv_file_timestamp: Option<DateTime<Utc>>,
+    pub staging_imported_timestamp: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, FromSqlRow, AsExpression)]

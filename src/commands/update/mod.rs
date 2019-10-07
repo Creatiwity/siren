@@ -102,11 +102,17 @@ pub fn run(flags: UpdateFlags, builders: ConnectorsBuilders) {
                     runner::step_download_file(&group_type, &temp_folder, flags.force, &connectors);
             }
             UpdateSubCommand::UnzipFile => {
-                result =
-                    runner::step_unzip_file(&group_type, &temp_folder, &file_folder, &connectors);
+                result = runner::step_unzip_file(
+                    &group_type,
+                    &temp_folder,
+                    &file_folder,
+                    flags.force,
+                    &connectors,
+                );
             }
             UpdateSubCommand::InsertData => {
-                result = runner::step_insert_data(&group_type, &db_folder, &connectors);
+                result =
+                    runner::step_insert_data(&group_type, &db_folder, flags.force, &connectors);
             }
             UpdateSubCommand::SwapData => {
                 result = runner::step_swap_data(&group_type, flags.force, &connectors);

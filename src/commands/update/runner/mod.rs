@@ -32,11 +32,17 @@ pub fn update(
         step_download_file(groups, &config.temp_folder, config.force, connectors)?;
 
         println!("[Update] Unzipping files");
-        step_unzip_file(groups, &config.temp_folder, &config.file_folder, connectors)?;
+        step_unzip_file(
+            groups,
+            &config.temp_folder,
+            &config.file_folder,
+            config.force,
+            connectors,
+        )?;
     }
 
     println!("[Update] Inserting data");
-    step_insert_data(groups, &config.db_folder, connectors)?;
+    step_insert_data(groups, &config.db_folder, config.force, connectors)?;
 
     println!("[Update] Swaping data");
     step_swap_data(groups, config.force, connectors)?;
@@ -67,10 +73,11 @@ pub fn step_unzip_file(
     groups: &Vec<GroupType>,
     temp_folder: &String,
     file_folder: &String,
+    force: bool,
     connectors: &Connectors,
 ) -> Result<(), Error> {
     for group in groups {
-        unzip_file(*group, temp_folder, file_folder, connectors)?;
+        unzip_file(*group, temp_folder, file_folder, force, connectors)?;
     }
     Ok(())
 }
@@ -78,10 +85,11 @@ pub fn step_unzip_file(
 pub fn step_insert_data(
     groups: &Vec<GroupType>,
     db_folder: &String,
+    force: bool,
     connectors: &Connectors,
 ) -> Result<(), Error> {
     for group in groups {
-        insert_data(*group, db_folder, connectors)?;
+        insert_data(*group, db_folder, force, connectors)?;
     }
     Ok(())
 }
@@ -144,7 +152,7 @@ fn download_file(
 
     // Test if not already imported or downloaded
     if !force {
-        if let Some(last_imported_timestamp) = group_metadata.last_file_timestamp {
+        if let Some(last_imported_timestamp) = group_metadata.last_imported_timestamp {
             if last_modified.le(&last_imported_timestamp) {
                 println!("[Download] {:#?} already imported", group);
                 return Ok(());
@@ -175,11 +183,38 @@ fn unzip_file(
     group: GroupType,
     temp_folder: &String,
     file_folder: &String,
+    force: bool,
     connectors: &Connectors,
 ) -> Result<(), Error> {
     println!("[Unzip] Unzipping {:#?}", group);
 
     let group_metadata = metadata::get(connectors, group)?;
+
+    // Unzip only if zip file is referenced in database
+    let staging_file_timestamp = match group_metadata.staging_file_timestamp {
+        Some(staging_file_timestamp) => staging_file_timestamp,
+        None => {
+            println!("[Unzip] Nothing to unzip for {:#?}", group);
+            return Ok(());
+        }
+    };
+
+    // Test if not already imported or unzipped
+    if !force {
+        if let Some(staging_csv_file_timestamp) = group_metadata.staging_csv_file_timestamp {
+            if let Some(last_imported_timestamp) = group_metadata.last_imported_timestamp {
+                if staging_csv_file_timestamp.le(&last_imported_timestamp) {
+                    println!("[Unzip] {:#?} already imported", group);
+                    return Ok(());
+                }
+            }
+
+            if staging_file_timestamp.le(&staging_csv_file_timestamp) {
+                println!("[Unzip] {:#?} already unzipped", group);
+                return Ok(());
+            }
+        }
+    }
 
     // Get Zip path
     let mut zip_path = PathBuf::from(temp_folder);
@@ -231,15 +266,48 @@ fn unzip_file(
         }
     }
 
+    models::metadata::set_staging_csv_file_timestamp(connectors, group, staging_file_timestamp)?;
+
     println!("[Unzip] Unzip of {:#?} finished", group);
 
     Ok(())
 }
 
-fn insert_data(group: GroupType, db_folder: &String, connectors: &Connectors) -> Result<(), Error> {
+fn insert_data(
+    group: GroupType,
+    db_folder: &String,
+    force: bool,
+    connectors: &Connectors,
+) -> Result<(), Error> {
     println!("[Insert] Insert {:#?}", group);
 
     let group_metadata = metadata::get(connectors, group)?;
+
+    // Insert only if csv file is referenced in database
+    let staging_csv_file_timestamp = match group_metadata.staging_csv_file_timestamp {
+        Some(staging_csv_file_timestamp) => staging_csv_file_timestamp,
+        None => {
+            println!("[Insert] Nothing to insert for {:#?}", group);
+            return Ok(());
+        }
+    };
+
+    // Test if not already inserted
+    if !force {
+        if let Some(staging_imported_timestamp) = group_metadata.staging_imported_timestamp {
+            if let Some(last_imported_timestamp) = group_metadata.last_imported_timestamp {
+                if staging_imported_timestamp.le(&last_imported_timestamp) {
+                    println!("[Insert] {:#?} already imported", group);
+                    return Ok(());
+                }
+            }
+
+            if staging_csv_file_timestamp.le(&staging_imported_timestamp) {
+                println!("[Insert] {:#?} already inserted", group);
+                return Ok(());
+            }
+        }
+    }
 
     // Get CSV path
     let mut csv_path = PathBuf::from(db_folder);
@@ -261,6 +329,12 @@ fn insert_data(group: GroupType, db_folder: &String, connectors: &Connectors) ->
         }
     }
 
+    models::metadata::set_staging_imported_timestamp(
+        connectors,
+        group,
+        staging_csv_file_timestamp,
+    )?;
+
     println!("[Insert] Finished insert of {:#?}", group);
 
     Ok(())
@@ -268,6 +342,27 @@ fn insert_data(group: GroupType, db_folder: &String, connectors: &Connectors) ->
 
 fn swap_data(group_type: GroupType, force: bool, connectors: &Connectors) -> Result<(), Error> {
     println!("[Insert] Swapping {:#?}", group_type);
+
+    let group_metadata = metadata::get(connectors, group_type)?;
+
+    // Swap only if inserted data are referenced in database
+    let staging_imported_timestamp = match group_metadata.staging_imported_timestamp {
+        Some(staging_imported_timestamp) => staging_imported_timestamp,
+        None => {
+            println!("[Swap] Nothing to swap for {:#?}", group_type);
+            return Ok(());
+        }
+    };
+
+    // Test if not already swapped
+    if !force {
+        if let Some(last_imported_timestamp) = group_metadata.last_imported_timestamp {
+            if staging_imported_timestamp.le(&last_imported_timestamp) {
+                println!("[Swap] {:#?} already imported", group_type);
+                return Ok(());
+            }
+        }
+    }
 
     match group_type {
         GroupType::Etablissements => {
@@ -306,6 +401,12 @@ fn swap_data(group_type: GroupType, force: bool, connectors: &Connectors) -> Res
         }
     }
 
+    models::metadata::set_last_imported_timestamp(
+        connectors,
+        group_type,
+        staging_imported_timestamp,
+    )?;
+
     println!("[Insert] Swap of {:#?} finished", group_type);
 
     Ok(())
@@ -338,6 +439,8 @@ fn clean_file(
     if let Err(error) = remove_file(csv_path) {
         println!("[Clean] CSV not deleted ({})", error);
     }
+
+    models::metadata::reset_staging_timestamps(connectors, group)?;
 
     println!("[Clean] Finished cleaning of {:#?}", group);
 
