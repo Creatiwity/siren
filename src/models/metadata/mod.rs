@@ -1,5 +1,5 @@
 pub mod common;
-mod error;
+pub mod error;
 
 use super::schema::group_metadata::dsl;
 use crate::connectors::Connectors;

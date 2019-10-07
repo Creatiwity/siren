@@ -82,46 +82,56 @@ pub fn run(flags: UpdateFlags, builders: ConnectorsBuilders) {
 
     let temp_folder = flags
         .temp_folder
-        .unwrap_or_else(|| env::var("TEMP_FOLDER").expect("Missing TEMP_FOLDER"));
+        .unwrap_or_else(|| env::var("TEMP_FOLDER").unwrap_or(String::from("./data/temp")));
 
     let file_folder = flags
         .file_folder
-        .unwrap_or_else(|| env::var("FILE_FOLDER").expect("Missing FILE_FOLDER"));
+        .unwrap_or_else(|| env::var("FILE_FOLDER").unwrap_or(String::from("./data/files")));
 
     let db_folder = flags
         .db_folder
         .unwrap_or_else(|| env::var("DB_FOLDER").unwrap_or(file_folder.clone()));
 
     let connectors = builders.create();
+    let result: Result<(), runner::error::Error>;
 
     match flags.subcmd {
         Some(subcmd) => match subcmd {
             UpdateSubCommand::DownloadFile => {
-                runner::step_download_file(&group_type, &temp_folder, &connectors);
+                result =
+                    runner::step_download_file(&group_type, &temp_folder, flags.force, &connectors);
             }
             UpdateSubCommand::UnzipFile => {
-                runner::step_unzip_file(&group_type, &temp_folder, &file_folder, &connectors);
+                result =
+                    runner::step_unzip_file(&group_type, &temp_folder, &file_folder, &connectors);
             }
             UpdateSubCommand::InsertData => {
-                runner::step_insert_data(&group_type, &db_folder, &connectors);
+                result = runner::step_insert_data(&group_type, &db_folder, &connectors);
             }
             UpdateSubCommand::SwapData => {
-                runner::step_swap_data(&group_type, flags.force, &connectors);
+                result = runner::step_swap_data(&group_type, flags.force, &connectors);
             }
             UpdateSubCommand::CleanFile => {
-                runner::step_clean_file(&group_type, &temp_folder, &file_folder, &connectors);
+                result =
+                    runner::step_clean_file(&group_type, &temp_folder, &file_folder, &connectors);
             }
         },
-        None => runner::update(
-            &group_type,
-            runner::Config {
-                force: flags.force,
-                data_only: flags.data_only,
-                temp_folder,
-                file_folder,
-                db_folder,
-            },
-            &connectors,
-        ),
+        None => {
+            result = runner::update(
+                &group_type,
+                runner::Config {
+                    force: flags.force,
+                    data_only: flags.data_only,
+                    temp_folder,
+                    file_folder,
+                    db_folder,
+                },
+                &connectors,
+            )
+        }
+    }
+
+    if let Err(error) = result {
+        error.exit();
     }
 }

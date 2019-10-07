@@ -48,3 +48,12 @@ impl FromSql<Text, Pg> for GroupType {
         }
     }
 }
+
+impl std::fmt::Display for GroupType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            GroupType::UnitesLegales => write!(f, "unités légales"),
+            GroupType::Etablissements => write!(f, "établissements"),
+        }
+    }
+}
