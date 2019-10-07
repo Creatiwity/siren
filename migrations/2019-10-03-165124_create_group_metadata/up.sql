@@ -17,6 +17,8 @@ CREATE TABLE "public"."group_metadata"
 CREATE UNIQUE INDEX "group_metadata_unique_group" ON "public"."group_metadata" USING BTREE
 ("group_type");
 
+SELECT diesel_manage_updated_at('group_metadata');
+
 INSERT INTO "public"."group_metadata"
     ("group_type", "insee_name", "file_name", "url")
 VALUES
