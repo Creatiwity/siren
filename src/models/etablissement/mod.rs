@@ -17,6 +17,24 @@ pub fn get(connectors: &Connectors, siret: &String) -> Result<Etablissement, Err
         .map_err(|error| error.into())
 }
 
+pub fn count(connectors: &Connectors) -> Result<i64, Error> {
+    let connection = connectors.local.pool.get()?;
+    dsl::etablissement
+        .select(diesel::dsl::count(dsl::siret))
+        .first::<i64>(&connection)
+        .map_err(|error| error.into())
+}
+
+pub fn count_staging(connectors: &Connectors) -> Result<i64, Error> {
+    use super::schema::etablissement_staging::dsl;
+
+    let connection = connectors.local.pool.get()?;
+    dsl::etablissement_staging
+        .select(diesel::dsl::count(dsl::siret))
+        .first::<i64>(&connection)
+        .map_err(|error| error.into())
+}
+
 pub fn get_with_siren(
     connectors: &Connectors,
     siren: &String,

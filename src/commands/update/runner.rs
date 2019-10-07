@@ -212,9 +212,38 @@ fn swap_data(group: &GroupType, force: bool, connectors: &Connectors) {
 
     match group {
         GroupType::Etablissements => {
+            if !force {
+                let count = models::etablissement::count(connectors).unwrap() as f64;
+                let count_staging =
+                    models::etablissement::count_staging(connectors).unwrap() as f64;
+
+                let max_count_staging = count * 1.01;
+                let min_count_staging = count * 0.99;
+
+                if count != 0.0
+                    && (count_staging < min_count_staging || max_count_staging < count_staging)
+                {
+                    panic!("Swapping stopped on etablissement, more than 1% difference between the old values and the new ones. Use --force to override.");
+                }
+            }
+
             models::etablissement::swap(connectors).unwrap();
         }
         GroupType::UnitesLegales => {
+            if !force {
+                let count = models::unite_legale::count(connectors).unwrap() as f64;
+                let count_staging = models::unite_legale::count_staging(connectors).unwrap() as f64;
+
+                let max_count_staging = count * 1.01;
+                let min_count_staging = count * 0.99;
+
+                if count != 0.0
+                    && (count_staging < min_count_staging || max_count_staging < count_staging)
+                {
+                    panic!("Swapping stopped on unite_legale, more than 1% difference between the old values and the new ones. Use --force to override.");
+                }
+            }
+
             models::unite_legale::swap(connectors).unwrap();
         }
     }

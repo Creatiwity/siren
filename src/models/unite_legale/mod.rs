@@ -17,6 +17,24 @@ pub fn get(connectors: &Connectors, siren: &String) -> Result<UniteLegale, Error
         .map_err(|error| error.into())
 }
 
+pub fn count(connectors: &Connectors) -> Result<i64, Error> {
+    let connection = connectors.local.pool.get()?;
+    dsl::unite_legale
+        .select(diesel::dsl::count(dsl::siren))
+        .first::<i64>(&connection)
+        .map_err(|error| error.into())
+}
+
+pub fn count_staging(connectors: &Connectors) -> Result<i64, Error> {
+    use super::schema::unite_legale_staging::dsl;
+
+    let connection = connectors.local.pool.get()?;
+    dsl::unite_legale_staging
+        .select(diesel::dsl::count(dsl::siren))
+        .first::<i64>(&connection)
+        .map_err(|error| error.into())
+}
+
 pub fn insert_in_staging(connectors: &Connectors, file_path: String) -> Result<bool, Error> {
     let connection = connectors.local.pool.get()?;
     let query = format!(
