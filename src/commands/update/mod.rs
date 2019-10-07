@@ -109,7 +109,7 @@ pub fn run(flags: UpdateFlags, builders: ConnectorsBuilders) {
                 runner::step_swap_data(&group_type, flags.force, &connectors);
             }
             UpdateSubCommand::CleanFile => {
-                runner::step_clean_file(&group_type, &connectors);
+                runner::step_clean_file(&group_type, &temp_folder, &file_folder, &connectors);
             }
         },
         None => runner::update(

@@ -4,7 +4,7 @@ use crate::models::metadata;
 use crate::models::metadata::common::GroupType;
 use chrono::{DateTime, Utc};
 use reqwest::header::LAST_MODIFIED;
-use std::fs::{create_dir_all, set_permissions, File, Permissions};
+use std::fs::{create_dir_all, remove_file, set_permissions, File, Permissions};
 use std::io;
 use std::path::PathBuf;
 
@@ -40,7 +40,7 @@ pub fn update(groups: &Vec<GroupType>, config: Config, connectors: &Connectors) 
 
     if !config.data_only {
         println!("[Update] Cleaning files");
-        step_clean_file(groups, connectors);
+        step_clean_file(groups, &config.temp_folder, &config.file_folder, connectors);
     }
 
     println!("[Update] Finished");
@@ -76,13 +76,18 @@ pub fn step_insert_data(groups: &Vec<GroupType>, db_folder: &String, connectors:
 
 pub fn step_swap_data(groups: &Vec<GroupType>, force: bool, connectors: &Connectors) {
     for group in groups {
-        swap_data(&group, force, connectors);
+        swap_data(*group, force, connectors);
     }
 }
 
-pub fn step_clean_file(groups: &Vec<GroupType>, connectors: &Connectors) {
+pub fn step_clean_file(
+    groups: &Vec<GroupType>,
+    temp_folder: &String,
+    file_folder: &String,
+    connectors: &Connectors,
+) {
     for group in groups {
-        clean_file(&group);
+        clean_file(*group, temp_folder, file_folder, connectors);
     }
 }
 
@@ -207,7 +212,7 @@ fn insert_data(group: GroupType, db_folder: &String, connectors: &Connectors) {
     println!("[Insert] Finished insert of {:#?}", group);
 }
 
-fn swap_data(group: &GroupType, force: bool, connectors: &Connectors) {
+fn swap_data(group: GroupType, force: bool, connectors: &Connectors) {
     println!("[Insert] Swapping {:#?}", group);
 
     match group {
@@ -251,4 +256,32 @@ fn swap_data(group: &GroupType, force: bool, connectors: &Connectors) {
     println!("[Insert] Swap of {:#?} finished", group);
 }
 
-fn clean_file(group: &GroupType) {}
+fn clean_file(
+    group: GroupType,
+    temp_folder: &String,
+    file_folder: &String,
+    connectors: &Connectors,
+) {
+    println!("[Clean] Cleaning {:#?}", group);
+
+    let group_metadata = metadata::get(connectors, group).unwrap();
+
+    // Get Zip path
+    let mut zip_path = PathBuf::from(temp_folder);
+    zip_path.push(group_metadata.file_name.clone());
+    zip_path.set_extension("zip");
+
+    // Get CSV path
+    let mut csv_path = PathBuf::from(file_folder);
+    csv_path.push(group_metadata.file_name);
+    csv_path.set_extension("csv");
+
+    let zip_result = remove_file(zip_path);
+    let csv_result = remove_file(csv_path);
+
+    // Panic at the end if at least one file was not deleted
+    zip_result.unwrap();
+    csv_result.unwrap();
+
+    println!("[Clean] Finished cleaning of {:#?}", group);
+}
