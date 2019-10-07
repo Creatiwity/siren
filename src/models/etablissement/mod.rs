@@ -59,6 +59,7 @@ pub fn get_siege_with_siren(
 
 pub fn insert_in_staging(connectors: &Connectors, file_path: String) -> Result<bool, Error> {
     let connection = connectors.local.pool.get()?;
+    sql_query("TRUNCATE etablissement_staging").execute(&connection)?;
     let query = format!(
         "COPY etablissement_staging({}) FROM '{}' DELIMITER ',' CSV HEADER",
         columns::COLUMNS,
@@ -74,19 +75,27 @@ pub fn swap(connectors: &Connectors) -> Result<(), Error> {
     let connection = connectors.local.pool.get()?;
     connection.build_transaction().read_write().run(|| {
         sql_query("ALTER TABLE etablissement RENAME TO etablissement_temp").execute(&connection)?;
-        sql_query("ALTER TABLE etablissement_staging RENAME TO etablissement").execute(&connection)?;
-        sql_query("ALTER TABLE etablissement_temp RENAME TO etablissement_staging").execute(&connection)?;
+        sql_query("ALTER TABLE etablissement_staging RENAME TO etablissement")
+            .execute(&connection)?;
+        sql_query("ALTER TABLE etablissement_temp RENAME TO etablissement_staging")
+            .execute(&connection)?;
         sql_query("TRUNCATE etablissement_staging").execute(&connection)?;
-        sql_query(r#"
+        sql_query(
+            r#"
             UPDATE group_metadata
-            SET last_imported_timestamp = staging_imported_timestamp, last_file_timestamp = staging_file_timestamp
+            SET last_imported_timestamp = staging_imported_timestamp
             WHERE group_type = 'etablissements'
-        "#).execute(&connection)?;
-        sql_query(r#"
+            "#,
+        )
+        .execute(&connection)?;
+        sql_query(
+            r#"
             UPDATE group_metadata
             SET staging_imported_timestamp = NULL
             WHERE group_type = 'etablissements'
-        "#).execute(&connection)?;
+            "#,
+        )
+        .execute(&connection)?;
 
         Ok(())
     })

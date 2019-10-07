@@ -37,6 +37,7 @@ pub fn count_staging(connectors: &Connectors) -> Result<i64, Error> {
 
 pub fn insert_in_staging(connectors: &Connectors, file_path: String) -> Result<bool, Error> {
     let connection = connectors.local.pool.get()?;
+    sql_query("TRUNCATE unite_legale_staging").execute(&connection)?;
     let query = format!(
         "COPY unite_legale_staging({}) FROM '{}' DELIMITER ',' CSV HEADER",
         columns::COLUMNS,
@@ -52,19 +53,27 @@ pub fn swap(connectors: &Connectors) -> Result<(), Error> {
     let connection = connectors.local.pool.get()?;
     connection.build_transaction().read_write().run(|| {
         sql_query("ALTER TABLE unite_legale RENAME TO unite_legale_temp").execute(&connection)?;
-        sql_query("ALTER TABLE unite_legale_staging RENAME TO unite_legale").execute(&connection)?;
-        sql_query("ALTER TABLE unite_legale_temp RENAME TO unite_legale_staging").execute(&connection)?;
+        sql_query("ALTER TABLE unite_legale_staging RENAME TO unite_legale")
+            .execute(&connection)?;
+        sql_query("ALTER TABLE unite_legale_temp RENAME TO unite_legale_staging")
+            .execute(&connection)?;
         sql_query("TRUNCATE unite_legale_staging").execute(&connection)?;
-        sql_query(r#"
+        sql_query(
+            r#"
             UPDATE group_metadata
-            SET last_imported_timestamp = staging_imported_timestamp, last_file_timestamp = staging_file_timestamp
+            SET last_imported_timestamp = staging_imported_timestamp
             WHERE group_type = 'unites_legales'
-        "#).execute(&connection)?;
-        sql_query(r#"
+            "#,
+        )
+        .execute(&connection)?;
+        sql_query(
+            r#"
             UPDATE group_metadata
             SET staging_imported_timestamp = NULL
             WHERE group_type = 'unites_legales'
-        "#).execute(&connection)?;
+            "#,
+        )
+        .execute(&connection)?;
 
         Ok(())
     })
