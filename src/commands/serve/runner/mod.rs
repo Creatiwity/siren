@@ -59,7 +59,7 @@ fn etablissements(
 
 pub fn run(config: Config, builders: ConnectorsBuilders) {
     rocket::custom(config)
-        .mount("/", routes![index, unites_legales, etablissements])
+        .mount("/v3", routes![index, unites_legales, etablissements])
         .manage(Context {
             connectors: builders.create(),
         })
