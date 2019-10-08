@@ -1,0 +1,42 @@
+version: "3"
+
+networks:
+  siren_network:
+    external: false
+
+services:
+  siren:
+    image: creatiwity/siren
+    container_name: siren
+    restart: unless-stopped
+    user: "${DOCKER_UID}:${DOCKER_GID}"
+    ports:
+      - "3000:3000"
+    environment:
+      - RUST_LOG=${RUST_LOG}
+      - SIRENE_ENV=${SIRENE_ENV}
+      - DATABASE_URL=${DATABASE_URL}
+      - TEMP_FOLDER=/app/data/temp
+      - FILES_FOLDER=/app/data/files
+    volumes:
+      - ./docker/data/:/app/data/
+    depends_on:
+      - db
+    networks:
+      - siren_network
+  db:
+    image: postgres:12
+    container_name: db
+    restart: unless-stopped
+    user: "${DOCKER_UID}:${DOCKER_GID}"
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+      - PGUSER=${DOCKER_USER}
+    volumes:
+      - ./docker/postgres:/var/lib/postgresql/data
+      - ./docker/data/:/app/data/:ro
+      - /etc/passwd:/etc/passwd:ro
+    networks:
+      - siren_network
