@@ -16,18 +16,19 @@ before_script:
     else
       DOCKER_TAG="$TRAVIS_BRANCH"
     fi
+    DOCKER_BUILDER_TAG="builder-${DOCKER_TAG}"
   - docker pull $IMAGE_NAME:builder || true
   - docker pull $IMAGE_NAME:$DOCKER_TAG || true
 
 script:
   - docker build
     --target builder
-    --cache-from $IMAGE_NAME:builder
+    --cache-from $IMAGE_NAME:$DOCKER_BUILDER_TAG
     --tag $IMAGE_NAME:builder
     --file ./Dockerfile
     "."
   - docker build
-    --cache-from $IMAGE_NAME:$DOCKER_TAG
+    --cache-from $IMAGE_NAME:$DOCKER_BUILDER_TAG
     --tag $IMAGE_NAME:$DOCKER_TAG
     --file ./Dockerfile
     "."
