@@ -17,25 +17,25 @@ before_script:
       DOCKER_TAG="$TRAVIS_BRANCH"
     fi
     DOCKER_BUILDER_TAG="builder-${DOCKER_TAG}"
-  - docker pull $IMAGE_NAME:builder || true
+  - docker pull $IMAGE_NAME:$DOCKER_BUILDER_TAG || true
   - docker pull $IMAGE_NAME:$DOCKER_TAG || true
 
 script:
   - docker build
     --target builder
     --cache-from $IMAGE_NAME:$DOCKER_BUILDER_TAG
-    --tag $IMAGE_NAME:builder
+    --tag $IMAGE_NAME:$DOCKER_BUILDER_TAG
     --file ./Dockerfile
     "."
   - docker build
-    --cache-from $IMAGE_NAME:$DOCKER_BUILDER_TAG
+    --cache-from $IMAGE_NAME:$DOCKER_TAG,$IMAGE_NAME:$DOCKER_BUILDER_TAG
     --tag $IMAGE_NAME:$DOCKER_TAG
     --file ./Dockerfile
     "."
 
 after_success:
   - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
-  - docker push $IMAGE_NAME:builder
+  - docker push $IMAGE_NAME:$DOCKER_BUILDER_TAG
   - docker push $IMAGE_NAME:$DOCKER_TAG
 
 branches:
