@@ -34,9 +34,21 @@ script:
     "."
 
 after_success:
-  - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
-  - docker push $IMAGE_NAME:$DOCKER_BUILDER_TAG
-  - docker push $IMAGE_NAME:$DOCKER_TAG
+  - |
+    if [ "$TRAVIS_BRANCH" = "false" ]; then
+      echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+      docker push $IMAGE_NAME:$DOCKER_BUILDER_TAG
+      docker push $IMAGE_NAME:$DOCKER_TAG
+
+      if [ ""]; then
+        docker run -v $PWD:/workspace \
+          -e DOCKERHUB_USERNAME='$DOCKER_USERNAME' \
+          -e DOCKERHUB_PASSWORD='$DOCKER_PASSWORD' \
+          -e DOCKERHUB_REPOSITORY='$IMAGE_NAME' \
+          -e README_FILEPATH='/workspace/README.md' \
+          peterevans/dockerhub-description:2.0.0
+      fi
+    fi
 
 branches:
   only:
