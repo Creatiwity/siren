@@ -1,4 +1,6 @@
-language: generic
+language: rust
+
+cache: cargo
 
 services:
   - docker
@@ -16,31 +18,27 @@ before_script:
     else
       DOCKER_TAG="$TRAVIS_BRANCH"
     fi
-    DOCKER_BUILDER_TAG="builder-${DOCKER_TAG}"
-  - docker pull $IMAGE_NAME:$DOCKER_BUILDER_TAG || true
-  - docker pull $IMAGE_NAME:$DOCKER_TAG || true
 
 script:
+  - docker run
+    -v $(System.DefaultWorkingDirectory):/volume
+    -v cargo-cache:$TRAVIS_HOME/.cargo/registry
+    --rm
+    -t clux/muslrust:nightly
+    /volume/build-musl.sh
   - docker build
-    --target builder
-    --cache-from $IMAGE_NAME:$DOCKER_BUILDER_TAG
-    --tag $IMAGE_NAME:$DOCKER_BUILDER_TAG
-    --file ./Dockerfile
-    "."
-  - docker build
-    --cache-from $IMAGE_NAME:$DOCKER_TAG,$IMAGE_NAME:$DOCKER_BUILDER_TAG
+    --target app
     --tag $IMAGE_NAME:$DOCKER_TAG
-    --file ./Dockerfile
+    --file ./no-builder.Dockerfile
     "."
 
 after_success:
   - |
-    if [ "$TRAVIS_BRANCH" = "false" ]; then
+    if [ "$TRAVIS_PULL_REQUEST" = "false" ]; then
       echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
-      docker push $IMAGE_NAME:$DOCKER_BUILDER_TAG
       docker push $IMAGE_NAME:$DOCKER_TAG
 
-      if [ ""]; then
+      if [ "$TRAVIS_BRANCH" = "master" ]; then
         docker run -v $PWD:/workspace \
           -e DOCKERHUB_USERNAME='$DOCKER_USERNAME' \
           -e DOCKERHUB_PASSWORD='$DOCKER_PASSWORD' \
@@ -53,4 +51,5 @@ after_success:
 branches:
   only:
     - master
+    - release/*
     - develop
