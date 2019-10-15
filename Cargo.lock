@@ -317,7 +317,7 @@ dependencies = [
 
 [[package]]
 name = "diesel"
-version = "1.4.2"
+version = "1.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "bitflags 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -747,7 +747,7 @@ name = "migrations_internals"
 version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "diesel 1.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "diesel 1.4.3 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -1501,7 +1501,7 @@ dependencies = [
  "chrono 0.4.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "clap 3.0.0-beta.1 (git+https://github.com/clap-rs/clap.git)",
  "custom_error 1.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "diesel 1.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "diesel 1.4.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "diesel_migrations 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "dotenv 0.14.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "openssl 0.10.24 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -2027,7 +2027,7 @@ dependencies = [
 "checksum devise 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "74e04ba2d03c5fa0d954c061fc8c9c288badadffc272ebb87679a89846de3ed3"
 "checksum devise_codegen 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "066ceb7928ca93a9bedc6d0e612a8a0424048b0ab1f75971b203d01420c055d7"
 "checksum devise_core 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "cf41c59b22b5e3ec0ea55c7847e5f358d340f3a8d6d53a5cf4f1564967f96487"
-"checksum diesel 1.4.2 (registry+https://github.com/rust-lang/crates.io-index)" = "8d24935ba50c4a8dc375a0fd1f8a2ba6bdbdc4125713126a74b965d6a01a06d7"
+"checksum diesel 1.4.3 (registry+https://github.com/rust-lang/crates.io-index)" = "9d7cc03b910de9935007861dce440881f69102aaaedfd4bc5a6f40340ca5840c"
 "checksum diesel_derives 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)" = "62a27666098617d52c487a41f70de23d44a1dc1f3aa5877ceba2790fb1f1cab4"
 "checksum diesel_migrations 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)" = "bf3cde8413353dc7f5d72fa8ce0b99a560a359d2c5ef1e5817ca731cd9008f4c"
 "checksum dotenv 0.14.1 (registry+https://github.com/rust-lang/crates.io-index)" = "4424bad868b0ffe6ae351ee463526ba625bbca817978293bbe6bb7dc1804a175"
