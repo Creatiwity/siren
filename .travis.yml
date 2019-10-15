@@ -21,7 +21,7 @@ before_script:
 
 script:
   - docker run
-    -v $(System.DefaultWorkingDirectory):/volume
+    -v $TRAVIS_BUILD_DIR:/volume
     -v cargo-cache:$TRAVIS_HOME/.cargo/registry
     --rm
     -t clux/muslrust:nightly
