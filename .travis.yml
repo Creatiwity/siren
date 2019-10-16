@@ -20,7 +20,7 @@ script:
       -t clux/muslrust:nightly
       /volume/build-musl.sh
 
-    if [ ! -z "$TRAVIS_TAG" ] then
+    if [ ! -z "$TRAVIS_TAG" ]; then
       docker build
         --target app
         --tag $IMAGE_NAME:$TRAVIS_TAG
