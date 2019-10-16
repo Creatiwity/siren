@@ -13,25 +13,25 @@ env:
 
 script:
   - |
-    docker run
-      -v $TRAVIS_BUILD_DIR:/volume
-      -v $TRAVIS_HOME/.cargo/registry:/root/.cargo/registry
-      --rm
-      -t clux/muslrust:nightly
+    docker run \
+      -v $TRAVIS_BUILD_DIR:/volume \
+      -v $TRAVIS_HOME/.cargo/registry:/root/.cargo/registry \
+      --rm \
+      -t clux/muslrust:nightly \
       /volume/build-musl.sh
 
     if [ ! -z "$TRAVIS_TAG" ]; then
-      docker build
-        --target app
-        --tag $IMAGE_NAME:$TRAVIS_TAG
-        --tag $IMAGE_NAME:latest
-        --file ./no-builder.Dockerfile
+      docker build \
+        --target app \
+        --tag $IMAGE_NAME:$TRAVIS_TAG \
+        --tag $IMAGE_NAME:latest \
+        --file ./no-builder.Dockerfile \
         "."
     else
-      docker build
-        --target app
-        --tag $IMAGE_NAME:$TRAVIS_BRANCH
-        --file ./no-builder.Dockerfile
+      docker build \
+        --target app \
+        --tag $IMAGE_NAME:$TRAVIS_BRANCH \
+        --file ./no-builder.Dockerfile \
         "."
     fi
 
