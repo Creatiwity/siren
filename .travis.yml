@@ -22,7 +22,7 @@ before_script:
 script:
   - docker run
     -v $TRAVIS_BUILD_DIR:/volume
-    -v cargo-cache:$TRAVIS_HOME/.cargo/registry
+    -v $TRAVIS_HOME/.cargo/registry:/root/.cargo/registry
     --rm
     -t clux/muslrust:nightly
     /volume/build-musl.sh
