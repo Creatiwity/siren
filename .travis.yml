@@ -11,6 +11,14 @@ env:
     - secure: eHzYmuj8kykBWbJpsm3PAyHohEmpoLWoewkn3K4OrTyrJwHbzt2OLFTXpaJ3ivtX3BVcJNWiri0pfCt4VUCJTg1kLJpMFcAb4q2drSTKBdpisufn3dy4b4izuRthfildeeRkp7/lR+MUKsTbuiM3BaMQi6lu8u5B8KwOmvsAmwsea06mpajDRANnP7oherHN28YdQD0dn89TEa0/AdHMoLfuTHjX/YY02MzLX+IQ0Fw/Y62M3Ma0FELSNLomv/C94MpDY1l2PxviTx0glMq1mYEDn+sJ+lQcvkYSkSvVe2+K9sRd3LZXN8pAXllM8ZHYbCEtSAsYxkdAj4zpkcO8ekrJiN1A6YkmreVxtNozGi92GfrPy7XPacEJIMNIa7l7EsUtQwbtPnu5vh7YtTL6H0smCYjTYLfY9kWjqU0Vd5s9dS/0q4VPApBNe3NhxITQyUr3y5IdrnJfDUvn3OoBFPl8Q572zFkIC9UhtqmiY+FqjqpVwSpJw12T6Hnf3W3sJknE9LQCojYmQK5wu9A09mb7sfYDqWSSxJ8DDWtbSWtA6+USiZC5tSpFuQr8aMqG4GbRGnvoA7VLDBlYvcidN/u2uo6uLISQrj+uaQNvUwIlwaurt8YTZ5FlUDjxXyjyLOOSmT974Ev3caIjpN58xRTivyTfnREXgU8AcWS3Ma0=
     - secure: lVy3FtGBuilGmFwj4E8fXXeQNphq8H1w5ofjrZSJFkuacypShC2ATWijfTZcQO5DUFEP1ODonqtvWJDBgpSnNktwP34bwwUy3uTG6GjNXqY7R+sUMAzzlqQBteqxLvN91OwlaOB0G0gpEDrGTWLc1Wjt7otVo+iRWDN60pukQ5k4+2ePBATF6Mgc0PfcgiBMUh2dh9Q21XTyDw3TyWWqPs76Cs87XwkGiY6lcXRGnBa6ZQYe5KxyR+M9KpffT3ck9AmOCN+QDcaYVgCaXgH3qGYzn2nAXEp8p59cxLyMBKyN/anEJp8TfZ12Aa3BkzmYQeHJSVtYJCyRkci0jXilIwa5Y3mHJqS5Qof/cxayQ3ZogKFObig6I5B3WC45UYansIEKDIp+Z4Mct8cS0IWfyPwMPvv/+MwkbqOKWbSt75DTEyNAn4W+JXAcjhTFUJFDvZVVEJCszghb0UC0RGMEDSNb09Si4njZhpfVmfFCbdKgln/cTkj6AYdZ74CZEI6LX+Zon59FGnPQNs9KjlNBc34bmOMUv1TD/VsoravlYm0mGkiOs1JqHBwdap88wucqbkiuyqa7MSrlvIRYc8V+3T04Nt52fN1hz5TRUG+WGyuwaITB1tlIiO5DmC35CDboHdu+u1GfDYbCD0x7CML4yG9vA873vHDx8JQ4cpxij8E=
 
+before_script:
+  - |
+    if [ "$TRAVIS_BRANCH" = "master" ]; then
+      DOCKER_TAG=latest
+    else
+      DOCKER_TAG="$TRAVIS_BRANCH"
+    fi
+
 script:
   - |
     docker run \
@@ -20,43 +28,32 @@ script:
       -t clux/muslrust:nightly \
       /volume/build-musl.sh
 
-    if [ ! -z "$TRAVIS_TAG" ]; then
-      docker build \
-        --target app \
-        --tag $IMAGE_NAME:$TRAVIS_TAG \
-        --tag $IMAGE_NAME:latest \
-        --file ./no-builder.Dockerfile \
-        "."
-    else
-      docker build \
-        --target app \
-        --tag $IMAGE_NAME:$TRAVIS_BRANCH \
-        --file ./no-builder.Dockerfile \
-        "."
-    fi
+    docker build \
+      --target app \
+      --tag $IMAGE_NAME:$DOCKER_TAG \
+      --file ./no-builder.Dockerfile \
+      "."
 
 after_success:
   - |
     if [ "$TRAVIS_PULL_REQUEST" = "false" ]; then
       echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
 
-      if [ ! -z "$TRAVIS_TAG" ]; then
-        docker push $IMAGE_NAME:$TRAVIS_TAG
-        docker push $IMAGE_NAME:latest
+      docker push $IMAGE_NAME:$DOCKER_TAG
 
+      if [ "$TRAVIS_BRANCH" = "master" ]; then
         docker run -v $PWD:/workspace \
           -e DOCKERHUB_USERNAME='$DOCKER_USERNAME' \
           -e DOCKERHUB_PASSWORD='$DOCKER_PASSWORD' \
           -e DOCKERHUB_REPOSITORY='$IMAGE_NAME' \
           -e README_FILEPATH='/workspace/README.md' \
           peterevans/dockerhub-description:2.0.0
-      else
-        docker push $IMAGE_NAME:$TRAVIS_BRANCH
       fi
     fi
 
 branches:
   only:
+    - master
     - release/*
     - develop
     - /^v\d+\.\d+(\.\d+)?(-\S*)?$/
