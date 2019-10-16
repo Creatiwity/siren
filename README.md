@@ -1,5 +1,10 @@
 # SIREN API
 
+[![Build Status](https://travis-ci.com/Creatiwity/siren.svg?branch=master)](https://travis-ci.com/Creatiwity/siren)
+[![docker pulls](https://img.shields.io/docker/pulls/creatiwity/siren.svg)](https://hub.docker.com/r/creatiwity/siren/)
+[![docker image info](https://images.microbadger.com/badges/image/creatiwity/siren.svg)](http://microbadger.com/images/creatiwity/siren)
+[![docker tag](https://images.microbadger.com/badges/version/creatiwity/siren.svg)](https://hub.docker.com/r/creatiwity/siren/tags/)
+
 REST API for serving INSEE files v3.
 
 ## Getting started
