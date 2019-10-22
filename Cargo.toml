@@ -12,7 +12,7 @@ clap = { git = "https://github.com/clap-rs/clap.git" }
 custom_error = "1.7"
 diesel = { version = "1.4", features = ["postgres", "chrono", "r2d2", "64-column-tables"] }
 diesel_migrations = { version = "1.4", features = ["postgres"] }
-dotenv = "0.14"
+dotenv = "0.15"
 openssl = "0.10"
 r2d2 = "0.8"
 reqwest = "0.9"
