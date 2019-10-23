@@ -20,18 +20,8 @@ before_script:
     fi
 
 script:
-  - |
-    docker run \
-      -v $TRAVIS_BUILD_DIR:/volume \
-      --rm \
-      -t clux/muslrust:nightly \
-      /volume/build-musl.sh
-
-    docker build \
-      --target app \
-      --tag $IMAGE_NAME:$DOCKER_TAG \
-      --file ./no-builder.Dockerfile \
-      "."
+  - docker run -v $TRAVIS_BUILD_DIR:/volume --rm -t clux/muslrust:nightly /volume/build-musl.sh
+  - docker build --target app --tag $IMAGE_NAME:$DOCKER_TAG --file ./no-builder.Dockerfile "."
 
 after_success:
   - |
