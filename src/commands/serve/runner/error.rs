@@ -6,6 +6,7 @@ use rocket::response::{self, content, Responder, Response};
 use serde::Serialize;
 
 custom_error! { pub Error
+    InvalidData = "Invalid data",
     UniteLegaleError {source: unite_legale::error::Error} = "[UniteLegale] {source}",
     EtablissementError {source: etablissement::error::Error} = "[Etablissement] {source}",
 }
@@ -21,6 +22,7 @@ impl<'r> Responder<'r> for Error {
         println!("{}", self);
 
         let status = match &self {
+            Error::InvalidData => Status::BadRequest,
             Error::UniteLegaleError { source } => match source {
                 unite_legale::error::Error::UniteLegaleNotFound => Status::NotFound,
                 _ => Status::InternalServerError,

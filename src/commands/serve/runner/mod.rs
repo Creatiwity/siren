@@ -22,6 +22,10 @@ fn unites_legales(
     state: State<Context>,
     siren: String,
 ) -> Result<Json<UniteLegaleResponse>, Error> {
+    if siren.len() != 9 {
+        return Err(Error::InvalidData);
+    }
+
     let unite_legale = models::unite_legale::get(&state.connectors, &siren)?;
     let etablissements = models::etablissement::get_with_siren(&state.connectors, &siren)?;
     let etablissement_siege =
@@ -41,6 +45,10 @@ fn etablissements(
     state: State<Context>,
     siret: String,
 ) -> Result<Json<EtablissementResponse>, Error> {
+    if siret.len() != 14 {
+        return Err(Error::InvalidData);
+    }
+
     let etablissement = models::etablissement::get(&state.connectors, &siret)?;
     let unite_legale = models::unite_legale::get(&state.connectors, &etablissement.siren)?;
     let etablissement_siege =
