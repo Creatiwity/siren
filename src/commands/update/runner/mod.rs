@@ -136,7 +136,7 @@ fn download_file(
     zip_path.set_extension("zip");
 
     // Prepare file download
-    let mut resp = reqwest::get(group_metadata.url.as_str())
+    let mut resp = reqwest::blocking::get(group_metadata.url.as_str())
         .map_err(|req_error| Error::DownloadError { req_error })?;
 
     // Decode Last-Modified header
