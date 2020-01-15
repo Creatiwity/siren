@@ -8,6 +8,9 @@
 # macOS
 .DS_Store
 
+# Testing
+/data
+
 # Docker
 /docker/data/*
 !/docker/data/.keep
