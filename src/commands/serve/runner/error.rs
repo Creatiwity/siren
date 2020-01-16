@@ -1,3 +1,4 @@
+use super::super::super::update::runner::error::Error as InternalUpdateError;
 use crate::models::{etablissement, unite_legale};
 use custom_error::custom_error;
 use rocket::http::Status;
@@ -7,6 +8,7 @@ use serde::Serialize;
 
 custom_error! { pub Error
     InvalidData = "Invalid data",
+    UpdateError {source: InternalUpdateError} = "[Update] {source}",
     UniteLegaleError {source: unite_legale::error::Error} = "[UniteLegale] {source}",
     EtablissementError {source: etablissement::error::Error} = "[Etablissement] {source}",
 }
@@ -23,6 +25,7 @@ impl<'r> Responder<'r> for Error {
 
         let status = match &self {
             Error::InvalidData => Status::BadRequest,
+            Error::UpdateError { source: _ } => Status::InternalServerError,
             Error::UniteLegaleError { source } => match source {
                 unite_legale::error::Error::UniteLegaleNotFound => Status::NotFound,
                 _ => Status::InternalServerError,

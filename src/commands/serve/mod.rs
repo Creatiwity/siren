@@ -1,5 +1,6 @@
 mod runner;
 
+use super::common::FolderOptions;
 use crate::connectors::ConnectorsBuilders;
 use rocket::config::{Config, Environment};
 use std::env;
@@ -49,7 +50,7 @@ impl CmdEnvironment {
     }
 }
 
-pub fn run(flags: ServeFlags, builders: ConnectorsBuilders) {
+pub fn run(flags: ServeFlags, folder_options: FolderOptions, builders: ConnectorsBuilders) {
     let env = flags.environment.unwrap_or_else(|| {
         CmdEnvironment::from_str(env::var("SIRENE_ENV").expect("Missing SIRENE_ENV"))
             .expect("Invalid SIRENE_ENV")
@@ -71,5 +72,5 @@ pub fn run(flags: ServeFlags, builders: ConnectorsBuilders) {
         .port(port)
         .finalize();
 
-    runner::run(config.unwrap(), builders)
+    runner::run(config.unwrap(), folder_options, builders)
 }

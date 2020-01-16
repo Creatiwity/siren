@@ -1,11 +1,14 @@
 mod common;
 mod error;
 
+use super::super::common::FolderOptions;
+use super::super::update::runner::{update as update_data, Config as DataConfig};
 use crate::connectors::ConnectorsBuilders;
 use crate::models;
 use common::{
     Context, EtablissementInnerResponse, EtablissementResponse,
     UniteLegaleEtablissementInnerResponse, UniteLegaleInnerResponse, UniteLegaleResponse,
+    UpdateOptions, UpdateResponse,
 };
 use error::Error;
 use rocket::config::Config;
@@ -15,6 +18,26 @@ use rocket_contrib::json::Json;
 #[get("/")]
 fn index() -> &'static str {
     "SIRENE API v3"
+}
+
+#[post("/update", format = "application/json", data = "<options>")]
+fn update(
+    state: State<Context>,
+    options: Json<UpdateOptions>,
+) -> Result<Json<UpdateResponse>, Error> {
+    update_data(
+        &options.group_type.into(),
+        DataConfig {
+            force: false,
+            data_only: false,
+            temp_folder: state.folder_options.temp.clone(),
+            file_folder: state.folder_options.file.clone(),
+            db_folder: state.folder_options.db.clone(),
+        },
+        &state.connectors,
+    )?;
+
+    Ok(Json(UpdateResponse {}))
 }
 
 #[get("/unites_legales/<siren>")]
@@ -65,11 +88,15 @@ fn etablissements(
     }))
 }
 
-pub fn run(config: Config, builders: ConnectorsBuilders) {
+pub fn run(config: Config, folder_options: FolderOptions, builders: ConnectorsBuilders) {
     rocket::custom(config)
-        .mount("/v3", routes![index, unites_legales, etablissements])
+        .mount(
+            "/v3",
+            routes![index, update, unites_legales, etablissements],
+        )
         .manage(Context {
             connectors: builders.create(),
+            folder_options,
         })
         .launch();
 }
