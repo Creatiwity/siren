@@ -25,11 +25,20 @@ fn update(
     state: State<Context>,
     options: Json<UpdateOptions>,
 ) -> Result<Json<UpdateResponse>, Error> {
-    update_data(
+    let api_key = match &state.api_key {
+        Some(key) => key,
+        None => return Err(Error::MissingApiKeyError),
+    };
+
+    if &options.api_key != api_key {
+        return Err(Error::ApiKeyError);
+    }
+
+    let summary = update_data(
         &options.group_type.into(),
         DataConfig {
-            force: false,
-            data_only: false,
+            force: options.force,
+            data_only: options.data_only,
             temp_folder: state.folder_options.temp.clone(),
             file_folder: state.folder_options.file.clone(),
             db_folder: state.folder_options.db.clone(),
@@ -37,7 +46,7 @@ fn update(
         &state.connectors,
     )?;
 
-    Ok(Json(UpdateResponse {}))
+    Ok(Json(UpdateResponse { summary }))
 }
 
 #[get("/unites_legales/<siren>")]
@@ -88,14 +97,18 @@ fn etablissements(
     }))
 }
 
-pub fn run(config: Config, folder_options: FolderOptions, builders: ConnectorsBuilders) {
+pub fn run(
+    config: Config,
+    api_key: Option<String>,
+    folder_options: FolderOptions,
+    builders: ConnectorsBuilders,
+) {
     rocket::custom(config)
-        .mount(
-            "/v3",
-            routes![index, update, unites_legales, etablissements],
-        )
+        .mount("/v3", routes![index, unites_legales, etablissements])
+        .mount("/admin", routes![update])
         .manage(Context {
             connectors: builders.create(),
+            api_key,
             folder_options,
         })
         .launch();

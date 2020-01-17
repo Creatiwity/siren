@@ -1,3 +1,4 @@
+pub mod common;
 pub mod error;
 
 use crate::connectors::Connectors;
@@ -5,6 +6,7 @@ use crate::models;
 use crate::models::metadata;
 use crate::models::metadata::common::GroupType;
 use chrono::{DateTime, Utc};
+use common::{Step, UpdateGroupSummary, UpdateStepSummary, UpdateSummary};
 use error::Error;
 use reqwest::header::LAST_MODIFIED;
 use std::fs::{canonicalize, create_dir_all, remove_file, set_permissions, File, Permissions};
@@ -24,37 +26,61 @@ pub fn update(
     groups: &Vec<GroupType>,
     config: Config,
     connectors: &Connectors,
-) -> Result<(), Error> {
+) -> Result<UpdateSummary, Error> {
+    // Start
     println!("[Update] Starting");
+    let started_timestamp = Utc::now();
+    let mut steps: Vec<UpdateStepSummary> = vec![];
 
     if !config.data_only {
         println!("[Update] Downloading files");
-        step_download_file(groups, &config.temp_folder, config.force, connectors)?;
+        steps.push(step_download_file(
+            groups,
+            &config.temp_folder,
+            config.force,
+            connectors,
+        )?);
 
         println!("[Update] Unzipping files");
-        step_unzip_file(
+        steps.push(step_unzip_file(
             groups,
             &config.temp_folder,
             &config.file_folder,
             config.force,
             connectors,
-        )?;
+        )?);
     }
 
     println!("[Update] Inserting data");
-    step_insert_data(groups, &config.db_folder, config.force, connectors)?;
+    steps.push(step_insert_data(
+        groups,
+        &config.db_folder,
+        config.force,
+        connectors,
+    )?);
 
     println!("[Update] Swaping data");
-    step_swap_data(groups, config.force, connectors)?;
+    steps.push(step_swap_data(groups, config.force, connectors)?);
 
     if !config.data_only {
         println!("[Update] Cleaning files");
-        step_clean_file(groups, &config.temp_folder, &config.file_folder, connectors)?;
+        steps.push(step_clean_file(
+            groups,
+            &config.temp_folder,
+            &config.file_folder,
+            connectors,
+        )?);
     }
 
+    // End
     println!("[Update] Finished");
 
-    Ok(())
+    Ok(UpdateSummary {
+        updated: steps.iter().find(|&s| s.updated).is_some(),
+        started_timestamp,
+        ended_timestamp: Utc::now(),
+        steps,
+    })
 }
 
 pub fn step_download_file(
@@ -62,11 +88,21 @@ pub fn step_download_file(
     temp_folder: &String,
     force: bool,
     connectors: &Connectors,
-) -> Result<(), Error> {
+) -> Result<UpdateStepSummary, Error> {
+    let started_timestamp = Utc::now();
+    let mut groups_summary: Vec<UpdateGroupSummary> = vec![];
+
     for group in groups {
-        download_file(*group, temp_folder, force, connectors)?;
+        groups_summary.push(download_file(*group, temp_folder, force, connectors)?);
     }
-    Ok(())
+
+    Ok(UpdateStepSummary {
+        step: Step::DownloadFile,
+        updated: groups_summary.iter().find(|&g| g.updated).is_some(),
+        started_timestamp,
+        ended_timestamp: Utc::now(),
+        groups: groups_summary,
+    })
 }
 
 pub fn step_unzip_file(
@@ -75,11 +111,27 @@ pub fn step_unzip_file(
     file_folder: &String,
     force: bool,
     connectors: &Connectors,
-) -> Result<(), Error> {
+) -> Result<UpdateStepSummary, Error> {
+    let started_timestamp = Utc::now();
+    let mut groups_summary: Vec<UpdateGroupSummary> = vec![];
+
     for group in groups {
-        unzip_file(*group, temp_folder, file_folder, force, connectors)?;
+        groups_summary.push(unzip_file(
+            *group,
+            temp_folder,
+            file_folder,
+            force,
+            connectors,
+        )?);
     }
-    Ok(())
+
+    Ok(UpdateStepSummary {
+        step: Step::UnzipFile,
+        updated: groups_summary.iter().find(|&g| g.updated).is_some(),
+        started_timestamp,
+        ended_timestamp: Utc::now(),
+        groups: groups_summary,
+    })
 }
 
 pub fn step_insert_data(
@@ -87,22 +139,42 @@ pub fn step_insert_data(
     db_folder: &String,
     force: bool,
     connectors: &Connectors,
-) -> Result<(), Error> {
+) -> Result<UpdateStepSummary, Error> {
+    let started_timestamp = Utc::now();
+    let mut groups_summary: Vec<UpdateGroupSummary> = vec![];
+
     for group in groups {
-        insert_data(*group, db_folder, force, connectors)?;
+        groups_summary.push(insert_data(*group, db_folder, force, connectors)?);
     }
-    Ok(())
+
+    Ok(UpdateStepSummary {
+        step: Step::InsertData,
+        updated: groups_summary.iter().find(|&g| g.updated).is_some(),
+        started_timestamp,
+        ended_timestamp: Utc::now(),
+        groups: groups_summary,
+    })
 }
 
 pub fn step_swap_data(
     groups: &Vec<GroupType>,
     force: bool,
     connectors: &Connectors,
-) -> Result<(), Error> {
+) -> Result<UpdateStepSummary, Error> {
+    let started_timestamp = Utc::now();
+    let mut groups_summary: Vec<UpdateGroupSummary> = vec![];
+
     for group in groups {
-        swap_data(*group, force, connectors)?;
+        groups_summary.push(swap_data(*group, force, connectors)?);
     }
-    Ok(())
+
+    Ok(UpdateStepSummary {
+        step: Step::SwapData,
+        updated: groups_summary.iter().find(|&g| g.updated).is_some(),
+        started_timestamp,
+        ended_timestamp: Utc::now(),
+        groups: groups_summary,
+    })
 }
 
 pub fn step_clean_file(
@@ -110,11 +182,21 @@ pub fn step_clean_file(
     temp_folder: &String,
     file_folder: &String,
     connectors: &Connectors,
-) -> Result<(), Error> {
+) -> Result<UpdateStepSummary, Error> {
+    let started_timestamp = Utc::now();
+    let mut groups_summary: Vec<UpdateGroupSummary> = vec![];
+
     for group in groups {
-        clean_file(*group, temp_folder, file_folder, connectors)?;
+        groups_summary.push(clean_file(*group, temp_folder, file_folder, connectors)?);
     }
-    Ok(())
+
+    Ok(UpdateStepSummary {
+        step: Step::CleanFile,
+        updated: groups_summary.iter().find(|&g| g.updated).is_some(),
+        started_timestamp,
+        ended_timestamp: Utc::now(),
+        groups: groups_summary,
+    })
 }
 
 fn download_file(
@@ -122,8 +204,9 @@ fn download_file(
     temp_folder: &String,
     force: bool,
     connectors: &Connectors,
-) -> Result<(), Error> {
+) -> Result<UpdateGroupSummary, Error> {
     println!("[Download] Downloading {:#?}", group);
+    let started_timestamp = Utc::now();
 
     let group_metadata = metadata::get(connectors, group)?;
 
@@ -155,14 +238,26 @@ fn download_file(
         if let Some(last_imported_timestamp) = group_metadata.last_imported_timestamp {
             if last_modified.le(&last_imported_timestamp) {
                 println!("[Download] {:#?} already imported", group);
-                return Ok(());
+                return Ok(UpdateGroupSummary {
+                    group_type: group,
+                    updated: false,
+                    status_label: String::from("already imported"),
+                    started_timestamp,
+                    ended_timestamp: Utc::now(),
+                });
             }
         }
 
         if let Some(staging_file_timestamp) = group_metadata.staging_file_timestamp {
             if last_modified.le(&staging_file_timestamp) {
                 println!("[Download] {:#?} already downloaded", group);
-                return Ok(());
+                return Ok(UpdateGroupSummary {
+                    group_type: group,
+                    updated: false,
+                    status_label: String::from("already downloaded"),
+                    started_timestamp,
+                    ended_timestamp: Utc::now(),
+                });
             }
         }
     }
@@ -176,7 +271,13 @@ fn download_file(
     // Update staging file timestamp
     metadata::set_staging_file_timestamp(connectors, group, last_modified)?;
 
-    Ok(())
+    return Ok(UpdateGroupSummary {
+        group_type: group,
+        updated: true,
+        status_label: String::from("downloaded"),
+        started_timestamp,
+        ended_timestamp: Utc::now(),
+    });
 }
 
 fn unzip_file(
@@ -185,8 +286,9 @@ fn unzip_file(
     file_folder: &String,
     force: bool,
     connectors: &Connectors,
-) -> Result<(), Error> {
+) -> Result<UpdateGroupSummary, Error> {
     println!("[Unzip] Unzipping {:#?}", group);
+    let started_timestamp = Utc::now();
 
     let group_metadata = metadata::get(connectors, group)?;
 
@@ -195,7 +297,13 @@ fn unzip_file(
         Some(staging_file_timestamp) => staging_file_timestamp,
         None => {
             println!("[Unzip] Nothing to unzip for {:#?}", group);
-            return Ok(());
+            return Ok(UpdateGroupSummary {
+                group_type: group,
+                updated: false,
+                status_label: String::from("nothing to unzip"),
+                started_timestamp,
+                ended_timestamp: Utc::now(),
+            });
         }
     };
 
@@ -205,13 +313,25 @@ fn unzip_file(
             if let Some(last_imported_timestamp) = group_metadata.last_imported_timestamp {
                 if staging_csv_file_timestamp.le(&last_imported_timestamp) {
                     println!("[Unzip] {:#?} already imported", group);
-                    return Ok(());
+                    return Ok(UpdateGroupSummary {
+                        group_type: group,
+                        updated: false,
+                        status_label: String::from("already imported"),
+                        started_timestamp,
+                        ended_timestamp: Utc::now(),
+                    });
                 }
             }
 
             if staging_file_timestamp.le(&staging_csv_file_timestamp) {
                 println!("[Unzip] {:#?} already unzipped", group);
-                return Ok(());
+                return Ok(UpdateGroupSummary {
+                    group_type: group,
+                    updated: false,
+                    status_label: String::from("already unzipped"),
+                    started_timestamp,
+                    ended_timestamp: Utc::now(),
+                });
             }
         }
     }
@@ -270,7 +390,13 @@ fn unzip_file(
 
     println!("[Unzip] Unzip of {:#?} finished", group);
 
-    Ok(())
+    Ok(UpdateGroupSummary {
+        group_type: group,
+        updated: true,
+        status_label: String::from("unzipped"),
+        started_timestamp,
+        ended_timestamp: Utc::now(),
+    })
 }
 
 fn insert_data(
@@ -278,8 +404,9 @@ fn insert_data(
     db_folder: &String,
     force: bool,
     connectors: &Connectors,
-) -> Result<(), Error> {
+) -> Result<UpdateGroupSummary, Error> {
     println!("[Insert] Insert {:#?}", group);
+    let started_timestamp = Utc::now();
 
     let group_metadata = metadata::get(connectors, group)?;
 
@@ -288,7 +415,13 @@ fn insert_data(
         Some(staging_csv_file_timestamp) => staging_csv_file_timestamp,
         None => {
             println!("[Insert] Nothing to insert for {:#?}", group);
-            return Ok(());
+            return Ok(UpdateGroupSummary {
+                group_type: group,
+                updated: false,
+                status_label: String::from("nothing to insert"),
+                started_timestamp,
+                ended_timestamp: Utc::now(),
+            });
         }
     };
 
@@ -298,13 +431,25 @@ fn insert_data(
             if let Some(last_imported_timestamp) = group_metadata.last_imported_timestamp {
                 if staging_imported_timestamp.le(&last_imported_timestamp) {
                     println!("[Insert] {:#?} already imported", group);
-                    return Ok(());
+                    return Ok(UpdateGroupSummary {
+                        group_type: group,
+                        updated: false,
+                        status_label: String::from("already imported"),
+                        started_timestamp,
+                        ended_timestamp: Utc::now(),
+                    });
                 }
             }
 
             if staging_csv_file_timestamp.le(&staging_imported_timestamp) {
                 println!("[Insert] {:#?} already inserted", group);
-                return Ok(());
+                return Ok(UpdateGroupSummary {
+                    group_type: group,
+                    updated: false,
+                    status_label: String::from("already inserted"),
+                    started_timestamp,
+                    ended_timestamp: Utc::now(),
+                });
             }
         }
     }
@@ -337,11 +482,22 @@ fn insert_data(
 
     println!("[Insert] Finished insert of {:#?}", group);
 
-    Ok(())
+    Ok(UpdateGroupSummary {
+        group_type: group,
+        updated: true,
+        status_label: String::from("inserted"),
+        started_timestamp,
+        ended_timestamp: Utc::now(),
+    })
 }
 
-fn swap_data(group_type: GroupType, force: bool, connectors: &Connectors) -> Result<(), Error> {
+fn swap_data(
+    group_type: GroupType,
+    force: bool,
+    connectors: &Connectors,
+) -> Result<UpdateGroupSummary, Error> {
     println!("[Insert] Swapping {:#?}", group_type);
+    let started_timestamp = Utc::now();
 
     let group_metadata = metadata::get(connectors, group_type)?;
 
@@ -350,7 +506,13 @@ fn swap_data(group_type: GroupType, force: bool, connectors: &Connectors) -> Res
         Some(staging_imported_timestamp) => staging_imported_timestamp,
         None => {
             println!("[Swap] Nothing to swap for {:#?}", group_type);
-            return Ok(());
+            return Ok(UpdateGroupSummary {
+                group_type,
+                updated: false,
+                status_label: String::from("nothing to swap"),
+                started_timestamp,
+                ended_timestamp: Utc::now(),
+            });
         }
     };
 
@@ -359,7 +521,13 @@ fn swap_data(group_type: GroupType, force: bool, connectors: &Connectors) -> Res
         if let Some(last_imported_timestamp) = group_metadata.last_imported_timestamp {
             if staging_imported_timestamp.le(&last_imported_timestamp) {
                 println!("[Swap] {:#?} already imported", group_type);
-                return Ok(());
+                return Ok(UpdateGroupSummary {
+                    group_type,
+                    updated: false,
+                    status_label: String::from("already imported"),
+                    started_timestamp,
+                    ended_timestamp: Utc::now(),
+                });
             }
         }
     }
@@ -409,7 +577,13 @@ fn swap_data(group_type: GroupType, force: bool, connectors: &Connectors) -> Res
 
     println!("[Insert] Swap of {:#?} finished", group_type);
 
-    Ok(())
+    Ok(UpdateGroupSummary {
+        group_type,
+        updated: true,
+        status_label: String::from("swapped"),
+        started_timestamp,
+        ended_timestamp: Utc::now(),
+    })
 }
 
 fn clean_file(
@@ -417,8 +591,11 @@ fn clean_file(
     temp_folder: &String,
     file_folder: &String,
     connectors: &Connectors,
-) -> Result<(), Error> {
+) -> Result<UpdateGroupSummary, Error> {
     println!("[Clean] Cleaning {:#?}", group);
+    let started_timestamp = Utc::now();
+    let mut updated = true;
+    let mut status_label = String::from("cleaned");
 
     let group_metadata = metadata::get(connectors, group)?;
 
@@ -434,15 +611,25 @@ fn clean_file(
 
     if let Err(error) = remove_file(zip_path) {
         println!("[Clean] Zip not deleted ({})", error);
+        updated = false;
+        status_label = String::from("zip not deleted");
     }
 
     if let Err(error) = remove_file(csv_path) {
         println!("[Clean] CSV not deleted ({})", error);
+        updated = false;
+        status_label = String::from("csv not deleted");
     }
 
     models::metadata::reset_staging_timestamps(connectors, group)?;
 
     println!("[Clean] Finished cleaning of {:#?}", group);
 
-    Ok(())
+    Ok(UpdateGroupSummary {
+        group_type: group,
+        updated,
+        status_label,
+        started_timestamp,
+        ended_timestamp: Utc::now(),
+    })
 }

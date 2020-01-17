@@ -18,6 +18,10 @@ pub struct ServeFlags {
     /// Listen this host
     #[clap(short = "h", long = "host")]
     host: Option<String>,
+
+    /// API key needed to allow maintenance operation from HTTP
+    #[clap(short = "k", long = "api-key")]
+    api_key: Option<String>,
 }
 
 arg_enum! {
@@ -67,10 +71,15 @@ pub fn run(flags: ServeFlags, folder_options: FolderOptions, builders: Connector
         .host
         .unwrap_or_else(|| env::var("HOST").expect("Missing HOST"));
 
+    let api_key = match flags.api_key {
+        Some(key) => Some(key),
+        None => env::var("API_KEY").ok(),
+    };
+
     let config = Config::build(env.into())
         .address(host)
         .port(port)
         .finalize();
 
-    runner::run(config.unwrap(), folder_options, builders)
+    runner::run(config.unwrap(), api_key, folder_options, builders)
 }

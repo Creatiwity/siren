@@ -3,6 +3,7 @@ pub mod runner;
 use super::common::{CmdGroupType, FolderOptions};
 use crate::connectors::ConnectorsBuilders;
 use crate::models::metadata::common::GroupType;
+use runner::common::UpdateStepSummary;
 
 #[derive(Clap, Debug)]
 pub struct UpdateFlags {
@@ -48,49 +49,57 @@ pub fn run(flags: UpdateFlags, folder_options: FolderOptions, builders: Connecto
     let group_type: Vec<GroupType> = flags.group_type.into();
 
     let connectors = builders.create();
-    let result: Result<(), runner::error::Error>;
 
     match flags.subcmd {
-        Some(subcmd) => match subcmd {
-            UpdateSubCommand::DownloadFile => {
-                result = runner::step_download_file(
-                    &group_type,
-                    &folder_options.temp,
-                    flags.force,
-                    &connectors,
-                );
+        Some(subcmd) => {
+            let result: Result<UpdateStepSummary, runner::error::Error>;
+
+            match subcmd {
+                UpdateSubCommand::DownloadFile => {
+                    result = runner::step_download_file(
+                        &group_type,
+                        &folder_options.temp,
+                        flags.force,
+                        &connectors,
+                    );
+                }
+                UpdateSubCommand::UnzipFile => {
+                    result = runner::step_unzip_file(
+                        &group_type,
+                        &folder_options.temp,
+                        &folder_options.file,
+                        flags.force,
+                        &connectors,
+                    );
+                }
+                UpdateSubCommand::InsertData => {
+                    result = runner::step_insert_data(
+                        &group_type,
+                        &folder_options.db,
+                        flags.force,
+                        &connectors,
+                    );
+                }
+                UpdateSubCommand::SwapData => {
+                    result = runner::step_swap_data(&group_type, flags.force, &connectors);
+                }
+                UpdateSubCommand::CleanFile => {
+                    result = runner::step_clean_file(
+                        &group_type,
+                        &folder_options.temp,
+                        &folder_options.file,
+                        &connectors,
+                    );
+                }
             }
-            UpdateSubCommand::UnzipFile => {
-                result = runner::step_unzip_file(
-                    &group_type,
-                    &folder_options.temp,
-                    &folder_options.file,
-                    flags.force,
-                    &connectors,
-                );
+
+            match result {
+                Ok(summary) => println!("{}", serde_json::to_string(&summary).unwrap()),
+                Err(error) => error.exit(),
             }
-            UpdateSubCommand::InsertData => {
-                result = runner::step_insert_data(
-                    &group_type,
-                    &folder_options.db,
-                    flags.force,
-                    &connectors,
-                );
-            }
-            UpdateSubCommand::SwapData => {
-                result = runner::step_swap_data(&group_type, flags.force, &connectors);
-            }
-            UpdateSubCommand::CleanFile => {
-                result = runner::step_clean_file(
-                    &group_type,
-                    &folder_options.temp,
-                    &folder_options.file,
-                    &connectors,
-                );
-            }
-        },
+        }
         None => {
-            result = runner::update(
+            match runner::update(
                 &group_type,
                 runner::Config {
                     force: flags.force,
@@ -100,11 +109,10 @@ pub fn run(flags: UpdateFlags, folder_options: FolderOptions, builders: Connecto
                     db_folder: folder_options.db,
                 },
                 &connectors,
-            )
+            ) {
+                Ok(summary) => println!("{}", serde_json::to_string(&summary).unwrap()),
+                Err(error) => error.exit(),
+            }
         }
-    }
-
-    if let Err(error) = result {
-        error.exit();
     }
 }

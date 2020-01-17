@@ -8,6 +8,8 @@ use serde::Serialize;
 
 custom_error! { pub Error
     InvalidData = "Invalid data",
+    MissingApiKeyError = "[Admin] Missing API key in configuration",
+    ApiKeyError = "[Admin] Wrong API key",
     UpdateError {source: InternalUpdateError} = "[Update] {source}",
     UniteLegaleError {source: unite_legale::error::Error} = "[UniteLegale] {source}",
     EtablissementError {source: etablissement::error::Error} = "[Etablissement] {source}",
@@ -25,6 +27,8 @@ impl<'r> Responder<'r> for Error {
 
         let status = match &self {
             Error::InvalidData => Status::BadRequest,
+            Error::MissingApiKeyError => return Err(Status::Unauthorized),
+            Error::ApiKeyError => return Err(Status::Unauthorized),
             Error::UpdateError { source: _ } => Status::InternalServerError,
             Error::UniteLegaleError { source } => match source {
                 unite_legale::error::Error::UniteLegaleNotFound => Status::NotFound,

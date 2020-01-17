@@ -1,4 +1,5 @@
 use super::super::super::common::{CmdGroupType, FolderOptions};
+use super::super::super::update::runner::common::UpdateSummary;
 use crate::connectors::Connectors;
 use crate::models::etablissement::common::Etablissement;
 use crate::models::unite_legale::common::UniteLegale;
@@ -6,16 +7,22 @@ use serde::{Deserialize, Serialize};
 
 pub struct Context {
     pub connectors: Connectors,
+    pub api_key: Option<String>,
     pub folder_options: FolderOptions,
 }
 
 #[derive(Deserialize)]
 pub struct UpdateOptions {
+    pub api_key: String,
     pub group_type: CmdGroupType,
+    pub force: bool,
+    pub data_only: bool,
 }
 
 #[derive(Serialize)]
-pub struct UpdateResponse {}
+pub struct UpdateResponse {
+    pub summary: UpdateSummary,
+}
 
 #[derive(Serialize)]
 pub struct UniteLegaleResponse {
