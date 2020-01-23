@@ -17,6 +17,31 @@ pub fn update(
     config: Config,
     connectors: &Connectors,
 ) -> Result<UpdateSummary, Error> {
+    // Build and execute workflow
+    execute_workflow(
+        build_workflow(&config),
+        synthetic_group_type,
+        config,
+        connectors,
+    )
+}
+
+pub fn update_step(
+    step: Step,
+    synthetic_group_type: SyntheticGroupType,
+    config: Config,
+    connectors: &Connectors,
+) -> Result<UpdateSummary, Error> {
+    // Execute step
+    execute_workflow(vec![step], synthetic_group_type, config, connectors)
+}
+
+fn execute_workflow(
+    workflow: Vec<Step>,
+    synthetic_group_type: SyntheticGroupType,
+    config: Config,
+    connectors: &Connectors,
+) -> Result<UpdateSummary, Error> {
     // Register start
     update_metadata::launch_update(
         connectors,
@@ -29,8 +54,7 @@ pub fn update(
     println!("[Update] Starting");
     let started_timestamp = Utc::now();
 
-    // Build and execute workflow
-    let workflow = build_workflow(&config);
+    // Execute workflow
     let result_steps: Result<Vec<UpdateStepSummary>, Error> = workflow
         .into_iter()
         .map(|step| execute_step(step, &config, &synthetic_group_type.into(), connectors))
