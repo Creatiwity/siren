@@ -22,7 +22,9 @@ extern crate zip;
 mod commands;
 mod connectors;
 mod models;
+mod update;
 
+use chrono::Utc;
 use connectors::ConnectorsBuilders;
 use dotenv::dotenv;
 
@@ -32,6 +34,15 @@ fn main() {
 
     // Load database
     let connectors_builders = ConnectorsBuilders::new();
+
+    // Close running updates
+    let connectors = connectors_builders.create();
+    models::update_metadata::error_update(
+        &connectors,
+        String::from("Program unexpectedly closed"),
+        Utc::now(),
+    )
+    .unwrap(); // Fail launch in case of error
 
     // Run command
     commands::run(connectors_builders);

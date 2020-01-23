@@ -10,7 +10,7 @@ edition = "2018"
 chrono = { version = "0.4", features = ["serde"] }
 clap = { git = "https://github.com/clap-rs/clap.git" }
 custom_error = "1.7"
-diesel = { version = "1.4", features = ["postgres", "chrono", "r2d2", "64-column-tables"] }
+diesel = { version = "1.4", features = ["postgres", "chrono", "r2d2", "serde_json", "64-column-tables"] }
 diesel_migrations = { version = "1.4", features = ["postgres"] }
 dotenv = "0.15"
 openssl = "0.10"

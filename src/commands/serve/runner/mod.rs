@@ -1,11 +1,14 @@
 mod common;
 mod error;
 
+use super::super::common::FolderOptions;
 use crate::connectors::ConnectorsBuilders;
 use crate::models;
+use crate::update::{common::Config as DataConfig, update as update_data};
 use common::{
     Context, EtablissementInnerResponse, EtablissementResponse,
     UniteLegaleEtablissementInnerResponse, UniteLegaleInnerResponse, UniteLegaleResponse,
+    UpdateOptions, UpdateResponse,
 };
 use error::Error;
 use rocket::config::Config;
@@ -15,6 +18,35 @@ use rocket_contrib::json::Json;
 #[get("/")]
 fn index() -> &'static str {
     "SIRENE API v3"
+}
+
+#[post("/update", format = "application/json", data = "<options>")]
+fn update(
+    state: State<Context>,
+    options: Json<UpdateOptions>,
+) -> Result<Json<UpdateResponse>, Error> {
+    let api_key = match &state.api_key {
+        Some(key) => key,
+        None => return Err(Error::MissingApiKeyError),
+    };
+
+    if &options.api_key != api_key {
+        return Err(Error::ApiKeyError);
+    }
+
+    let summary = update_data(
+        options.group_type,
+        DataConfig {
+            force: options.force,
+            data_only: options.data_only,
+            temp_folder: state.folder_options.temp.clone(),
+            file_folder: state.folder_options.file.clone(),
+            db_folder: state.folder_options.db.clone(),
+        },
+        &state.connectors,
+    )?;
+
+    Ok(Json(UpdateResponse { summary }))
 }
 
 #[get("/unites_legales/<siren>")]
@@ -65,11 +97,19 @@ fn etablissements(
     }))
 }
 
-pub fn run(config: Config, builders: ConnectorsBuilders) {
+pub fn run(
+    config: Config,
+    api_key: Option<String>,
+    folder_options: FolderOptions,
+    builders: ConnectorsBuilders,
+) {
     rocket::custom(config)
         .mount("/v3", routes![index, unites_legales, etablissements])
+        .mount("/admin", routes![update])
         .manage(Context {
             connectors: builders.create(),
+            api_key,
+            folder_options,
         })
         .launch();
 }
