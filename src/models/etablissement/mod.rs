@@ -2,6 +2,7 @@ mod columns;
 pub mod common;
 pub mod error;
 
+use super::common::{Error as UpdatableError, UpdatableModel};
 use super::schema::etablissement::dsl;
 use crate::connectors::Connectors;
 use common::Etablissement;
@@ -14,24 +15,6 @@ pub fn get(connectors: &Connectors, siret: &String) -> Result<Etablissement, Err
     dsl::etablissement
         .find(siret)
         .first::<Etablissement>(&connection)
-        .map_err(|error| error.into())
-}
-
-pub fn count(connectors: &Connectors) -> Result<i64, Error> {
-    let connection = connectors.local.pool.get()?;
-    dsl::etablissement
-        .select(diesel::dsl::count(dsl::siret))
-        .first::<i64>(&connection)
-        .map_err(|error| error.into())
-}
-
-pub fn count_staging(connectors: &Connectors) -> Result<i64, Error> {
-    use super::schema::etablissement_staging::dsl;
-
-    let connection = connectors.local.pool.get()?;
-    dsl::etablissement_staging
-        .select(diesel::dsl::count(dsl::siret))
-        .first::<i64>(&connection)
         .map_err(|error| error.into())
 }
 
@@ -57,46 +40,73 @@ pub fn get_siege_with_siren(
         .map_err(|error| error.into())
 }
 
-pub fn insert_in_staging(connectors: &Connectors, file_path: String) -> Result<bool, Error> {
-    let connection = connectors.local.pool.get()?;
-    sql_query("TRUNCATE etablissement_staging").execute(&connection)?;
-    let query = format!(
-        "COPY etablissement_staging({}) FROM '{}' DELIMITER ',' CSV HEADER",
-        columns::COLUMNS,
-        file_path
-    );
-    sql_query(query)
-        .execute(&connection)
-        .map(|count| count > 0)
-        .map_err(|error| error.into())
-}
+pub struct EtablissementModel {}
 
-pub fn swap(connectors: &Connectors) -> Result<(), Error> {
-    let connection = connectors.local.pool.get()?;
-    connection.build_transaction().read_write().run(|| {
-        sql_query("ALTER TABLE etablissement RENAME TO etablissement_temp").execute(&connection)?;
-        sql_query("ALTER TABLE etablissement_staging RENAME TO etablissement")
-            .execute(&connection)?;
-        sql_query("ALTER TABLE etablissement_temp RENAME TO etablissement_staging")
-            .execute(&connection)?;
+impl UpdatableModel for EtablissementModel {
+    fn count(&self, connectors: &Connectors) -> Result<i64, UpdatableError> {
+        let connection = connectors.local.pool.get()?;
+        dsl::etablissement
+            .select(diesel::dsl::count(dsl::siret))
+            .first::<i64>(&connection)
+            .map_err(|error| error.into())
+    }
+
+    fn count_staging(&self, connectors: &Connectors) -> Result<i64, UpdatableError> {
+        use super::schema::etablissement_staging::dsl;
+
+        let connection = connectors.local.pool.get()?;
+        dsl::etablissement_staging
+            .select(diesel::dsl::count(dsl::siret))
+            .first::<i64>(&connection)
+            .map_err(|error| error.into())
+    }
+
+    fn insert_in_staging(
+        &self,
+        connectors: &Connectors,
+        file_path: String,
+    ) -> Result<bool, UpdatableError> {
+        let connection = connectors.local.pool.get()?;
         sql_query("TRUNCATE etablissement_staging").execute(&connection)?;
-        sql_query(
-            r#"
+        let query = format!(
+            "COPY etablissement_staging({}) FROM '{}' DELIMITER ',' CSV HEADER",
+            columns::COLUMNS,
+            file_path
+        );
+        sql_query(query)
+            .execute(&connection)
+            .map(|count| count > 0)
+            .map_err(|error| error.into())
+    }
+
+    fn swap(&self, connectors: &Connectors) -> Result<(), UpdatableError> {
+        let connection = connectors.local.pool.get()?;
+        connection.build_transaction().read_write().run(|| {
+            sql_query("ALTER TABLE etablissement RENAME TO etablissement_temp")
+                .execute(&connection)?;
+            sql_query("ALTER TABLE etablissement_staging RENAME TO etablissement")
+                .execute(&connection)?;
+            sql_query("ALTER TABLE etablissement_temp RENAME TO etablissement_staging")
+                .execute(&connection)?;
+            sql_query("TRUNCATE etablissement_staging").execute(&connection)?;
+            sql_query(
+                r#"
             UPDATE group_metadata
             SET last_imported_timestamp = staging_imported_timestamp
             WHERE group_type = 'etablissements'
             "#,
-        )
-        .execute(&connection)?;
-        sql_query(
-            r#"
+            )
+            .execute(&connection)?;
+            sql_query(
+                r#"
             UPDATE group_metadata
             SET staging_imported_timestamp = NULL
             WHERE group_type = 'etablissements'
             "#,
-        )
-        .execute(&connection)?;
+            )
+            .execute(&connection)?;
 
-        Ok(())
-    })
+            Ok(())
+        })
+    }
 }

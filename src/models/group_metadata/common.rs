@@ -1,4 +1,7 @@
+use super::super::common::UpdatableModel;
+use super::super::etablissement::EtablissementModel;
 use super::super::schema::group_metadata;
+use super::super::unite_legale::UniteLegaleModel;
 use chrono::{DateTime, Utc};
 use diesel::deserialize::{self, FromSql};
 use diesel::pg::Pg;
@@ -36,6 +39,15 @@ pub struct MetadataTimestamps {
 pub enum GroupType {
     UnitesLegales,
     Etablissements,
+}
+
+impl GroupType {
+    pub fn get_updatable_model(&self) -> Box<dyn UpdatableModel> {
+        match self {
+            GroupType::UnitesLegales => Box::new(UniteLegaleModel {}),
+            GroupType::Etablissements => Box::new(EtablissementModel {}),
+        }
+    }
 }
 
 // SQL conversion

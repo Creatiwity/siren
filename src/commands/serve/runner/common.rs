@@ -1,8 +1,8 @@
-use super::super::super::common::{CmdGroupType, FolderOptions};
-use super::super::super::update::runner::common::UpdateSummary;
+use super::super::super::common::FolderOptions;
 use crate::connectors::Connectors;
 use crate::models::etablissement::common::Etablissement;
 use crate::models::unite_legale::common::UniteLegale;
+use crate::models::update_metadata::common::{SyntheticGroupType, UpdateSummary};
 use serde::{Deserialize, Serialize};
 
 pub struct Context {
@@ -14,7 +14,7 @@ pub struct Context {
 #[derive(Deserialize)]
 pub struct UpdateOptions {
     pub api_key: String,
-    pub group_type: CmdGroupType,
+    pub group_type: SyntheticGroupType,
     pub force: bool,
     pub data_only: bool,
 }

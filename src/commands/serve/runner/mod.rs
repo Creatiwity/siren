@@ -2,9 +2,9 @@ mod common;
 mod error;
 
 use super::super::common::FolderOptions;
-use super::super::update::runner::{update as update_data, Config as DataConfig};
 use crate::connectors::ConnectorsBuilders;
 use crate::models;
+use crate::update::{common::Config as DataConfig, update as update_data};
 use common::{
     Context, EtablissementInnerResponse, EtablissementResponse,
     UniteLegaleEtablissementInnerResponse, UniteLegaleInnerResponse, UniteLegaleResponse,
@@ -35,7 +35,7 @@ fn update(
     }
 
     let summary = update_data(
-        &options.group_type.into(),
+        options.group_type,
         DataConfig {
             force: options.force,
             data_only: options.data_only,

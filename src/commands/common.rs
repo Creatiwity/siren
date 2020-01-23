@@ -1,4 +1,4 @@
-use crate::models::metadata::common::GroupType;
+use crate::models::update_metadata::common::SyntheticGroupType;
 use serde::Deserialize;
 
 pub struct FolderOptions {
@@ -16,12 +16,12 @@ arg_enum! {
     }
 }
 
-impl From<CmdGroupType> for Vec<GroupType> {
+impl From<CmdGroupType> for SyntheticGroupType {
     fn from(group: CmdGroupType) -> Self {
         match group {
-            CmdGroupType::UnitesLegales => vec![GroupType::UnitesLegales],
-            CmdGroupType::Etablissements => vec![GroupType::Etablissements],
-            CmdGroupType::All => vec![GroupType::UnitesLegales, GroupType::Etablissements],
+            CmdGroupType::UnitesLegales => SyntheticGroupType::UnitesLegales,
+            CmdGroupType::Etablissements => SyntheticGroupType::Etablissements,
+            CmdGroupType::All => SyntheticGroupType::All,
         }
     }
 }

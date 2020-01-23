@@ -1,5 +1,5 @@
-use super::super::super::update::runner::error::Error as InternalUpdateError;
 use crate::models::{etablissement, unite_legale};
+use crate::update::error::Error as InternalUpdateError;
 use custom_error::custom_error;
 use rocket::http::Status;
 use rocket::request::Request;
