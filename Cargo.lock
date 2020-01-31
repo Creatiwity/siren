@@ -125,12 +125,13 @@ dependencies = [
 [[package]]
 name = "clap"
 version = "3.0.0-beta.1"
-source = "git+https://github.com/clap-rs/clap.git#f3683a97924be22c7ae5932ff95812187dc2e438"
+source = "git+https://github.com/clap-rs/clap.git#8be0a94951a65d21147a18e9070f4ffb73077fec"
 dependencies = [
  "ansi_term 0.12.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "atty 0.2.13 (registry+https://github.com/rust-lang/crates.io-index)",
  "bitflags 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "clap_derive 0.3.0 (git+https://github.com/clap-rs/clap_derive)",
+ "clap_derive 3.0.0-beta.1 (git+https://github.com/clap-rs/clap.git)",
+ "exitcode 1.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "indexmap 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "strsim 0.9.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "textwrap 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -140,8 +141,8 @@ dependencies = [
 
 [[package]]
 name = "clap_derive"
-version = "0.3.0"
-source = "git+https://github.com/clap-rs/clap_derive#0352bb30c897b00af88ad240e8e6f4aaf1855d05"
+version = "3.0.0-beta.1"
+source = "git+https://github.com/clap-rs/clap.git#8be0a94951a65d21147a18e9070f4ffb73077fec"
 dependencies = [
  "heck 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "proc-macro-error 0.4.4 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -275,6 +276,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "cfg-if 0.1.10 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
+
+[[package]]
+name = "exitcode"
+version = "1.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "filetime"
@@ -1822,7 +1828,7 @@ dependencies = [
 "checksum cfg-if 0.1.10 (registry+https://github.com/rust-lang/crates.io-index)" = "4785bdd1c96b2a846b2bd7cc02e86b6b3dbf14e7e53446c4f54c92a361040822"
 "checksum chrono 0.4.10 (registry+https://github.com/rust-lang/crates.io-index)" = "31850b4a4d6bae316f7a09e691c944c28299298837edc0a03f755618c23cbc01"
 "checksum clap 3.0.0-beta.1 (git+https://github.com/clap-rs/clap.git)" = "<none>"
-"checksum clap_derive 0.3.0 (git+https://github.com/clap-rs/clap_derive)" = "<none>"
+"checksum clap_derive 3.0.0-beta.1 (git+https://github.com/clap-rs/clap.git)" = "<none>"
 "checksum cloudabi 0.0.3 (registry+https://github.com/rust-lang/crates.io-index)" = "ddfc5b9aa5d4507acaf872de71051dfd0e309860e88966e1051e462a077aac4f"
 "checksum cookie 0.11.1 (registry+https://github.com/rust-lang/crates.io-index)" = "99be24cfcf40d56ed37fd11c2123be833959bbc5bddecb46e1c2e442e15fa3e0"
 "checksum core-foundation 0.6.4 (registry+https://github.com/rust-lang/crates.io-index)" = "25b9e03f145fd4f2bf705e07b900cd41fc636598fe5dc452fd0db1441c3f496d"
@@ -1838,6 +1844,7 @@ dependencies = [
 "checksum dotenv 0.15.0 (registry+https://github.com/rust-lang/crates.io-index)" = "77c90badedccf4105eca100756a0b1289e191f6fcbdadd3cee1d2f614f97da8f"
 "checksum dtoa 0.4.4 (registry+https://github.com/rust-lang/crates.io-index)" = "ea57b42383d091c85abcc2706240b94ab2a8fa1fc81c10ff23c4de06e2a90b5e"
 "checksum encoding_rs 0.8.20 (registry+https://github.com/rust-lang/crates.io-index)" = "87240518927716f79692c2ed85bfe6e98196d18c6401ec75355760233a7e12e9"
+"checksum exitcode 1.1.2 (registry+https://github.com/rust-lang/crates.io-index)" = "de853764b47027c2e862a995c34978ffa63c1501f2e15f987ba11bd4f9bba193"
 "checksum filetime 0.2.7 (registry+https://github.com/rust-lang/crates.io-index)" = "6bd7380b54ced79dda72ecc35cc4fbbd1da6bba54afaa37e96fd1c2a308cd469"
 "checksum flate2 1.0.12 (registry+https://github.com/rust-lang/crates.io-index)" = "ad3c5233c9a940c8719031b423d7e6c16af66e031cb0420b0896f5245bf181d3"
 "checksum fnv 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)" = "2fad85553e09a6f881f739c29f0b00b0f01357c743266d478b68951ce23285f3"
