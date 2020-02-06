@@ -125,13 +125,14 @@ dependencies = [
 [[package]]
 name = "clap"
 version = "3.0.0-beta.1"
-source = "git+https://github.com/clap-rs/clap.git#f3683a97924be22c7ae5932ff95812187dc2e438"
+source = "git+https://github.com/clap-rs/clap.git#7acc9225c68cb83b3839cfee032fc00b484cdcae"
 dependencies = [
  "ansi_term 0.12.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "atty 0.2.13 (registry+https://github.com/rust-lang/crates.io-index)",
  "bitflags 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "clap_derive 0.3.0 (git+https://github.com/clap-rs/clap_derive)",
+ "clap_derive 3.0.0-beta.1 (git+https://github.com/clap-rs/clap.git)",
  "indexmap 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "lazy_static 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "strsim 0.9.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "textwrap 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "unicode-width 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -140,8 +141,8 @@ dependencies = [
 
 [[package]]
 name = "clap_derive"
-version = "0.3.0"
-source = "git+https://github.com/clap-rs/clap_derive#0352bb30c897b00af88ad240e8e6f4aaf1855d05"
+version = "3.0.0-beta.1"
+source = "git+https://github.com/clap-rs/clap.git#7acc9225c68cb83b3839cfee032fc00b484cdcae"
 dependencies = [
  "heck 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "proc-macro-error 0.4.4 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1822,7 +1823,7 @@ dependencies = [
 "checksum cfg-if 0.1.10 (registry+https://github.com/rust-lang/crates.io-index)" = "4785bdd1c96b2a846b2bd7cc02e86b6b3dbf14e7e53446c4f54c92a361040822"
 "checksum chrono 0.4.10 (registry+https://github.com/rust-lang/crates.io-index)" = "31850b4a4d6bae316f7a09e691c944c28299298837edc0a03f755618c23cbc01"
 "checksum clap 3.0.0-beta.1 (git+https://github.com/clap-rs/clap.git)" = "<none>"
-"checksum clap_derive 0.3.0 (git+https://github.com/clap-rs/clap_derive)" = "<none>"
+"checksum clap_derive 3.0.0-beta.1 (git+https://github.com/clap-rs/clap.git)" = "<none>"
 "checksum cloudabi 0.0.3 (registry+https://github.com/rust-lang/crates.io-index)" = "ddfc5b9aa5d4507acaf872de71051dfd0e309860e88966e1051e462a077aac4f"
 "checksum cookie 0.11.1 (registry+https://github.com/rust-lang/crates.io-index)" = "99be24cfcf40d56ed37fd11c2123be833959bbc5bddecb46e1c2e442e15fa3e0"
 "checksum core-foundation 0.6.4 (registry+https://github.com/rust-lang/crates.io-index)" = "25b9e03f145fd4f2bf705e07b900cd41fc636598fe5dc452fd0db1441c3f496d"
