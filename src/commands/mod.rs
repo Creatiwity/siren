@@ -3,6 +3,7 @@ mod serve;
 mod update;
 
 use crate::connectors::ConnectorsBuilders;
+use clap::Clap;
 use common::FolderOptions;
 use serve::ServeFlags;
 use std::env;
