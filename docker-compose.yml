@@ -14,6 +14,7 @@ services:
       - "3000:3000"
     environment:
       - RUST_LOG=${RUST_LOG}
+      - API_KEY=${API_KEY}
       - SIRENE_ENV=${SIRENE_ENV}
       - DATABASE_URL=${DATABASE_URL}
       - TEMP_FOLDER=/app/data/temp
