@@ -7,19 +7,19 @@ use std::env;
 
 #[derive(Clap, Debug)]
 pub struct ServeFlags {
-    /// Listen this port
+    /// Production, Staging or Development, will change log level, you can set in environment variable as SIRENE_ENV
     #[clap(long = "env")]
     environment: Option<CmdEnvironment>,
 
-    /// Listen this port
+    /// Listen this port, you can set in environment variable as PORT
     #[clap(short = "p", long = "port")]
     port: Option<u16>,
 
-    /// Listen this host
+    /// Listen this host, you can set in environment variable as HOST
     #[clap(short = "h", long = "host")]
     host: Option<String>,
 
-    /// API key needed to allow maintenance operation from HTTP
+    /// API key needed to allow maintenance operation from HTTP, you can set in environment variable as API_KEY
     #[clap(short = "k", long = "api-key")]
     api_key: Option<String>,
 }
