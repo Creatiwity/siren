@@ -25,7 +25,103 @@ createuser --pwprompt sirene # set password to sirenepw for instance
 createdb --owner=sirene sirene
 ```
 
-### Usage
+## Documentation
+
+### CLI
+
+**> sirene**
+
+```
+> sirene -h
+
+USAGE:
+    sirene [OPTIONS] <SUBCOMMAND>
+
+FLAGS:
+    -h, --help       Prints help information
+    -V, --version    Prints version information
+
+OPTIONS:
+        --db-folder <db-folder>        Path to the file storage folder for the database, you can set in environment
+                                       variable as DB_FOLDER Could be the same as FILE_FOLDER if this app and the
+                                       database are on the same file system Files copied by this app inside FILE_FOLDER
+                                       must be visible by the database in DB_FOLDER
+        --file-folder <file-folder>    Path to the file storage folder for this app, you can set in environment variable
+                                       as FILE_FOLDER
+        --temp-folder <temp-folder>    Path to the temp folder, you can set in environment variable as TEMP_FOLDER
+
+SUBCOMMANDS:
+    help      Prints this message or the help of the given subcommand(s)
+    serve     Serve data from database to /unites_legales/<siren> and /etablissements/<siret>
+    update    Update data from CSV source files
+```
+
+**> sirene serve --help**
+
+```
+USAGE:
+    sirene serve [OPTIONS]
+
+FLAGS:
+        --help       Prints help information
+    -V, --version    Prints version information
+
+OPTIONS:
+    -k, --api-key <api-key>    API key needed to allow maintenance operation from HTTP, you can set in environment
+                               variable as API_KEY
+        --env <environment>    Production, Staging or Development, will change log level, you can set in environment
+                               variable as SIRENE_ENV
+    -h, --host <host>          Listen this host, you can set in environment variable as HOST
+    -p, --port <port>          Listen this port, you can set in environment variable as PORT
+```
+
+**> sirene update --help**
+
+```
+USAGE:
+    sirene update [FLAGS] <group-type> [SUBCOMMAND]
+
+ARGS:
+    <group-type>    Configure which part will be updated, UnitesLegales, Etablissements or All
+
+FLAGS:
+        --data-only    Use an existing CSV file already present in FILE_FOLDER and does not delete it
+        --force        Force update even if the source data where not updated
+    -h, --help         Prints help information
+    -V, --version      Prints version information
+
+SUBCOMMANDS:
+    clean-file       Clean files from FILE_FOLDER
+    download-file    Download file in TEMP_FOLDER
+    help             Prints this message or the help of the given subcommand(s)
+    insert-data      Load CSV file in database in loader-table from DB_FOLDER
+    swap-data        Swap loader-table to production
+    unzip-file       Unzip file from TEMP_FOLDER, and move it to the FILE_FOLDER
+```
+
+### HTTP API
+
+```
+GET /v3/unites_legales/<siren>
+GET /v3/etablissements/<siret>
+```
+
+**Maintenance**
+
+_This API is enabled only if you have provided an API_KEY when starting the `serve` process._
+
+```
+POST /admin/update
+
+{
+    api_key: string,
+    group_type: "UnitesLegales" | "Etablissements" | "All",
+    force: bool,
+    data_only: bool,
+}
+```
+
+### Basic usage
 
 Serve:
 

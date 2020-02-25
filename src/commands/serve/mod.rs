@@ -1,22 +1,27 @@
 mod runner;
 
+use super::common::FolderOptions;
 use crate::connectors::ConnectorsBuilders;
 use rocket::config::{Config, Environment};
 use std::env;
 
 #[derive(Clap, Debug)]
 pub struct ServeFlags {
-    /// Listen this port
+    /// Production, Staging or Development, will change log level, you can set in environment variable as SIRENE_ENV
     #[clap(long = "env")]
     environment: Option<CmdEnvironment>,
 
-    /// Listen this port
+    /// Listen this port, you can set in environment variable as PORT
     #[clap(short = "p", long = "port")]
     port: Option<u16>,
 
-    /// Listen this host
+    /// Listen this host, you can set in environment variable as HOST
     #[clap(short = "h", long = "host")]
     host: Option<String>,
+
+    /// API key needed to allow maintenance operation from HTTP, you can set in environment variable as API_KEY
+    #[clap(short = "k", long = "api-key")]
+    api_key: Option<String>,
 }
 
 arg_enum! {
@@ -49,7 +54,7 @@ impl CmdEnvironment {
     }
 }
 
-pub fn run(flags: ServeFlags, builders: ConnectorsBuilders) {
+pub fn run(flags: ServeFlags, folder_options: FolderOptions, builders: ConnectorsBuilders) {
     let env = flags.environment.unwrap_or_else(|| {
         CmdEnvironment::from_str(env::var("SIRENE_ENV").expect("Missing SIRENE_ENV"))
             .expect("Invalid SIRENE_ENV")
@@ -66,10 +71,15 @@ pub fn run(flags: ServeFlags, builders: ConnectorsBuilders) {
         .host
         .unwrap_or_else(|| env::var("HOST").expect("Missing HOST"));
 
+    let api_key = match flags.api_key {
+        Some(key) => Some(key),
+        None => env::var("API_KEY").ok(),
+    };
+
     let config = Config::build(env.into())
         .address(host)
         .port(port)
         .finalize();
 
-    runner::run(config.unwrap(), builders)
+    runner::run(config.unwrap(), api_key, folder_options, builders)
 }

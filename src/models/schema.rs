@@ -196,10 +196,27 @@ table! {
     }
 }
 
+table! {
+    update_metadata (id) {
+        id -> Int4,
+        synthetic_group_type -> Text,
+        force -> Bool,
+        data_only -> Bool,
+        status -> Text,
+        summary -> Nullable<Jsonb>,
+        error -> Nullable<Text>,
+        launched_timestamp -> Timestamptz,
+        finished_timestamp -> Nullable<Timestamptz>,
+        created_at -> Timestamptz,
+        updated_at -> Timestamptz,
+    }
+}
+
 allow_tables_to_appear_in_same_query!(
     etablissement,
     etablissement_staging,
     group_metadata,
     unite_legale,
     unite_legale_staging,
+    update_metadata,
 );
