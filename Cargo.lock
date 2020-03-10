@@ -1234,9 +1234,9 @@ dependencies = [
 
 [[package]]
 name = "rocket"
-version = "0.4.3"
+version = "0.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0aa9ab5fad4a9b366ae884f5b5461e166fe8f94d23a561a91dfaab046c2f4fde"
+checksum = "e20afbad214b001cabbe31dd270b48b3be980a7153ee2ed8392e241f856d651b"
 dependencies = [
  "atty",
  "base64 0.10.1",
@@ -1255,9 +1255,9 @@ dependencies = [
 
 [[package]]
 name = "rocket_codegen"
-version = "0.4.3"
+version = "0.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c56c540f73ae2291e8c1e4f9757f92fec7015c09fd90d7bb70349386a111602c"
+checksum = "2108b35e2c3a35759d3f16cc3002ece05523191d884d3ad6523693fd43324dde"
 dependencies = [
  "devise",
  "glob",
@@ -1283,9 +1283,9 @@ dependencies = [
 
 [[package]]
 name = "rocket_http"
-version = "0.4.3"
+version = "0.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "968a07cbfa9f8c8a0239aba359b80e1281e85da9415795c68f3ddeb5e1d636d6"
+checksum = "6ce8ca76247376ea21cf271af0f95e3f2014596e3e4c7cc04e44ee6242a40ff2"
 dependencies = [
  "cookie",
  "hyper 0.10.16",
