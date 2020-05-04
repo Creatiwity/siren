@@ -134,13 +134,14 @@ dependencies = [
 [[package]]
 name = "clap"
 version = "3.0.0-beta.1"
-source = "git+https://github.com/clap-rs/clap.git#e1d83a78804a271b053d4d21f69b67f7eb01ad01"
+source = "git+https://github.com/clap-rs/clap.git#5239d2c3718732dce3dc639213f494b5f469f922"
 dependencies = [
  "atty",
  "bitflags",
  "clap_derive",
  "indexmap",
  "lazy_static",
+ "os_str_bytes",
  "strsim",
  "termcolor",
  "textwrap",
@@ -151,7 +152,7 @@ dependencies = [
 [[package]]
 name = "clap_derive"
 version = "3.0.0-beta.1"
-source = "git+https://github.com/clap-rs/clap.git#e1d83a78804a271b053d4d21f69b67f7eb01ad01"
+source = "git+https://github.com/clap-rs/clap.git#5239d2c3718732dce3dc639213f494b5f469f922"
 dependencies = [
  "heck",
  "proc-macro-error",
@@ -931,6 +932,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "os_str_bytes"
+version = "2.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ced912e1439b63a8172b943887c33373f226a4a9cfab95d09c0e3c44851d04d4"
+
+[[package]]
 name = "parking_lot"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1456,9 +1463,9 @@ checksum = "7345c971d1ef21ffdbd103a75990a15eb03604fc8b8852ca8cb418ee1a099028"
 
 [[package]]
 name = "strsim"
-version = "0.9.3"
+version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6446ced80d6c486436db5c078dde11a9f73d42b57fb273121e160b84f63d894c"
+checksum = "73473c0e59e6d5812c5dfe2a064a6444949f089e20eec9a2e5506596494e4623"
 
 [[package]]
 name = "syn"
