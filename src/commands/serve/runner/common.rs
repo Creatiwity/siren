@@ -1,12 +1,12 @@
 use super::super::super::common::FolderOptions;
-use crate::connectors::Connectors;
+use crate::connectors::ConnectorsBuilders;
 use crate::models::etablissement::common::Etablissement;
 use crate::models::unite_legale::common::UniteLegale;
 use crate::models::update_metadata::common::{SyntheticGroupType, UpdateSummary};
 use serde::{Deserialize, Serialize};
 
 pub struct Context {
-    pub connectors: Connectors,
+    pub builders: ConnectorsBuilders,
     pub api_key: Option<String>,
     pub folder_options: FolderOptions,
 }
@@ -17,6 +17,7 @@ pub struct UpdateOptions {
     pub group_type: SyntheticGroupType,
     pub force: bool,
     pub data_only: bool,
+    pub daily_enabled: bool,
 }
 
 #[derive(Serialize)]

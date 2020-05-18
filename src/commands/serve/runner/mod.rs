@@ -21,7 +21,7 @@ fn index() -> &'static str {
 }
 
 #[post("/update", format = "application/json", data = "<options>")]
-fn update(
+async fn update(
     state: State<Context>,
     options: Json<UpdateOptions>,
 ) -> Result<Json<UpdateResponse>, Error> {
@@ -34,6 +34,8 @@ fn update(
         return Err(Error::ApiKeyError);
     }
 
+    let connectors = state.builders.create_with_insee(true).await;
+
     let summary = update_data(
         options.group_type,
         DataConfig {
@@ -42,8 +44,9 @@ fn update(
             temp_folder: state.folder_options.temp.clone(),
             file_folder: state.folder_options.file.clone(),
             db_folder: state.folder_options.db.clone(),
+            daily_enabled: options.daily_enabled,
         },
-        &state.connectors,
+        &connectors,
     )?;
 
     Ok(Json(UpdateResponse { summary }))
@@ -58,10 +61,12 @@ fn unites_legales(
         return Err(Error::InvalidData);
     }
 
-    let unite_legale = models::unite_legale::get(&state.connectors, &siren)?;
-    let etablissements = models::etablissement::get_with_siren(&state.connectors, &siren)?;
+    let connectors = state.builders.create();
+
+    let unite_legale = models::unite_legale::get(&connectors, &siren)?;
+    let etablissements = models::etablissement::get_with_siren(&connectors, &siren)?;
     let etablissement_siege =
-        models::etablissement::get_siege_with_siren(&state.connectors, &unite_legale.siren)?;
+        models::etablissement::get_siege_with_siren(&connectors, &unite_legale.siren)?;
 
     Ok(Json(UniteLegaleResponse {
         unite_legale: UniteLegaleInnerResponse {
@@ -81,10 +86,12 @@ fn etablissements(
         return Err(Error::InvalidData);
     }
 
-    let etablissement = models::etablissement::get(&state.connectors, &siret)?;
-    let unite_legale = models::unite_legale::get(&state.connectors, &etablissement.siren)?;
+    let connectors = state.builders.create();
+
+    let etablissement = models::etablissement::get(&connectors, &siret)?;
+    let unite_legale = models::unite_legale::get(&connectors, &etablissement.siren)?;
     let etablissement_siege =
-        models::etablissement::get_siege_with_siren(&state.connectors, &etablissement.siren)?;
+        models::etablissement::get_siege_with_siren(&connectors, &etablissement.siren)?;
 
     Ok(Json(EtablissementResponse {
         etablissement: EtablissementInnerResponse {
@@ -107,7 +114,7 @@ pub fn run(
         .mount("/v3", routes![index, unites_legales, etablissements])
         .mount("/admin", routes![update])
         .manage(Context {
-            connectors: builders.create(),
+            builders,
             api_key,
             folder_options,
         })

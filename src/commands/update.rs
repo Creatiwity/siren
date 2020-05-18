@@ -16,6 +16,10 @@ pub struct UpdateFlags {
     #[clap(long = "data-only")]
     data_only: bool,
 
+    /// Use INSEE API to get daily data updates
+    #[clap(long = "daily-enabled")]
+    daily_enabled: bool,
+
     #[clap(subcommand)]
     subcmd: Option<UpdateSubCommand>,
 }
@@ -44,7 +48,7 @@ enum UpdateSubCommand {
 }
 
 pub fn run(flags: UpdateFlags, folder_options: FolderOptions, builders: ConnectorsBuilders) {
-    let connectors = builders.create();
+    let connectors = builders.create(flags.daily_enabled);
     let synthetic_group_type: SyntheticGroupType = flags.group_type.into();
 
     // Prepare config
@@ -54,6 +58,7 @@ pub fn run(flags: UpdateFlags, folder_options: FolderOptions, builders: Connecto
         temp_folder: folder_options.temp,
         file_folder: folder_options.file,
         db_folder: folder_options.db,
+        daily_enabled: flags.daily_enabled,
     };
 
     let summary_result = match flags.subcmd {

@@ -17,6 +17,7 @@ extern crate rocket;
 extern crate rocket_contrib;
 extern crate serde;
 extern crate serde_json;
+extern crate tokio;
 extern crate zip;
 
 mod commands;
@@ -27,8 +28,10 @@ mod update;
 use chrono::Utc;
 use connectors::ConnectorsBuilders;
 use dotenv::dotenv;
+use tokio::prelude::*;
 
-fn main() {
+#[tokio::main]
+async fn main() {
     // Load configuration
     dotenv().ok();
 
@@ -36,7 +39,7 @@ fn main() {
     let connectors_builders = ConnectorsBuilders::new();
 
     // Close running updates
-    let connectors = connectors_builders.create();
+    let connectors = connectors_builders.create(false);
     models::update_metadata::error_update(
         &connectors,
         String::from("Program unexpectedly closed"),
