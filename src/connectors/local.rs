@@ -25,8 +25,12 @@ impl ConnectorBuilder {
                 .expect(&format!("Error connecting to {}", database_url)),
         };
 
-        let connection = builder.pool.get().expect("Unable to connect for migrations");
-        embedded_migrations::run_with_output(&connection, &mut std::io::stdout()).expect("Unable to run migrations");
+        let connection = builder
+            .pool
+            .get()
+            .expect("Unable to connect for migrations");
+        embedded_migrations::run_with_output(&connection, &mut std::io::stdout())
+            .expect("Unable to run migrations");
 
         builder
     }

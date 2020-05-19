@@ -34,7 +34,7 @@ async fn update(
         return Err(Error::ApiKeyError);
     }
 
-    let connectors = state.builders.create_with_insee(true).await;
+    let connectors = state.builders.create_with_insee().await;
 
     let summary = update_data(
         options.group_type,
@@ -44,7 +44,6 @@ async fn update(
             temp_folder: state.folder_options.temp.clone(),
             file_folder: state.folder_options.file.clone(),
             db_folder: state.folder_options.db.clone(),
-            daily_enabled: options.daily_enabled,
         },
         &connectors,
     )?;

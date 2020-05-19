@@ -17,7 +17,6 @@ pub struct UpdateOptions {
     pub group_type: SyntheticGroupType,
     pub force: bool,
     pub data_only: bool,
-    pub daily_enabled: bool,
 }
 
 #[derive(Serialize)]
