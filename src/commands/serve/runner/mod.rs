@@ -21,7 +21,7 @@ fn index() -> &'static str {
 }
 
 #[post("/update", format = "application/json", data = "<options>")]
-async fn update(
+fn update(
     state: State<Context>,
     options: Json<UpdateOptions>,
 ) -> Result<Json<UpdateResponse>, Error> {
@@ -34,7 +34,7 @@ async fn update(
         return Err(Error::ApiKeyError);
     }
 
-    let connectors = state.builders.create_with_insee().await;
+    let connectors = state.builders.create();
 
     let summary = update_data(
         options.group_type,

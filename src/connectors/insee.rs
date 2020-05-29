@@ -36,7 +36,7 @@ impl ConnectorBuilder {
         }
     }
 
-    pub async fn create(&self) -> Result<Connector, Error> {
+    pub fn create(&self) -> Result<Connector, Error> {
         self.generate_token().map(|token| Connector { token })
     }
 
