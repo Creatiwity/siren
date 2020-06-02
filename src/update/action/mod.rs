@@ -28,7 +28,7 @@ pub fn execute_step(
     }
 
     Ok(UpdateStepSummary {
-        step: Step::DownloadFile,
+        step,
         updated: groups_summary.iter().find(|&g| g.updated).is_some(),
         started_timestamp,
         finished_timestamp: Utc::now(),
