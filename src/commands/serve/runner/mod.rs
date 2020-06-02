@@ -34,7 +34,7 @@ fn update(
         return Err(Error::ApiKeyError);
     }
 
-    let connectors = state.builders.create();
+    let connectors = state.builders.create_with_insee()?;
 
     let summary = update_data(
         options.group_type,
