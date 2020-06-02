@@ -29,6 +29,7 @@ impl ConnectorBuilder {
     pub fn new() -> Option<ConnectorBuilder> {
         let credentials = env::var("INSEE_CREDENTIALS").ok();
 
+        println!("INSEE Credentials: {:#?}", credentials);
         if let Some(credentials) = credentials {
             Some(ConnectorBuilder { credentials })
         } else {
@@ -49,7 +50,7 @@ impl ConnectorBuilder {
             .send()?
             .json()?;
 
-        println!("{:?}", response.access_token.clone());
+        println!("Access token: {:?}", response.access_token.clone());
         Ok(response.access_token)
     }
 }
