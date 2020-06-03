@@ -41,6 +41,10 @@ enum UpdateSubCommand {
     /// Clean files from FILE_FOLDER
     #[clap(name = "clean-file")]
     CleanFile,
+
+    /// Synchronise UnitesLegales and Etablissements from INSEE for a date range
+    #[clap(name = "sync-insee")]
+    SyncInsee,
 }
 
 pub fn run(flags: UpdateFlags, folder_options: FolderOptions, builders: ConnectorsBuilders) {
@@ -64,6 +68,7 @@ pub fn run(flags: UpdateFlags, folder_options: FolderOptions, builders: Connecto
                 UpdateSubCommand::InsertData => Step::InsertData,
                 UpdateSubCommand::SwapData => Step::SwapData,
                 UpdateSubCommand::CleanFile => Step::CleanFile,
+                UpdateSubCommand::SyncInsee => Step::SyncInsee,
             };
 
             update_step(step, synthetic_group_type, config, &connectors)

@@ -11,6 +11,7 @@ pub mod common;
 pub mod download_stock;
 pub mod insert_stock;
 pub mod swap;
+pub mod sync_insee;
 pub mod unzip_stock;
 
 pub fn execute_step(
@@ -58,5 +59,6 @@ fn build_action(config: &Config, step: Step) -> Box<dyn Action> {
             temp_folder: config.temp_folder.clone(),
             file_folder: config.file_folder.clone(),
         }),
+        Step::SyncInsee => Box::new(sync_insee::SyncInseeAction {}),
     }
 }

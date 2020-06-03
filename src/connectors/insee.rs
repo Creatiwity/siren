@@ -10,7 +10,7 @@ custom_error! { pub Error
 }
 
 pub struct Connector {
-    token: String,
+    pub token: String,
 }
 
 pub struct ConnectorBuilder {

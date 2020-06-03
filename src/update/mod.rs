@@ -98,6 +98,7 @@ fn build_workflow(config: &Config) -> Vec<Step> {
     }
 
     // If INSEE, download and insert daily modifications
+    workflow.push(Step::SyncInsee);
 
     workflow
 }
