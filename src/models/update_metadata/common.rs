@@ -67,6 +67,7 @@ pub enum Step {
     InsertData,
     SwapData,
     CleanFile,
+    SyncInsee,
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug)]

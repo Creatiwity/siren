@@ -8,10 +8,11 @@ use common::Action;
 
 pub mod clean;
 pub mod common;
-pub mod download;
-pub mod insert;
+pub mod download_stock;
+pub mod insert_stock;
 pub mod swap;
-pub mod unzip;
+pub mod sync_insee;
+pub mod unzip_stock;
 
 pub fn execute_step(
     step: Step,
@@ -28,7 +29,7 @@ pub fn execute_step(
     }
 
     Ok(UpdateStepSummary {
-        step: Step::DownloadFile,
+        step,
         updated: groups_summary.iter().find(|&g| g.updated).is_some(),
         started_timestamp,
         finished_timestamp: Utc::now(),
@@ -38,16 +39,16 @@ pub fn execute_step(
 
 fn build_action(config: &Config, step: Step) -> Box<dyn Action> {
     match step {
-        Step::DownloadFile => Box::new(download::DownloadAction {
+        Step::DownloadFile => Box::new(download_stock::DownloadAction {
             temp_folder: config.temp_folder.clone(),
             force: config.force,
         }),
-        Step::UnzipFile => Box::new(unzip::UnzipAction {
+        Step::UnzipFile => Box::new(unzip_stock::UnzipAction {
             temp_folder: config.temp_folder.clone(),
             file_folder: config.file_folder.clone(),
             force: config.force,
         }),
-        Step::InsertData => Box::new(insert::InsertAction {
+        Step::InsertData => Box::new(insert_stock::InsertAction {
             db_folder: config.file_folder.clone(),
             force: config.force,
         }),
@@ -58,5 +59,6 @@ fn build_action(config: &Config, step: Step) -> Box<dyn Action> {
             temp_folder: config.temp_folder.clone(),
             file_folder: config.file_folder.clone(),
         }),
+        Step::SyncInsee => Box::new(sync_insee::SyncInseeAction {}),
     }
 }

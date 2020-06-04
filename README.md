@@ -97,6 +97,7 @@ SUBCOMMANDS:
     insert-data      Load CSV file in database in loader-table from DB_FOLDER
     swap-data        Swap loader-table to production
     unzip-file       Unzip file from TEMP_FOLDER, and move it to the FILE_FOLDER
+    sync-insee       Synchronise daily data from INSEE since the last modification
 ```
 
 ### HTTP API

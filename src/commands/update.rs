@@ -41,10 +41,14 @@ enum UpdateSubCommand {
     /// Clean files from FILE_FOLDER
     #[clap(name = "clean-file")]
     CleanFile,
+
+    /// Synchronise daily data from INSEE since the last modification
+    #[clap(name = "sync-insee")]
+    SyncInsee,
 }
 
 pub fn run(flags: UpdateFlags, folder_options: FolderOptions, builders: ConnectorsBuilders) {
-    let connectors = builders.create();
+    let connectors = builders.create_with_insee().unwrap();
     let synthetic_group_type: SyntheticGroupType = flags.group_type.into();
 
     // Prepare config
@@ -64,6 +68,7 @@ pub fn run(flags: UpdateFlags, folder_options: FolderOptions, builders: Connecto
                 UpdateSubCommand::InsertData => Step::InsertData,
                 UpdateSubCommand::SwapData => Step::SwapData,
                 UpdateSubCommand::CleanFile => Step::CleanFile,
+                UpdateSubCommand::SyncInsee => Step::SyncInsee,
             };
 
             update_step(step, synthetic_group_type, config, &connectors)

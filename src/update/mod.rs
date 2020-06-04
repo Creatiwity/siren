@@ -86,6 +86,7 @@ fn build_workflow(config: &Config) -> Vec<Step> {
 
     if !config.data_only {
         workflow.push(Step::DownloadFile);
+        // If INSEE && newly downloaded file, get update date from INSEE and update
         workflow.push(Step::UnzipFile);
     }
 
@@ -95,6 +96,9 @@ fn build_workflow(config: &Config) -> Vec<Step> {
     if !config.data_only {
         workflow.push(Step::CleanFile);
     }
+
+    // If INSEE, download and insert daily modifications
+    workflow.push(Step::SyncInsee);
 
     workflow
 }
