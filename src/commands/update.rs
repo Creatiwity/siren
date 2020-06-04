@@ -42,7 +42,7 @@ enum UpdateSubCommand {
     #[clap(name = "clean-file")]
     CleanFile,
 
-    /// Synchronise UnitesLegales and Etablissements from INSEE for a date range
+    /// Synchronise daily data from INSEE since the last modification
     #[clap(name = "sync-insee")]
     SyncInsee,
 }

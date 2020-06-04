@@ -50,7 +50,6 @@ impl ConnectorBuilder {
             .send()?
             .json()?;
 
-        println!("Access token: {:?}", response.access_token.clone());
         Ok(response.access_token)
     }
 }
