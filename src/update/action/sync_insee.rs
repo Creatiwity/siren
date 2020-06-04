@@ -20,12 +20,10 @@ impl Action for SyncInseeAction {
         println!("[SyncInsee] Starting {:#?}", group_type);
         let started_timestamp = Utc::now();
 
-        let insee = connectors
-            .insee
-            .as_ref()
-            .ok_or(Error::SyncInseeConnectorError)?;
-
-        println!("Insee access token: {}", insee.token);
+        if let Some(insee) = &connectors.insee {
+            // Use Insee connector only if present
+            println!("Insee access token: {}", insee.token);
+        }
 
         println!("[SyncInsee] Finished for {:#?}", group_type);
         Ok(UpdateGroupSummary {
