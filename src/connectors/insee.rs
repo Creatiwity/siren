@@ -1,6 +1,6 @@
 use custom_error::custom_error;
 use reqwest::header::AUTHORIZATION;
-use serde::Deserialize;
+use serde::{Serialize, Deserialize};
 use std::env;
 
 custom_error! { pub Error
@@ -17,6 +17,12 @@ pub struct ConnectorBuilder {
     pub credentials: String,
 }
 
+#[derive(Serialize)]
+struct InseeTokenParameters {
+    pub grant_type: String,
+    pub validity_period: u32
+}
+
 #[derive(Deserialize)]
 struct InseeTokenResponse {
     pub access_token: String,
@@ -29,7 +35,6 @@ impl ConnectorBuilder {
     pub fn new() -> Option<ConnectorBuilder> {
         let credentials = env::var("INSEE_CREDENTIALS").ok();
 
-        println!("INSEE Credentials: {:#?}", credentials);
         if let Some(credentials) = credentials {
             Some(ConnectorBuilder { credentials })
         } else {
@@ -46,7 +51,10 @@ impl ConnectorBuilder {
         let response: InseeTokenResponse = client
             .post("https://api.insee.fr/token")
             .header(AUTHORIZATION, format!("Basic {}", self.credentials))
-            .body("grant_type=client_credentials&validity_period=86400")
+            .form(&InseeTokenParameters {
+                grant_type: String::from("client_credentials"),
+                validity_period: 86400
+            })
             .send()?
             .json()?;
 
