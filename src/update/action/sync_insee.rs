@@ -19,11 +19,19 @@ impl Action for SyncInseeAction {
     ) -> Result<UpdateGroupSummary, Error> {
         println!("[SyncInsee] Starting {:#?}", group_type);
         let started_timestamp = Utc::now();
+        let mut result = String::new();
 
         if let Some(insee) = &connectors.insee {
             // Use Insee connector only if present
             println!("Insee access token: {}", insee.token);
+
+            result = match group_type {
+                GroupType::UnitesLegales => insee.get_daily_unites_legales()?,
+                GroupType::Etablissements => insee.get_daily_etablissements()?,
+            };
         }
+
+        println!("Result: {}", result);
 
         println!("[SyncInsee] Finished for {:#?}", group_type);
         Ok(UpdateGroupSummary {
