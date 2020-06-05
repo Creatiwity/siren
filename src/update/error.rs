@@ -1,4 +1,4 @@
-use crate::connectors::insee::InseeError;
+use crate::connectors::insee::error::InseeError;
 use crate::models;
 use crate::models::group_metadata::common::GroupType;
 use crate::models::{group_metadata, update_metadata};

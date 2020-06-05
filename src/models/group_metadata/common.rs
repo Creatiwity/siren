@@ -23,6 +23,7 @@ pub struct Metadata {
     pub url: String,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    pub last_insee_synced_timestamp: Option<DateTime<Utc>>,
 }
 
 #[derive(AsChangeset)]
