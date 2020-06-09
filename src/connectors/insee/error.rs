@@ -8,4 +8,5 @@ custom_error! { pub TokenError
 
 custom_error! { pub InseeError
     NetworkError {source: reqwest::Error} = "Unable to retrieve INSEE data (network error: {source})",
+    MissingPeriodeError = "Missing current unite legale periode",
 }
