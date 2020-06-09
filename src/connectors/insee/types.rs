@@ -25,7 +25,7 @@ pub struct Header {
     pub curseur_suivant: String,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct InseeUniteLegaleInner {
     pub siren: String,
@@ -45,11 +45,14 @@ pub struct InseeUniteLegaleInner {
     pub pseudonyme_unite_legale: Option<String>,
     pub identifiant_association_unite_legale: Option<String>,
     pub tranche_effectifs_unite_legale: Option<String>,
+
     #[serde(deserialize_with = "from_str_optional")]
     pub annee_effectifs_unite_legale: Option<i32>,
+
     pub date_dernier_traitement_unite_legale: Option<NaiveDateTime>,
     pub nombre_periodes_unite_legale: Option<i32>,
     pub categorie_entreprise: Option<String>,
+
     #[serde(deserialize_with = "from_str_optional")]
     pub annee_categorie_entreprise: Option<i32>,
 }
@@ -68,12 +71,15 @@ pub struct InseeUniteLegaleWithPeriode {
     pub periode: PeriodeInseeUniteLegale,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct PeriodeInseeUniteLegale {
     pub date_fin: Option<NaiveDate>,
     pub date_debut: Option<NaiveDate>,
+
+    #[serde(deserialize_with = "deserialize_etat_administratif")]
     pub etat_administratif_unite_legale: String,
+
     pub changement_etat_administratif_unite_legale: bool,
     pub nom_unite_legale: Option<String>,
     pub changement_nom_unite_legale: bool,
@@ -109,8 +115,8 @@ impl From<&InseeUniteLegale> for Option<UniteLegale> {
                 // Convert
                 Some(
                     InseeUniteLegaleWithPeriode {
-                        content: u.content,
-                        periode: *periode,
+                        content: u.content.clone(),
+                        periode: periode.clone(),
                     }
                     .into(),
                 )
@@ -173,10 +179,19 @@ where
         Ok(serde_json::Value::String(s)) => T::from_str(&s)
             .map_err(serde::de::Error::custom)
             .map(Option::from),
-        Ok(v) => {
-            println!("string expected but found something else: {}", v);
+        Ok(_v) => {
+            // Commenting this print to prevent console spamming
+            // println!("string expected but found something else: {}", v);
             Ok(None)
         }
         Err(_) => Ok(None),
     }
+}
+
+fn deserialize_etat_administratif<'de, D>(deserializer: D) -> Result<String, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let opt = Option::deserialize(deserializer)?;
+    Ok(opt.unwrap_or(String::from("C")))
 }
