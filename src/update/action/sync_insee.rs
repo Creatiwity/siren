@@ -26,7 +26,9 @@ impl Action for SyncInseeAction {
 
             let model = group_type.get_updatable_model();
 
-            model.update_daily_data(connectors, started_timestamp)?;
+            if let Some(timestamp) = model.get_last_insee_synced_timestamp(connectors)? {
+                model.update_daily_data(connectors, timestamp)?;
+            }
         }
 
         println!("[SyncInsee] Finished for {:#?}", group_type);

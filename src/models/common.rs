@@ -1,6 +1,6 @@
 use crate::connectors::insee::error::InseeUpdateError;
 use crate::connectors::Connectors;
-use chrono::{DateTime, Utc};
+use chrono::NaiveDateTime;
 use custom_error::custom_error;
 
 pub trait UpdatableModel {
@@ -11,11 +11,11 @@ pub trait UpdatableModel {
     fn get_last_insee_synced_timestamp(
         &self,
         connectors: &Connectors,
-    ) -> Result<Option<DateTime<Utc>>, Error>;
+    ) -> Result<Option<NaiveDateTime>, Error>;
     fn update_daily_data(
         &self,
         connectors: &Connectors,
-        start_timestamp: DateTime<Utc>,
+        start_timestamp: NaiveDateTime,
     ) -> Result<(), Error>;
 }
 

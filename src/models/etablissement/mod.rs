@@ -5,7 +5,7 @@ pub mod error;
 use super::common::{Error as UpdatableError, UpdatableModel};
 use super::schema::etablissement::dsl;
 use crate::connectors::Connectors;
-use chrono::{DateTime, Utc};
+use chrono::NaiveDateTime;
 use common::Etablissement;
 use diesel::prelude::*;
 use diesel::sql_query;
@@ -115,14 +115,14 @@ impl UpdatableModel for EtablissementModel {
     fn get_last_insee_synced_timestamp(
         &self,
         _connectors: &Connectors,
-    ) -> Result<Option<DateTime<Utc>>, UpdatableError> {
+    ) -> Result<Option<NaiveDateTime>, UpdatableError> {
         Ok(None)
     }
 
     fn update_daily_data(
         &self,
         connectors: &Connectors,
-        _start_timestamp: DateTime<Utc>,
+        _start_timestamp: NaiveDateTime,
     ) -> Result<(), UpdatableError> {
         let insee = connectors
             .insee

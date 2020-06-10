@@ -5,7 +5,7 @@ pub mod error;
 use super::common::{Error as UpdatableError, UpdatableModel};
 use super::schema::unite_legale::dsl;
 use crate::connectors::Connectors;
-use chrono::{DateTime, Utc};
+use chrono::NaiveDateTime;
 use common::UniteLegale;
 use diesel::prelude::*;
 use diesel::sql_query;
@@ -92,15 +92,21 @@ impl UpdatableModel for UniteLegaleModel {
     // SELECT date_dernier_traitement FROM unite_legale WHERE date_dernier_traitement IS NOT NULL ORDER BY date_dernier_traitement DESC LIMIT 1;
     fn get_last_insee_synced_timestamp(
         &self,
-        _connectors: &Connectors,
-    ) -> Result<Option<DateTime<Utc>>, UpdatableError> {
-        Ok(None)
+        connectors: &Connectors,
+    ) -> Result<Option<NaiveDateTime>, UpdatableError> {
+        let connection = connectors.local.pool.get()?;
+        dsl::unite_legale
+            .select(dsl::date_dernier_traitement)
+            .order(dsl::date_dernier_traitement.desc())
+            .filter(dsl::date_dernier_traitement.is_not_null())
+            .first::<Option<NaiveDateTime>>(&connection)
+            .map_err(|error| error.into())
     }
 
     fn update_daily_data(
         &self,
         connectors: &Connectors,
-        start_timestamp: DateTime<Utc>,
+        start_timestamp: NaiveDateTime,
     ) -> Result<(), UpdatableError> {
         let insee = connectors
             .insee
