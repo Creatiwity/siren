@@ -5,6 +5,7 @@ pub mod error;
 use super::common::{Error as UpdatableError, UpdatableModel};
 use super::schema::etablissement::dsl;
 use crate::connectors::Connectors;
+use chrono::{DateTime, Utc};
 use common::Etablissement;
 use diesel::prelude::*;
 use diesel::sql_query;
@@ -108,5 +109,29 @@ impl UpdatableModel for EtablissementModel {
 
             Ok(())
         })
+    }
+
+    // SELECT date_dernier_traitement FROM etablissement WHERE date_dernier_traitement IS NOT NULL ORDER BY date_dernier_traitement DESC LIMIT 1;
+    fn get_last_insee_synced_timestamp(
+        &self,
+        _connectors: &Connectors,
+    ) -> Result<Option<DateTime<Utc>>, UpdatableError> {
+        Ok(None)
+    }
+
+    fn update_daily_data(
+        &self,
+        connectors: &Connectors,
+        _start_timestamp: DateTime<Utc>,
+    ) -> Result<(), UpdatableError> {
+        let insee = connectors
+            .insee
+            .as_ref()
+            .ok_or(UpdatableError::MissingInseeConnector)?;
+
+        let result = insee.get_daily_etablissements()?;
+
+        println!("{:#?}", result);
+        Ok(())
     }
 }

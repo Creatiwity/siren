@@ -23,6 +23,10 @@ impl Action for SyncInseeAction {
         if let Some(insee) = &connectors.insee {
             // Use Insee connector only if present
             println!("Insee access token: {}", insee.token);
+
+            let model = group_type.get_updatable_model();
+
+            model.update_daily_data(connectors, started_timestamp)?;
         }
 
         println!("[SyncInsee] Finished for {:#?}", group_type);
