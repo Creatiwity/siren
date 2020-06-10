@@ -1,4 +1,4 @@
-use super::error::InseeError;
+use super::error::InseeUpdateError;
 use super::types::InseeUniteLegaleResponse;
 use super::Connector;
 use crate::models::unite_legale::common::UniteLegale;
@@ -11,7 +11,7 @@ impl Connector {
     pub fn get_daily_unites_legales(
         &self,
         _start_timestamp: DateTime<Utc>,
-    ) -> Result<Vec<UniteLegale>, InseeError> {
+    ) -> Result<Vec<UniteLegale>, InseeUpdateError> {
         let mut unites_legales: Vec<UniteLegale> = vec![];
 
         let client = reqwest::blocking::Client::new();
@@ -22,7 +22,7 @@ impl Connector {
             println!("Current cursor: {}", current_cursor);
 
             let url = format!(
-                "{}/siren?q=dateDernierTraitementUniteLegale:[2020-06-08 TO *]&nombre=1000&curseur={}",
+                "{}/siren?q=dateDernierTraitementUniteLegale:[2020-06-09 TO *]&nombre=1000&curseur={}",
                 BASE_URL, current_cursor
             );
 
@@ -43,7 +43,7 @@ impl Connector {
         Ok(unites_legales)
     }
 
-    pub fn get_daily_etablissements(&self) -> Result<String, InseeError> {
+    pub fn get_daily_etablissements(&self) -> Result<String, InseeUpdateError> {
         Ok(String::from("Etablissement"))
     }
 }

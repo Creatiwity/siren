@@ -3,7 +3,7 @@ mod types;
 
 pub mod error;
 
-use error::TokenError;
+use error::InseeTokenError;
 use reqwest::header::AUTHORIZATION;
 use serde::{Deserialize, Serialize};
 use std::env;
@@ -41,11 +41,11 @@ impl ConnectorBuilder {
         }
     }
 
-    pub fn create(&self) -> Result<Connector, TokenError> {
+    pub fn create(&self) -> Result<Connector, InseeTokenError> {
         self.generate_token().map(|token| Connector { token })
     }
 
-    fn generate_token(&self) -> Result<String, TokenError> {
+    fn generate_token(&self) -> Result<String, InseeTokenError> {
         let client = reqwest::blocking::Client::new();
         let response: InseeTokenResponse = client
             .post("https://api.insee.fr/token")

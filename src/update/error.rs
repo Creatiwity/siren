@@ -1,4 +1,4 @@
-use crate::connectors::insee::error::InseeError;
+use crate::connectors::insee::error::InseeUpdateError;
 use crate::models;
 use crate::models::group_metadata::common::GroupType;
 use crate::models::{group_metadata, update_metadata};
@@ -27,7 +27,7 @@ custom_error! { pub Error
     InvalidCSVPath = "Invalid CSV path, not UTF8 compatible.",
     InvalidComponentInCSVPath {io_error: std::io::Error} = "Invalid component in CSV path ({io_error}).",
     SwapStoppedTooMuchDifference {group_type: GroupType} = "Swapping stopped on {group_type}, more than 1% difference between the old values and the new ones. Use --force to override.",
-    SyncInseeError {source: InseeError} = "[SyncInsee] {source}",
+    SyncInseeError {source: InseeUpdateError} = "[SyncInsee] {source}",
 }
 
 impl Error {

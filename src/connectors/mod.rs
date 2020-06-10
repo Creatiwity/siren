@@ -4,7 +4,7 @@ pub mod insee;
 pub mod local;
 
 custom_error! { pub Error
-    InseeError { source: insee::error::TokenError } = "{source}",
+    InseeError { source: insee::error::InseeTokenError } = "{source}",
 }
 
 pub struct ConnectorsBuilders {
