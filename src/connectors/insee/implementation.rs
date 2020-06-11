@@ -1,5 +1,5 @@
 use super::error::InseeUpdateError;
-use super::types::{InseeResponse, InseeUniteLegaleResponse};
+use super::types::{unite_legale::InseeUniteLegaleResponse, InseeResponse};
 use super::Connector;
 use crate::models::unite_legale::common::UniteLegale;
 use chrono::{Duration, NaiveDateTime, Utc};
@@ -33,16 +33,21 @@ impl Connector {
         Ok((
             next_cursor,
             match response {
-                Some(resp) => resp.unites_legales
-                .iter()
-                .filter_map(|u| u.into())
-                .collect(),
-                None => vec![]
-            }
+                Some(resp) => resp
+                    .unites_legales
+                    .iter()
+                    .filter_map(|u| u.into())
+                    .collect(),
+                None => vec![],
+            },
         ))
     }
 
-    pub fn get_daily_etablissements(&self) -> Result<String, InseeUpdateError> {
+    pub fn get_daily_etablissements(
+        &self,
+        start_timestamp: NaiveDateTime,
+        cursor: String,
+    ) -> Result<String, InseeUpdateError> {
         Ok(String::from("Etablissement"))
     }
 }
@@ -87,10 +92,11 @@ fn get_daily_data<T: InseeResponse>(
         }
     }?;
 
-    let next_cursor = if response.header().curseur == response.header().curseur_suivant {
+    let header = response.header();
+    let next_cursor = if header.curseur == header.curseur_suivant {
         None
     } else {
-        Some(response.header().curseur_suivant)
+        Some(header.curseur_suivant)
     };
 
     Ok((next_cursor, Some(response)))

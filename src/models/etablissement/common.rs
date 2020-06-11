@@ -1,7 +1,9 @@
+use super::super::schema::etablissement;
 use chrono::{NaiveDate, NaiveDateTime};
 use serde::Serialize;
 
-#[derive(Queryable, Serialize, Clone, Debug)]
+#[derive(Insertable, Queryable, Serialize, Clone, Debug)]
+#[table_name = "etablissement"]
 pub struct Etablissement {
     pub siret: String,
     pub siren: String,

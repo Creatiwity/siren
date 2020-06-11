@@ -1,16 +1,7 @@
+use super::{Header, InseeResponse};
 use crate::models::unite_legale::common::UniteLegale;
 use chrono::{NaiveDate, NaiveDateTime};
-use serde::{de::DeserializeOwned, Deserialize};
-use std::fmt::Display;
-use std::str::FromStr;
-
-fn default_as_false() -> bool {
-    false
-}
-
-pub trait InseeResponse: DeserializeOwned {
-    fn header(&self) -> Header;
-}
+use serde::Deserialize;
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -25,23 +16,13 @@ impl InseeResponse for InseeUniteLegaleResponse {
     }
 }
 
-#[derive(Clone, Deserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct Header {
-    total: u32,
-    debut: u32,
-    nombre: u32,
-    pub curseur: String,
-    pub curseur_suivant: String,
-}
-
 #[derive(Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct InseeUniteLegaleInner {
     pub siren: String,
     pub statut_diffusion_unite_legale: String,
 
-    #[serde(default = "default_as_false")]
+    #[serde(default = "super::default_as_false")]
     pub unite_purgee_unite_legale: bool,
 
     pub date_creation_unite_legale: Option<NaiveDate>,
@@ -56,14 +37,14 @@ pub struct InseeUniteLegaleInner {
     pub identifiant_association_unite_legale: Option<String>,
     pub tranche_effectifs_unite_legale: Option<String>,
 
-    #[serde(deserialize_with = "from_str_optional")]
+    #[serde(deserialize_with = "super::from_str_optional")]
     pub annee_effectifs_unite_legale: Option<i32>,
 
     pub date_dernier_traitement_unite_legale: Option<NaiveDateTime>,
     pub nombre_periodes_unite_legale: Option<i32>,
     pub categorie_entreprise: Option<String>,
 
-    #[serde(deserialize_with = "from_str_optional")]
+    #[serde(deserialize_with = "super::from_str_optional")]
     pub annee_categorie_entreprise: Option<i32>,
 }
 
@@ -175,26 +156,6 @@ impl From<InseeUniteLegaleWithPeriode> for UniteLegale {
             economie_sociale_solidaire: u.periode.economie_sociale_solidaire_unite_legale,
             caractere_employeur: u.periode.caractere_employeur_unite_legale,
         }
-    }
-}
-
-fn from_str_optional<'de, T, D>(deserializer: D) -> Result<Option<T>, D::Error>
-where
-    T: FromStr,
-    T::Err: Display,
-    D: serde::Deserializer<'de>,
-{
-    let deser_res: Result<serde_json::Value, _> = serde::Deserialize::deserialize(deserializer);
-    match deser_res {
-        Ok(serde_json::Value::String(s)) => T::from_str(&s)
-            .map_err(serde::de::Error::custom)
-            .map(Option::from),
-        Ok(serde_json::Value::Null) => Ok(None),
-        Ok(v) => {
-            println!("string expected but found something else: {}", v);
-            Ok(None)
-        }
-        Err(_) => Ok(None),
     }
 }
 
