@@ -8,7 +8,7 @@ edition = "2018"
 
 [dependencies]
 chrono = { version = "0.4", features = ["serde"] }
-clap = { git = "https://github.com/clap-rs/clap.git" }
+clap = "3.0.0-beta"
 custom_error = "1.7"
 diesel = { version = "1.4", features = ["postgres", "chrono", "r2d2", "serde_json", "64-column-tables"] }
 diesel_migrations = { version = "1.4", features = ["postgres"] }
@@ -16,12 +16,12 @@ dotenv = "0.15"
 openssl = "0.10"
 r2d2 = "0.8"
 reqwest = { version = "0.10", features = ["blocking", "json"] }
-rocket = "0.4.4"
+rocket = "0.4"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 zip = "0.5"
 
 [dependencies.rocket_contrib]
-version = "0.4.4"
+version = "0.4"
 default-features = false
 features = ["json"]

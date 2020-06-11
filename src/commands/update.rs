@@ -6,6 +6,7 @@ use crate::update::{common::Config, update, update_step};
 #[derive(Clap, Debug)]
 pub struct UpdateFlags {
     /// Configure which part will be updated, UnitesLegales, Etablissements or All
+    #[clap(arg_enum)]
     group_type: CmdGroupType,
 
     /// Force update even if the source data where not updated

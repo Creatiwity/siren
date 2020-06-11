@@ -8,7 +8,7 @@ use std::env;
 #[derive(Clap, Debug)]
 pub struct ServeFlags {
     /// Production, Staging or Development, will change log level, you can set in environment variable as SIRENE_ENV
-    #[clap(long = "env")]
+    #[clap(arg_enum, long = "env")]
     environment: Option<CmdEnvironment>,
 
     /// Listen this port, you can set in environment variable as PORT
@@ -24,13 +24,11 @@ pub struct ServeFlags {
     api_key: Option<String>,
 }
 
-arg_enum! {
-    #[derive(Debug)]
-    enum CmdEnvironment {
-        Development,
-        Staging,
-        Production
-    }
+#[derive(Clap, Debug)]
+enum CmdEnvironment {
+    Development,
+    Staging,
+    Production
 }
 
 impl From<CmdEnvironment> for Environment {
