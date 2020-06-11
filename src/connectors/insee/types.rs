@@ -1,11 +1,15 @@
 use crate::models::unite_legale::common::UniteLegale;
 use chrono::{NaiveDate, NaiveDateTime};
-use serde::Deserialize;
+use serde::{de::DeserializeOwned, Deserialize};
 use std::fmt::Display;
 use std::str::FromStr;
 
 fn default_as_false() -> bool {
     false
+}
+
+pub trait InseeResponse: DeserializeOwned {
+    fn header(&self) -> Header;
 }
 
 #[derive(Deserialize, Debug)]
@@ -15,7 +19,13 @@ pub struct InseeUniteLegaleResponse {
     pub unites_legales: Vec<InseeUniteLegale>,
 }
 
-#[derive(Deserialize, Debug)]
+impl InseeResponse for InseeUniteLegaleResponse {
+    fn header(&self) -> Header {
+        self.header.clone()
+    }
+}
+
+#[derive(Clone, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct Header {
     total: u32,
