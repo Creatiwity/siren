@@ -8,6 +8,8 @@ use reqwest::header::AUTHORIZATION;
 use serde::{Deserialize, Serialize};
 use std::env;
 
+pub use implementation::INITIAL_CURSOR;
+
 pub struct Connector {
     pub token: String,
 }

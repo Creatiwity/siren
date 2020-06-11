@@ -123,7 +123,7 @@ impl UpdatableModel for EtablissementModel {
         &self,
         connectors: &Connectors,
         _start_timestamp: NaiveDateTime,
-    ) -> Result<(), UpdatableError> {
+    ) -> Result<usize, UpdatableError> {
         let insee = connectors
             .insee
             .as_ref()
@@ -132,6 +132,6 @@ impl UpdatableModel for EtablissementModel {
         let result = insee.get_daily_etablissements()?;
 
         println!("{:#?}", result);
-        Ok(())
+        Ok(0)
     }
 }

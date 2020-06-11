@@ -20,19 +20,16 @@ impl Action for SyncInseeAction {
     ) -> Result<UpdateGroupSummary, Error> {
         println!("[SyncInsee] Syncing {:#?}", group_type);
         let started_timestamp = Utc::now();
+        let status_label: String;
         let mut updated = false;
-        let mut status_label = String::from("missing insee connector");
 
-        if let Some(insee) = &connectors.insee {
-            // Use Insee connector only if present
-            println!("Insee access token: {}", insee.token);
-
+        // Use Insee connector only if present
+        if connectors.insee.is_some() {
             let model = group_type.get_updatable_model();
 
-            status_label = String::from("missing last treatment date");
-
             if let Some(timestamp) = model.get_last_insee_synced_timestamp(connectors)? {
-                model.update_daily_data(connectors, timestamp)?;
+                let updated_count = model.update_daily_data(connectors, timestamp)?;
+                println!("[SyncInsee] {} {:#?} synced", updated_count, group_type);
 
                 group_metadata::set_last_insee_synced_timestamp(
                     connectors,
@@ -40,12 +37,16 @@ impl Action for SyncInseeAction {
                     Utc::now(),
                 )?;
 
-                updated = true;
+                updated = updated_count > 0;
                 status_label = String::from("synced");
+            } else {
+                status_label = String::from("missing last treatment date");
             }
+        } else {
+            status_label = String::from("no insee connector configured");
         }
 
-        println!("[SyncInsee] {:#?} synced", group_type);
+        println!("[SyncInsee] Syncing of {:#?} done", group_type);
         Ok(UpdateGroupSummary {
             group_type,
             updated,

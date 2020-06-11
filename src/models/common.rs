@@ -16,7 +16,7 @@ pub trait UpdatableModel {
         &self,
         connectors: &Connectors,
         start_timestamp: NaiveDateTime,
-    ) -> Result<(), Error>;
+    ) -> Result<usize, Error>;
 }
 
 custom_error! { pub Error
