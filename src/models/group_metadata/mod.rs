@@ -68,6 +68,19 @@ pub fn set_last_imported_timestamp(
         .map_err(|error| error.into())
 }
 
+pub fn set_last_insee_synced_timestamp(
+    connectors: &Connectors,
+    group_type: GroupType,
+    timestamp: DateTime<Utc>,
+) -> Result<bool, Error> {
+    let connection = connectors.local.pool.get()?;
+    diesel::update(dsl::group_metadata.filter(dsl::group_type.eq(group_type)))
+        .set(dsl::last_insee_synced_timestamp.eq(timestamp))
+        .execute(&connection)
+        .map(|count| count > 0)
+        .map_err(|error| error.into())
+}
+
 pub fn reset_staging_timestamps(
     connectors: &Connectors,
     group_type: GroupType,
