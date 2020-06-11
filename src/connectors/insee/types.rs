@@ -179,9 +179,9 @@ where
         Ok(serde_json::Value::String(s)) => T::from_str(&s)
             .map_err(serde::de::Error::custom)
             .map(Option::from),
-        Ok(_v) => {
-            // Commenting this print to prevent console spamming
-            // println!("string expected but found something else: {}", v);
+        Ok(serde_json::Value::Null) => Ok(None),
+        Ok(v) => {
+            println!("string expected but found something else: {}", v);
             Ok(None)
         }
         Err(_) => Ok(None),
