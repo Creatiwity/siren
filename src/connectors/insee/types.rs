@@ -15,7 +15,7 @@ pub struct InseeUniteLegaleResponse {
     pub unites_legales: Vec<InseeUniteLegale>,
 }
 
-#[derive(Deserialize, Debug, Default)]
+#[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct Header {
     total: u32,
