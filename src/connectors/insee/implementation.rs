@@ -1,6 +1,10 @@
 use super::error::InseeUpdateError;
-use super::types::{unite_legale::InseeUniteLegaleResponse, InseeResponse};
+use super::types::{
+    etablissement::InseeEtablissementResponse, unite_legale::InseeUniteLegaleResponse,
+    InseeResponse,
+};
 use super::Connector;
+use crate::models::etablissement::common::Etablissement;
 use crate::models::unite_legale::common::UniteLegale;
 use chrono::{Duration, NaiveDateTime, Utc};
 use reqwest::header::{HeaderValue, ACCEPT, AUTHORIZATION};
@@ -47,8 +51,28 @@ impl Connector {
         &self,
         start_timestamp: NaiveDateTime,
         cursor: String,
-    ) -> Result<String, InseeUpdateError> {
-        Ok(String::from("Etablissement"))
+    ) -> Result<(Option<String>, Vec<Etablissement>), InseeUpdateError> {
+        let (next_cursor, response) = get_daily_data::<InseeEtablissementResponse>(
+            EndpointConfig {
+                token: self.token.clone(),
+                route: String::from("siret"),
+                query_field: String::from("dateDernierTraitementEtablissement"),
+            },
+            start_timestamp,
+            cursor,
+        )?;
+
+        Ok((
+            next_cursor,
+            match response {
+                Some(resp) => resp
+                    .etablissements
+                    .iter()
+                    .filter_map(|u| u.into())
+                    .collect(),
+                None => vec![],
+            },
+        ))
     }
 }
 

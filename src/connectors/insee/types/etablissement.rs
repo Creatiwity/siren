@@ -16,7 +16,7 @@ impl InseeResponse for InseeEtablissementResponse {
     }
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct InseeEtablissementInner {
     siren: String,
@@ -53,7 +53,7 @@ pub struct InseeEtablissementWithPeriode {
     pub periode: InseePeriodeEtablissement,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct InseeAdresseEtablissement {
     complement_adresse_etablissement: Option<String>,
@@ -72,7 +72,7 @@ pub struct InseeAdresseEtablissement {
     libelle_pays_etranger_etablissement: Option<String>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct InseeAdresse2Etablissement {
     complement_adresse2_etablissement: Option<String>,
@@ -91,7 +91,7 @@ pub struct InseeAdresse2Etablissement {
     libelle_pays_etranger2_etablissement: Option<String>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct InseePeriodeEtablissement {
     date_fin: Option<NaiveDate>,
@@ -125,10 +125,10 @@ impl From<&InseeEtablissement> for Option<Etablissement> {
                 // Convert
                 Some(
                     InseeEtablissementWithPeriode {
-                        content: u.content,
-                        adresse: u.adresse_etablissement,
-                        adresse2: u.adresse2_etablissement,
-                        periode: *periode,
+                        content: u.content.clone(),
+                        adresse: u.adresse_etablissement.clone(),
+                        adresse2: u.adresse2_etablissement.clone(),
+                        periode: periode.clone(),
                     }
                     .into(),
                 )
