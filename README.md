@@ -82,7 +82,7 @@ USAGE:
     sirene update [FLAGS] <group-type> [SUBCOMMAND]
 
 ARGS:
-    <group-type>    Configure which part will be updated, UnitesLegales, Etablissements or All
+    <group-type>    Configure which part will be updated, unites-legales, etablissements or all
 
 FLAGS:
         --data-only    Use an existing CSV file already present in FILE_FOLDER and does not delete it
