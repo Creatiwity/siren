@@ -17,6 +17,7 @@ extern crate rocket;
 extern crate rocket_contrib;
 extern crate serde;
 extern crate serde_json;
+extern crate warp;
 extern crate zip;
 
 mod commands;
@@ -28,7 +29,8 @@ use chrono::Utc;
 use connectors::ConnectorsBuilders;
 use dotenv::dotenv;
 
-fn main() {
+#[tokio::main]
+async fn main() {
     // Load configuration
     dotenv().ok();
 
@@ -45,5 +47,5 @@ fn main() {
     .unwrap(); // Fail launch in case of error
 
     // Run command
-    commands::run(connectors_builders);
+    commands::run(connectors_builders).await;
 }

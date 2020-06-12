@@ -4,6 +4,7 @@ use super::common::FolderOptions;
 use crate::connectors::ConnectorsBuilders;
 use rocket::config::{Config, Environment};
 use std::env;
+use std::net::ToSocketAddrs;
 
 #[derive(Clap, Debug)]
 pub struct ServeFlags {
@@ -52,7 +53,7 @@ impl CmdEnvironment {
     }
 }
 
-pub fn run(flags: ServeFlags, folder_options: FolderOptions, builders: ConnectorsBuilders) {
+pub async fn run(flags: ServeFlags, folder_options: FolderOptions, builders: ConnectorsBuilders) {
     let env = flags.environment.unwrap_or_else(|| {
         CmdEnvironment::from_str(env::var("SIRENE_ENV").expect("Missing SIRENE_ENV"))
             .expect("Invalid SIRENE_ENV")
@@ -69,15 +70,23 @@ pub fn run(flags: ServeFlags, folder_options: FolderOptions, builders: Connector
         .host
         .unwrap_or_else(|| env::var("HOST").expect("Missing HOST"));
 
+    let addr = format!("{}:{}", host, port)
+        .to_socket_addrs()
+        .expect("Unable to resolve domain")
+        .next()
+        .expect("No addresse available");
+
     let api_key = match flags.api_key {
         Some(key) => Some(key),
         None => env::var("API_KEY").ok(),
     };
 
-    let config = Config::build(env.into())
-        .address(host)
-        .port(port)
-        .finalize();
+    // let config = Config::build(env.into())
+    //     .address(host)
+    //     .port(port)
+    //     .finalize();
 
-    runner::run(config.unwrap(), api_key, folder_options, builders)
+    println!("Launching on {:#?} env", env);
+
+    runner::run(addr, api_key, folder_options, builders).await;
 }

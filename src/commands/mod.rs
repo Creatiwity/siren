@@ -43,7 +43,7 @@ enum MainCommand {
     Serve(ServeFlags),
 }
 
-pub fn run(builders: ConnectorsBuilders) {
+pub async fn run(builders: ConnectorsBuilders) {
     let opts = Opts::parse();
 
     let temp_folder = opts
@@ -66,6 +66,6 @@ pub fn run(builders: ConnectorsBuilders) {
 
     match opts.main_command {
         MainCommand::Update(update_flags) => update::run(update_flags, folder_options, builders),
-        MainCommand::Serve(serve_flags) => serve::run(serve_flags, folder_options, builders),
+        MainCommand::Serve(serve_flags) => serve::run(serve_flags, folder_options, builders).await,
     }
 }

@@ -14,6 +14,8 @@ use error::Error;
 use rocket::config::Config;
 use rocket::State;
 use rocket_contrib::json::Json;
+use std::net::SocketAddr;
+use warp::Filter;
 
 #[get("/")]
 fn index() -> &'static str {
@@ -103,19 +105,27 @@ fn etablissements(
     }))
 }
 
-pub fn run(
-    config: Config,
+pub async fn run(
+    // config: Config,
+    addr: SocketAddr,
     api_key: Option<String>,
     folder_options: FolderOptions,
     builders: ConnectorsBuilders,
 ) {
-    rocket::custom(config)
-        .mount("/v3", routes![index, unites_legales, etablissements])
-        .mount("/admin", routes![update])
-        .manage(Context {
-            builders,
-            api_key,
-            folder_options,
-        })
-        .launch();
+    // rocket::custom(config)
+    //     .mount("/v3", routes![index, unites_legales, etablissements])
+    //     .mount("/admin", routes![update])
+    //     .manage(Context {
+    //         builders,
+    //         api_key,
+    //         folder_options,
+    //     })
+    //     .launch();
+
+    // GET /v3 => 200 OK with body "SIRENE API v3"
+    let index = warp::path!("v3").map(index);
+
+    println!("Warp listening on http://{}", addr);
+
+    warp::serve(index).run(addr).await;
 }
