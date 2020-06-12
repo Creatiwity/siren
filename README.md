@@ -69,7 +69,7 @@ FLAGS:
 OPTIONS:
     -k, --api-key <api-key>    API key needed to allow maintenance operation from HTTP, you can set in environment
                                variable as API_KEY
-        --env <environment>    Production, Staging or Development, will change log level, you can set in environment
+        --env <environment>    production, staging or development, will change log level, you can set in environment
                                variable as SIRENE_ENV
     -h, --host <host>          Listen this host, you can set in environment variable as HOST
     -p, --port <port>          Listen this port, you can set in environment variable as PORT
@@ -82,7 +82,7 @@ USAGE:
     sirene update [FLAGS] <group-type> [SUBCOMMAND]
 
 ARGS:
-    <group-type>    Configure which part will be updated, UnitesLegales, Etablissements or All
+    <group-type>    Configure which part will be updated, unites-legales, etablissements or all
 
 FLAGS:
         --data-only    Use an existing CSV file already present in FILE_FOLDER and does not delete it

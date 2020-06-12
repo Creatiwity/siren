@@ -1,6 +1,10 @@
 use super::error::InseeUpdateError;
-use super::types::{InseeResponse, InseeUniteLegaleResponse};
+use super::types::{
+    etablissement::InseeEtablissementResponse, unite_legale::InseeUniteLegaleResponse,
+    InseeResponse,
+};
 use super::Connector;
+use crate::models::etablissement::common::Etablissement;
 use crate::models::unite_legale::common::UniteLegale;
 use chrono::{Duration, NaiveDateTime, Utc};
 use reqwest::header::{HeaderValue, ACCEPT, AUTHORIZATION};
@@ -33,17 +37,42 @@ impl Connector {
         Ok((
             next_cursor,
             match response {
-                Some(resp) => resp.unites_legales
-                .iter()
-                .filter_map(|u| u.into())
-                .collect(),
-                None => vec![]
-            }
+                Some(resp) => resp
+                    .unites_legales
+                    .iter()
+                    .filter_map(|u| u.into())
+                    .collect(),
+                None => vec![],
+            },
         ))
     }
 
-    pub fn get_daily_etablissements(&self) -> Result<String, InseeUpdateError> {
-        Ok(String::from("Etablissement"))
+    pub fn get_daily_etablissements(
+        &self,
+        start_timestamp: NaiveDateTime,
+        cursor: String,
+    ) -> Result<(Option<String>, Vec<Etablissement>), InseeUpdateError> {
+        let (next_cursor, response) = get_daily_data::<InseeEtablissementResponse>(
+            EndpointConfig {
+                token: self.token.clone(),
+                route: String::from("siret"),
+                query_field: String::from("dateDernierTraitementEtablissement"),
+            },
+            start_timestamp,
+            cursor,
+        )?;
+
+        Ok((
+            next_cursor,
+            match response {
+                Some(resp) => resp
+                    .etablissements
+                    .iter()
+                    .filter_map(|u| u.into())
+                    .collect(),
+                None => vec![],
+            },
+        ))
     }
 }
 
@@ -87,10 +116,11 @@ fn get_daily_data<T: InseeResponse>(
         }
     }?;
 
-    let next_cursor = if response.header().curseur == response.header().curseur_suivant {
+    let header = response.header();
+    let next_cursor = if header.curseur == header.curseur_suivant {
         None
     } else {
-        Some(response.header().curseur_suivant)
+        Some(header.curseur_suivant)
     };
 
     Ok((next_cursor, Some(response)))
