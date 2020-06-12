@@ -5,7 +5,7 @@ use crate::update::{common::Config, update, update_step};
 
 #[derive(Clap, Debug)]
 pub struct UpdateFlags {
-    /// Configure which part will be updated, UnitesLegales, Etablissements or All
+    /// Configure which part will be updated, unites-legales, etablissements or all
     #[clap(arg_enum)]
     group_type: CmdGroupType,
 

@@ -7,7 +7,7 @@ use std::env;
 
 #[derive(Clap, Debug)]
 pub struct ServeFlags {
-    /// Production, Staging or Development, will change log level, you can set in environment variable as SIRENE_ENV
+    /// production, staging or development, will change log level, you can set in environment variable as SIRENE_ENV
     #[clap(arg_enum, long = "env")]
     environment: Option<CmdEnvironment>,
 
@@ -28,7 +28,7 @@ pub struct ServeFlags {
 enum CmdEnvironment {
     Development,
     Staging,
-    Production
+    Production,
 }
 
 impl From<CmdEnvironment> for Environment {
