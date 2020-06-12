@@ -8,7 +8,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@master
+      - uses: actions/checkout@v2
       - name: Install minimal nightly
         uses: actions-rs/toolchain@v1
         with:
@@ -17,9 +17,10 @@ jobs:
           override: true
       - name: Build
         uses: actions-rs/cargo@v1
-        with: 
+        with:
           command: build
+          args: --release
       - name: Run tests
         uses: actions-rs/cargo@v1
-        with: 
+        with:
           command: test
