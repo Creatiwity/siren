@@ -2,7 +2,7 @@ mod runner;
 
 use super::common::FolderOptions;
 use crate::connectors::ConnectorsBuilders;
-use rocket::config::{Config, Environment};
+use runner::common::Context;
 use std::env;
 use std::net::ToSocketAddrs;
 
@@ -30,16 +30,6 @@ enum CmdEnvironment {
     Development,
     Staging,
     Production,
-}
-
-impl From<CmdEnvironment> for Environment {
-    fn from(env: CmdEnvironment) -> Self {
-        match env {
-            CmdEnvironment::Development => Environment::Development,
-            CmdEnvironment::Staging => Environment::Staging,
-            CmdEnvironment::Production => Environment::Production,
-        }
-    }
 }
 
 impl CmdEnvironment {
@@ -74,19 +64,22 @@ pub async fn run(flags: ServeFlags, folder_options: FolderOptions, builders: Con
         .to_socket_addrs()
         .expect("Unable to resolve domain")
         .next()
-        .expect("No addresse available");
+        .expect("No address available");
 
     let api_key = match flags.api_key {
         Some(key) => Some(key),
         None => env::var("API_KEY").ok(),
     };
 
-    // let config = Config::build(env.into())
-    //     .address(host)
-    //     .port(port)
-    //     .finalize();
+    println!("[Warp] Configuring for {:#?}", env);
 
-    println!("Launching on {:#?} env", env);
-
-    runner::run(addr, api_key, folder_options, builders).await;
+    runner::run(
+        addr,
+        Context {
+            builders,
+            api_key,
+            folder_options,
+        },
+    )
+    .await;
 }

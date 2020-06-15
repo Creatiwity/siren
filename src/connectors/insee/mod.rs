@@ -14,6 +14,7 @@ pub struct Connector {
     pub token: String,
 }
 
+#[derive(Clone)]
 pub struct ConnectorBuilder {
     pub credentials: String,
 }

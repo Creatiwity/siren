@@ -5,6 +5,7 @@ use crate::models::unite_legale::common::UniteLegale;
 use crate::models::update_metadata::common::{SyntheticGroupType, UpdateSummary};
 use serde::{Deserialize, Serialize};
 
+#[derive(Clone)]
 pub struct Context {
     pub builders: ConnectorsBuilders,
     pub api_key: Option<String>,

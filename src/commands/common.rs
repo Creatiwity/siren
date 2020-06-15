@@ -1,6 +1,7 @@
 use crate::models::update_metadata::common::SyntheticGroupType;
 use serde::Deserialize;
 
+#[derive(Clone)]
 pub struct FolderOptions {
     pub temp: String,
     pub file: String,
@@ -11,7 +12,7 @@ pub struct FolderOptions {
 pub enum CmdGroupType {
     UnitesLegales,
     Etablissements,
-    All
+    All,
 }
 
 impl From<CmdGroupType> for SyntheticGroupType {
