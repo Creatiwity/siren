@@ -1,4 +1,5 @@
 use custom_error::custom_error;
+use warp::{reject::Reject, Rejection};
 
 custom_error! { pub Error
     LocalConnectionFailed{source: r2d2::Error} = "Unable to connect to local database ({source}).",
@@ -14,5 +15,13 @@ impl From<diesel::result::Error> for Error {
                 diesel_error: error,
             },
         }
+    }
+}
+
+impl Reject for Error {}
+
+impl From<Error> for Rejection {
+    fn from(e: Error) -> Self {
+        warp::reject::custom(e)
     }
 }

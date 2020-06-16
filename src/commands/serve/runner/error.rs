@@ -3,6 +3,8 @@ use crate::models::{etablissement, unite_legale};
 use crate::update::error::Error as InternalUpdateError;
 use custom_error::custom_error;
 use serde::Serialize;
+use std::convert::Infallible;
+use warp::{http::StatusCode, Rejection, Reply};
 
 custom_error! { pub Error
     InvalidData = "Invalid data",
@@ -19,41 +21,55 @@ struct ErrorResponse {
     message: String,
 }
 
-// impl<'r> Responder<'r> for Error {
-//     fn respond_to(self, req: &Request) -> response::Result<'r> {
-//         // Log error
-//         println!("{}", self);
+impl warp::reject::Reject for Error {}
 
-//         let status = match &self {
-//             Error::InvalidData => Status::BadRequest,
-//             Error::MissingApiKeyError => return Err(Status::Unauthorized),
-//             Error::ApiKeyError => return Err(Status::Unauthorized),
-//             Error::UpdateConnectorError { source: _ } => Status::InternalServerError,
-//             Error::UpdateError { source: _ } => Status::InternalServerError,
-//             Error::UniteLegaleError { source } => match source {
-//                 unite_legale::error::Error::UniteLegaleNotFound => Status::NotFound,
-//                 _ => Status::InternalServerError,
-//             },
-//             Error::EtablissementError { source } => match source {
-//                 etablissement::error::Error::EtablissementNotFound => Status::NotFound,
-//                 _ => Status::InternalServerError,
-//             },
-//         };
+impl From<Error> for Rejection {
+    fn from(e: Error) -> Self {
+        warp::reject::custom(e)
+    }
+}
 
-//         let error_response = ErrorResponse {
-//             message: self.to_string(),
-//         };
+pub async fn handle_rejection(err: Rejection) -> Result<impl Reply, Infallible> {
+    let (code, message) = if let Some(e) = err.find::<Error>() {
+        eprintln!("[Warp][Error] {:?}", e);
 
-//         let json_result = serde_json::to_string(&error_response)
-//             .map(|string| content::Json(string).respond_to(req).unwrap())
-//             .map_err(|e| {
-//                 eprintln!("JSON failed to serialize: {:?}", e);
-//                 Status::InternalServerError
-//             });
+        (
+            match e {
+                Error::InvalidData => StatusCode::BAD_REQUEST,
+                Error::MissingApiKeyError => StatusCode::UNAUTHORIZED,
+                Error::ApiKeyError => StatusCode::UNAUTHORIZED,
+                Error::UpdateConnectorError { source: _ } => StatusCode::INTERNAL_SERVER_ERROR,
+                Error::UpdateError { source: _ } => StatusCode::INTERNAL_SERVER_ERROR,
+                Error::UniteLegaleError { source } => match source {
+                    unite_legale::error::Error::UniteLegaleNotFound => StatusCode::NOT_FOUND,
+                    _ => StatusCode::INTERNAL_SERVER_ERROR,
+                },
+                Error::EtablissementError { source } => match source {
+                    etablissement::error::Error::EtablissementNotFound => StatusCode::NOT_FOUND,
+                    _ => StatusCode::INTERNAL_SERVER_ERROR,
+                },
+            },
+            e.to_string(),
+        )
+    } else if let Some(body_error) = err.find::<warp::body::BodyDeserializeError>() {
+        eprintln!("[Warp][Json] {}", body_error);
 
-//         match json_result {
-//             Ok(json) => Response::build_from(json).status(status).ok(),
-//             Err(status) => Err(status),
-//         }
-//     }
-// }
+        (StatusCode::BAD_REQUEST, body_error.to_string())
+    } else if let Some(e) = err.find::<warp::reject::MethodNotAllowed>() {
+        eprintln!("[Warp][Method] {}", e);
+
+        (StatusCode::METHOD_NOT_ALLOWED, e.to_string())
+    } else {
+        eprintln!("[Warp][Rejection] Unhandled error {:?}", err);
+
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            String::from("Internal server error"),
+        )
+    };
+
+    Ok(warp::reply::with_status(
+        warp::reply::json(&ErrorResponse { message }),
+        code,
+    ))
+}

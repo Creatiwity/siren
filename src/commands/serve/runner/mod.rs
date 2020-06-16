@@ -12,7 +12,7 @@ use common::{
 use error::Error;
 use std::convert::Infallible;
 use std::net::SocketAddr;
-use warp::Filter;
+use warp::{filters::log::Info, http::Method, Filter, Rejection, Reply};
 
 fn index() -> &'static str {
     "SIRENE API v3"
@@ -45,9 +45,9 @@ fn update(options: UpdateOptions, context: Context) -> Result<UpdateResponse, Er
     Ok(UpdateResponse { summary })
 }
 
-fn unites_legales(siren: String, context: Context) -> Result<UniteLegaleResponse, Error> {
+async fn unites_legales(siren: String, context: Context) -> Result<impl Reply, Rejection> {
     if siren.len() != 9 {
-        return Err(Error::InvalidData);
+        return Err(Error::InvalidData.into());
     }
 
     let connectors = context.builders.create();
@@ -57,13 +57,13 @@ fn unites_legales(siren: String, context: Context) -> Result<UniteLegaleResponse
     let etablissement_siege =
         models::etablissement::get_siege_with_siren(&connectors, &unite_legale.siren)?;
 
-    Ok(UniteLegaleResponse {
+    Ok(warp::reply::json(&UniteLegaleResponse {
         unite_legale: UniteLegaleInnerResponse {
             unite_legale,
             etablissements,
             etablissement_siege,
         },
-    })
+    }))
 }
 
 fn etablissements(siret: String, context: Context) -> Result<EtablissementResponse, Error> {
@@ -105,14 +105,14 @@ pub async fn run(addr: SocketAddr, context: Context) {
     let v3_unites_legales_route = warp::get()
         .and(warp::path!("unites_legales" / String))
         .and(with_context(context.clone()))
-        .map(|siren: String, context: Context| siren);
+        .and_then(unites_legales);
     println!("[Warp] Mount GET /v3/unites_legales/<siren>");
 
     // GET /etablissements/<siret>
     let v3_etablissement_route = warp::get()
         .and(warp::path!("etablissements" / String))
         .and(with_context(context.clone()))
-        .map(|siret: String, context: Context| siret);
+        .map(|siret: String, context: Context| format!("Siret: {}", siret));
     println!("[Warp] Mount GET /v3/etablissements/<siret>");
 
     // POST /admin/update {json}
@@ -128,6 +128,11 @@ pub async fn run(addr: SocketAddr, context: Context) {
         });
     println!("[Warp] Mount POST /admin/update {{json}}");
 
+    // Cors
+    let cors = warp::cors()
+        .allow_methods(&[Method::GET, Method::POST])
+        .allow_any_origin();
+
     let routes = health_route
         .or(v3_route.and(
             v3_unites_legales_route
@@ -135,7 +140,9 @@ pub async fn run(addr: SocketAddr, context: Context) {
                 .or(v3_index),
         ))
         .or(admin_update_route)
-        .with(warp::cors().allow_any_origin());
+        .with(warp::log::custom(log_warp_info))
+        .with(cors)
+        .recover(error::handle_rejection);
 
     println!("[Warp] Running on http://{}", addr);
 
@@ -144,4 +151,14 @@ pub async fn run(addr: SocketAddr, context: Context) {
 
 fn with_context(context: Context) -> impl Filter<Extract = (Context,), Error = Infallible> + Clone {
     warp::any().map(move || context.clone())
+}
+
+fn log_warp_info(info: Info) {
+    println!(
+        "[Warp][Call] {} {}{} {}",
+        info.method(),
+        info.host().unwrap_or(""),
+        info.path(),
+        info.status(),
+    );
 }
