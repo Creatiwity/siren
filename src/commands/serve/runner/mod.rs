@@ -129,7 +129,11 @@ pub async fn run(addr: SocketAddr, context: Context) {
     println!("[Warp] Mount POST /admin/update {{json}}");
 
     let routes = health_route
-        .or(v3_route.and(v3_unites_legales_route.or(v3_etablissement_route.or(v3_index))))
+        .or(v3_route.and(
+            v3_unites_legales_route
+                .or(v3_etablissement_route)
+                .or(v3_index),
+        ))
         .or(admin_update_route)
         .with(warp::cors().allow_any_origin());
 
