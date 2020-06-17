@@ -71,7 +71,7 @@ pub async fn run(flags: ServeFlags, folder_options: FolderOptions, builders: Con
         None => env::var("API_KEY").ok(),
     };
 
-    println!("[Warp] Configuring for {:#?}", env);
+    log::info!("[Warp] Configuring for {:#?}", env);
 
     runner::run(
         addr,

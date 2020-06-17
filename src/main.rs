@@ -31,6 +31,9 @@ async fn main() {
     // Load configuration
     dotenv().ok();
 
+    // Load Logger
+    pretty_env_logger::init();
+
     // Load database
     let connectors_builders = ConnectorsBuilders::new();
 

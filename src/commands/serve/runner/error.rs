@@ -60,7 +60,7 @@ struct ErrorResponse {
 
 pub async fn handle_rejection(err: Rejection) -> Result<impl Reply, Infallible> {
     let (code, message) = if let Some(e) = err.find::<Error>() {
-        eprintln!("[Warp][Error] {:?}", e);
+        log::debug!("[Warp][Error] {:?}", e);
 
         (
             match e {
@@ -81,15 +81,15 @@ pub async fn handle_rejection(err: Rejection) -> Result<impl Reply, Infallible> 
             e.to_string(),
         )
     } else if let Some(body_error) = err.find::<warp::body::BodyDeserializeError>() {
-        eprintln!("[Warp][Json] {}", body_error);
+        log::debug!("[Warp][Json] {}", body_error);
 
         (StatusCode::BAD_REQUEST, body_error.to_string())
     } else if let Some(e) = err.find::<warp::reject::MethodNotAllowed>() {
-        eprintln!("[Warp][Method] {}", e);
+        log::debug!("[Warp][Method] {}", e);
 
         (StatusCode::NOT_FOUND, String::from("Not found"))
     } else {
-        eprintln!("[Warp][Rejection] Unhandled error {:?}", err);
+        log::debug!("[Warp][Rejection] Unhandled error {:?}", err);
 
         (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -98,7 +98,10 @@ pub async fn handle_rejection(err: Rejection) -> Result<impl Reply, Infallible> 
     };
 
     Ok(warp::reply::with_status(
-        warp::reply::json(&ErrorResponse { code: code.as_u16(), message }),
+        warp::reply::json(&ErrorResponse {
+            code: code.as_u16(),
+            message,
+        }),
         code,
     ))
 }
