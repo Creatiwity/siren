@@ -12,20 +12,20 @@ use common::{
 use error::Error;
 use std::convert::Infallible;
 use std::net::SocketAddr;
-use warp::{filters::log::Info, http::Method, Filter, Rejection, Reply};
+use warp::{filters::log::Info, http::{Method, header}, Filter, Rejection, Reply};
 
 fn index() -> &'static str {
     "SIRENE API v3"
 }
 
-fn update(options: UpdateOptions, context: Context) -> Result<UpdateResponse, Error> {
+async fn update(options: UpdateOptions, context: Context) -> Result<impl Reply, Rejection> {
     let api_key = match &context.api_key {
         Some(key) => key,
-        None => return Err(Error::MissingApiKeyError),
+        None => return Err(Error::MissingApiKeyError.into()),
     };
 
     if &options.api_key != api_key {
-        return Err(Error::ApiKeyError);
+        return Err(Error::ApiKeyError.into());
     }
 
     let connectors = context.builders.create_with_insee()?;
@@ -42,7 +42,7 @@ fn update(options: UpdateOptions, context: Context) -> Result<UpdateResponse, Er
         &connectors,
     )?;
 
-    Ok(UpdateResponse { summary })
+    Ok(warp::reply::json(&UpdateResponse { summary }))
 }
 
 async fn unites_legales(siren: String, context: Context) -> Result<impl Reply, Rejection> {
@@ -66,9 +66,9 @@ async fn unites_legales(siren: String, context: Context) -> Result<impl Reply, R
     }))
 }
 
-fn etablissements(siret: String, context: Context) -> Result<EtablissementResponse, Error> {
+async fn etablissements(siret: String, context: Context) -> Result<impl Reply, Rejection> {
     if siret.len() != 14 {
-        return Err(Error::InvalidData);
+        return Err(Error::InvalidData.into());
     }
 
     let connectors = context.builders.create();
@@ -78,7 +78,7 @@ fn etablissements(siret: String, context: Context) -> Result<EtablissementRespon
     let etablissement_siege =
         models::etablissement::get_siege_with_siren(&connectors, &etablissement.siren)?;
 
-    Ok(EtablissementResponse {
+    Ok(warp::reply::json(&EtablissementResponse {
         etablissement: EtablissementInnerResponse {
             etablissement,
             unite_legale: UniteLegaleEtablissementInnerResponse {
@@ -86,7 +86,7 @@ fn etablissements(siret: String, context: Context) -> Result<EtablissementRespon
                 etablissement_siege,
             },
         },
-    })
+    }))
 }
 
 pub async fn run(addr: SocketAddr, context: Context) {
@@ -112,7 +112,7 @@ pub async fn run(addr: SocketAddr, context: Context) {
     let v3_etablissement_route = warp::get()
         .and(warp::path!("etablissements" / String))
         .and(with_context(context.clone()))
-        .map(|siret: String, context: Context| format!("Siret: {}", siret));
+        .and_then(etablissements);
     println!("[Warp] Mount GET /v3/etablissements/<siret>");
 
     // POST /admin/update {json}
@@ -120,17 +120,13 @@ pub async fn run(addr: SocketAddr, context: Context) {
         .and(warp::path!("admin" / "update"))
         .and(warp::body::json::<UpdateOptions>())
         .and(with_context(context))
-        .map(|options: UpdateOptions, context: Context| {
-            format!(
-                "API KEY: {}\nGroup Type: {}\nForce: {}\nData Only: {}",
-                options.api_key, options.group_type, options.force, options.data_only
-            )
-        });
+        .and_then(update);
     println!("[Warp] Mount POST /admin/update {{json}}");
 
     // Cors
     let cors = warp::cors()
         .allow_methods(&[Method::GET, Method::POST])
+        .allow_headers(vec![header::CONTENT_TYPE])
         .allow_any_origin();
 
     let routes = health_route
@@ -141,8 +137,8 @@ pub async fn run(addr: SocketAddr, context: Context) {
         ))
         .or(admin_update_route)
         .with(warp::log::custom(log_warp_info))
-        .with(cors)
-        .recover(error::handle_rejection);
+        .recover(error::handle_rejection)
+        .with(cors);
 
     println!("[Warp] Running on http://{}", addr);
 
