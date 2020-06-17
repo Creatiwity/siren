@@ -9,6 +9,7 @@ pub struct Connector {
     pub pool: Pool<ConnectionManager<PgConnection>>,
 }
 
+#[derive(Clone)]
 pub struct ConnectorBuilder {
     pool: Pool<ConnectionManager<PgConnection>>,
 }
