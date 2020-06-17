@@ -33,11 +33,11 @@ impl ConnectorsBuilders {
         }
     }
 
-    pub fn create_with_insee(&self) -> Result<Connectors, Error> {
+    pub async fn create_with_insee(&self) -> Result<Connectors, Error> {
         Ok(Connectors {
             local: self.local.create(),
             insee: match self.insee.as_ref() {
-                Some(insee_builder) => Some(insee_builder.create()?),
+                Some(insee_builder) => Some(insee_builder.create().await?),
                 None => None,
             },
         })

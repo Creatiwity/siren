@@ -31,7 +31,7 @@ async fn update(options: UpdateOptions, context: Context) -> Result<impl Reply, 
         return Err(Error::ApiKeyError.into());
     }
 
-    let connectors = context.builders.create_with_insee()?;
+    let connectors = context.builders.create_with_insee().await?;
 
     let summary = update_data(
         options.group_type,

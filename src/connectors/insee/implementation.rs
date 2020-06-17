@@ -85,7 +85,7 @@ fn get_daily_data<T: InseeResponse>(
     start_timestamp: NaiveDateTime,
     cursor: String,
 ) -> Result<(Option<String>, Option<T>), InseeUpdateError> {
-    let client = reqwest::blocking::Client::new();
+    // let client = reqwest::blocking::Client::new();
 
     let url = format!(
         "{}/{}?q={}:%7B{} TO *]&nombre=1000&curseur={}",
@@ -96,32 +96,32 @@ fn get_daily_data<T: InseeResponse>(
         cursor
     );
 
-    let response = match client
-        .get(&url)
-        .header(AUTHORIZATION, format!("Bearer {}", config.token))
-        .header(ACCEPT, HeaderValue::from_static("application/json"))
-        .send()?
-        .error_for_status()
-    {
-        Ok(response) => response.json::<T>().map_err(|error| error.into()),
-        Err(error) => {
-            // Insee returns 404 for empty data
-            if let Some(status) = error.status() {
-                if status == reqwest::StatusCode::NOT_FOUND {
-                    return Ok((None, None));
-                }
-            }
+    // let response = match client
+    //     .get(&url)
+    //     .header(AUTHORIZATION, format!("Bearer {}", config.token))
+    //     .header(ACCEPT, HeaderValue::from_static("application/json"))
+    //     .send()?
+    //     .error_for_status()
+    // {
+    //     Ok(response) => response.json::<T>().map_err(|error| error.into()),
+    //     Err(error) => {
+    //         // Insee returns 404 for empty data
+    //         if let Some(status) = error.status() {
+    //             if status == reqwest::StatusCode::NOT_FOUND {
+    //                 return Ok((None, None));
+    //             }
+    //         }
 
-            Err(error)
-        }
-    }?;
+    //         Err(error)
+    //     }
+    // }?;
 
-    let header = response.header();
-    let next_cursor = if header.curseur == header.curseur_suivant {
-        None
-    } else {
-        Some(header.curseur_suivant)
-    };
+    // let header = response.header();
+    // let next_cursor = if header.curseur == header.curseur_suivant {
+    //     None
+    // } else {
+    //     Some(header.curseur_suivant)
+    // };
 
-    Ok((next_cursor, Some(response)))
+    Ok((None, None))
 }

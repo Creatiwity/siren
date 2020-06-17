@@ -65,7 +65,9 @@ pub async fn run(builders: ConnectorsBuilders) {
     };
 
     match opts.main_command {
-        MainCommand::Update(update_flags) => update::run(update_flags, folder_options, builders),
+        MainCommand::Update(update_flags) => {
+            update::run(update_flags, folder_options, builders).await
+        }
         MainCommand::Serve(serve_flags) => serve::run(serve_flags, folder_options, builders).await,
     }
 }

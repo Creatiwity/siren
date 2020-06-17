@@ -44,21 +44,23 @@ impl ConnectorBuilder {
         }
     }
 
-    pub fn create(&self) -> Result<Connector, InseeTokenError> {
-        self.generate_token().map(|token| Connector { token })
+    pub async fn create(&self) -> Result<Connector, InseeTokenError> {
+        self.generate_token().await.map(|token| Connector { token })
     }
 
-    fn generate_token(&self) -> Result<String, InseeTokenError> {
-        let client = reqwest::blocking::Client::new();
-        let response: InseeTokenResponse = client
+    async fn generate_token(&self) -> Result<String, InseeTokenError> {
+        let client = reqwest::Client::new();
+        let response = client
             .post("https://api.insee.fr/token")
             .header(AUTHORIZATION, format!("Basic {}", self.credentials))
             .form(&InseeTokenParameters {
                 grant_type: String::from("client_credentials"),
                 validity_period: 86400,
             })
-            .send()?
-            .json()?;
+            .send()
+            .await?
+            .json::<InseeTokenResponse>()
+            .await?;
 
         Ok(response.access_token)
     }

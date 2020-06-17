@@ -48,8 +48,8 @@ enum UpdateSubCommand {
     SyncInsee,
 }
 
-pub fn run(flags: UpdateFlags, folder_options: FolderOptions, builders: ConnectorsBuilders) {
-    let connectors = builders.create_with_insee().unwrap();
+pub async fn run(flags: UpdateFlags, folder_options: FolderOptions, builders: ConnectorsBuilders) {
+    let connectors = builders.create_with_insee().await.unwrap();
     let synthetic_group_type: SyntheticGroupType = flags.group_type.into();
 
     // Prepare config
