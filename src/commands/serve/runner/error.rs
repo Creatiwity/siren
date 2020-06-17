@@ -97,6 +97,8 @@ pub async fn handle_rejection(err: Rejection) -> Result<impl Reply, Infallible> 
         )
     };
 
+    log::error!("[Warp][InternalServerError] {}", message);
+
     Ok(warp::reply::with_status(
         warp::reply::json(&ErrorResponse {
             code: code.as_u16(),
