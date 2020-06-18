@@ -1,4 +1,4 @@
-#![feature(proc_macro_hygiene, decl_macro)]
+#![feature(proc_macro_hygiene, decl_macro, async_closure)]
 
 extern crate chrono;
 #[macro_use]

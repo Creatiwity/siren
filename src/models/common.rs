@@ -1,8 +1,10 @@
 use crate::connectors::insee::error::InseeUpdateError;
 use crate::connectors::Connectors;
+use async_trait::async_trait;
 use chrono::NaiveDateTime;
 use custom_error::custom_error;
 
+#[async_trait]
 pub trait UpdatableModel {
     fn count(&self, connectors: &Connectors) -> Result<i64, Error>;
     fn count_staging(&self, connectors: &Connectors) -> Result<i64, Error>;
@@ -12,7 +14,7 @@ pub trait UpdatableModel {
         &self,
         connectors: &Connectors,
     ) -> Result<Option<NaiveDateTime>, Error>;
-    fn update_daily_data(
+    async fn update_daily_data(
         &self,
         connectors: &Connectors,
         start_timestamp: NaiveDateTime,

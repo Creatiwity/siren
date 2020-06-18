@@ -12,7 +12,7 @@ pub mod action;
 pub mod common;
 pub mod error;
 
-pub fn update(
+pub async fn update(
     synthetic_group_type: SyntheticGroupType,
     config: Config,
     connectors: &Connectors,
@@ -24,19 +24,20 @@ pub fn update(
         config,
         connectors,
     )
+    .await
 }
 
-pub fn update_step(
+pub async fn update_step(
     step: Step,
     synthetic_group_type: SyntheticGroupType,
     config: Config,
     connectors: &Connectors,
 ) -> Result<UpdateSummary, Error> {
     // Execute step
-    execute_workflow(vec![step], synthetic_group_type, config, connectors)
+    execute_workflow(vec![step], synthetic_group_type, config, connectors).await
 }
 
-fn execute_workflow(
+async fn execute_workflow(
     workflow: Vec<Step>,
     synthetic_group_type: SyntheticGroupType,
     config: Config,
@@ -57,7 +58,9 @@ fn execute_workflow(
     // Execute workflow
     let result_steps: Result<Vec<UpdateStepSummary>, Error> = workflow
         .into_iter()
-        .map(|step| execute_step(step, &config, &synthetic_group_type.into(), connectors))
+        .map(async move |step| {
+            execute_step(step, &config, &synthetic_group_type.into(), connectors).await
+        })
         .collect();
 
     let steps = match result_steps {

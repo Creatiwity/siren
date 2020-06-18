@@ -4,6 +4,7 @@ use crate::connectors::Connectors;
 use crate::models::group_metadata;
 use crate::models::group_metadata::common::GroupType;
 use crate::models::update_metadata::common::{Step, UpdateGroupSummary};
+use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use reqwest::header::LAST_MODIFIED;
 use std::fs::{create_dir_all, File};
@@ -15,12 +16,13 @@ pub struct DownloadAction {
     pub force: bool,
 }
 
+#[async_trait]
 impl Action for DownloadAction {
     fn step(&self) -> Step {
         Step::DownloadFile
     }
 
-    fn execute(
+    async fn execute(
         &self,
         group_type: GroupType,
         connectors: &Connectors,
@@ -91,6 +93,22 @@ impl Action for DownloadAction {
         let mut out =
             File::create(zip_path).map_err(|io_error| Error::FileCreationError { io_error })?;
         // io::copy(&mut resp, &mut out).map_err(|io_error| Error::FileCopyError { io_error })?;
+        // tokio::io::copy(&mut resp.bytes_stream(), &mut out)
+        //     .map_err(|io_error| Error::FileCopyError { io_error })?;
+
+        // Blocked at async read write
+        // let mut out = tokio::fs::File::create(zip_path)
+        //     .await
+        //     .map_err(|io_error| Error::FileCreationError { io_error })?;
+
+        // resp.bytes_stream()
+        //     .fold(out, |out, chunk| {
+        //         out.write_all(&chunk?)
+        //             .map(|(f, _c)| f)
+        //             .map_err(|io_error| Error::FileCopyError { io_error })
+        //     })
+        //     .await?;
+
         println!("[Download] Download of {:#?} finished", group_type);
 
         // Update staging file timestamp

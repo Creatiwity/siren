@@ -72,9 +72,9 @@ pub async fn run(flags: UpdateFlags, folder_options: FolderOptions, builders: Co
                 UpdateSubCommand::SyncInsee => Step::SyncInsee,
             };
 
-            update_step(step, synthetic_group_type, config, &connectors)
+            update_step(step, synthetic_group_type, config, &connectors).await
         }
-        None => update(synthetic_group_type, config, &connectors),
+        None => update(synthetic_group_type, config, &connectors).await,
     };
 
     match summary_result {

@@ -43,7 +43,8 @@ async fn update(options: UpdateOptions, context: Context) -> Result<impl Reply, 
             db_folder: context.folder_options.db.clone(),
         },
         &connectors,
-    )?;
+    )
+    .await?;
 
     Ok(warp::reply::json(&UpdateResponse { summary }))
 }

@@ -14,7 +14,7 @@ pub mod swap;
 pub mod sync_insee;
 pub mod unzip_stock;
 
-pub fn execute_step(
+pub async fn execute_step(
     step: Step,
     config: &Config,
     groups: &Vec<GroupType>,
@@ -25,7 +25,7 @@ pub fn execute_step(
     let action = build_action(config, step);
 
     for group in groups {
-        groups_summary.push(action.execute(*group, connectors)?);
+        groups_summary.push(action.execute(*group, connectors).await?);
     }
 
     Ok(UpdateStepSummary {

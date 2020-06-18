@@ -4,6 +4,7 @@ use crate::connectors::Connectors;
 use crate::models::group_metadata;
 use crate::models::group_metadata::common::GroupType;
 use crate::models::update_metadata::common::{Step, UpdateGroupSummary};
+use async_trait::async_trait;
 use chrono::Utc;
 use std::fs::remove_file;
 use std::path::PathBuf;
@@ -13,12 +14,13 @@ pub struct CleanAction {
     pub file_folder: String,
 }
 
+#[async_trait]
 impl Action for CleanAction {
     fn step(&self) -> Step {
         Step::CleanFile
     }
 
-    fn execute(
+    async fn execute(
         &self,
         group_type: GroupType,
         connectors: &Connectors,

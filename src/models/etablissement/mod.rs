@@ -5,6 +5,7 @@ pub mod error;
 use super::common::{Error as UpdatableError, UpdatableModel};
 use super::schema::etablissement::dsl;
 use crate::connectors::{insee::INITIAL_CURSOR, Connectors};
+use async_trait::async_trait;
 use chrono::NaiveDateTime;
 use common::Etablissement;
 use diesel::pg::upsert::excluded;
@@ -44,6 +45,7 @@ pub fn get_siege_with_siren(
 
 pub struct EtablissementModel {}
 
+#[async_trait]
 impl UpdatableModel for EtablissementModel {
     fn count(&self, connectors: &Connectors) -> Result<i64, UpdatableError> {
         let connection = connectors.local.pool.get()?;
@@ -126,7 +128,7 @@ impl UpdatableModel for EtablissementModel {
             .map_err(|error| error.into())
     }
 
-    fn update_daily_data(
+    async fn update_daily_data(
         &self,
         connectors: &Connectors,
         start_timestamp: NaiveDateTime,
@@ -142,8 +144,9 @@ impl UpdatableModel for EtablissementModel {
         let mut updated_count: usize = 0;
 
         while let Some(cursor) = current_cursor {
-            let (next_cursor, etablissements) =
-                insee.get_daily_etablissements(start_timestamp, cursor)?;
+            let (next_cursor, etablissements) = insee
+                .get_daily_etablissements(start_timestamp, cursor)
+                .await?;
 
             current_cursor = next_cursor;
 
