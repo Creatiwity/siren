@@ -5,7 +5,7 @@ use chrono::NaiveDateTime;
 use custom_error::custom_error;
 
 #[async_trait]
-pub trait UpdatableModel {
+pub trait UpdatableModel: Sync + Send {
     fn count(&self, connectors: &Connectors) -> Result<i64, Error>;
     fn count_staging(&self, connectors: &Connectors) -> Result<i64, Error>;
     fn insert_in_staging(&self, connectors: &Connectors, file_path: String) -> Result<bool, Error>;

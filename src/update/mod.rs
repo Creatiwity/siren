@@ -1,16 +1,18 @@
 use crate::connectors::Connectors;
 use crate::models::update_metadata;
 use crate::models::update_metadata::common::{
-    Step, SyntheticGroupType, UpdateStepSummary, UpdateSummary,
+    Step, SyntheticGroupType, UpdateSummary,
 };
 use action::execute_step;
 use chrono::Utc;
 use common::Config;
 use error::Error;
+use summary::Summary;
 
 pub mod action;
 pub mod common;
 pub mod error;
+pub mod summary;
 
 pub async fn update(
     synthetic_group_type: SyntheticGroupType,
@@ -56,28 +58,28 @@ async fn execute_workflow(
     let started_timestamp = Utc::now();
 
     // Execute workflow
-    let result_steps: Result<Vec<UpdateStepSummary>, Error> = workflow
-        .into_iter()
-        .map(async move |step| {
-            execute_step(step, &config, &synthetic_group_type.into(), connectors).await
-        })
-        .collect();
+    let mut summary = Summary::new();
 
-    let steps = match result_steps {
-        Ok(s) => s,
-        Err(error) => {
-            update_metadata::error_update(connectors, error.to_string(), Utc::now())?;
-            return Err(error);
+    for step in workflow.into_iter() {
+        execute_step(step, &config, &synthetic_group_type.into(), connectors, &mut summary).await;
+
+        if summary.error.is_some() {
+            break
         }
-    };
+    }
+
+    if let Some(error) = summary.error {
+        update_metadata::error_update(connectors, error.to_string(), Utc::now())?;
+            return Err(error);
+    }
 
     // End
     println!("[Update] Finished");
     let summary = UpdateSummary {
-        updated: steps.iter().find(|&s| s.updated).is_some(),
+        updated: summary.steps.iter().find(|&s| s.updated).is_some(),
         started_timestamp,
         finished_timestamp: Utc::now(),
-        steps,
+        steps: summary.steps,
     };
     update_metadata::finished_update(connectors, summary.clone())?;
 

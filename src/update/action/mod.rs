@@ -1,10 +1,10 @@
 use super::common::Config;
-use super::error::Error;
 use crate::connectors::Connectors;
 use crate::models::group_metadata::common::GroupType;
 use crate::models::update_metadata::common::{Step, UpdateGroupSummary, UpdateStepSummary};
 use chrono::Utc;
 use common::Action;
+use super::summary::Summary;
 
 pub mod clean;
 pub mod common;
@@ -19,22 +19,29 @@ pub async fn execute_step(
     config: &Config,
     groups: &Vec<GroupType>,
     connectors: &Connectors,
-) -> Result<UpdateStepSummary, Error> {
+    summary: &mut Summary,
+) {
     let started_timestamp = Utc::now();
     let mut groups_summary: Vec<UpdateGroupSummary> = vec![];
     let action = build_action(config, step);
 
     for group in groups {
-        groups_summary.push(action.execute(*group, connectors).await?);
+        match action.execute(*group, connectors).await {
+            Ok(group) => groups_summary.push(group),
+            Err(error) => {
+                summary.error = Some(error);
+                return;
+            }
+        }
     }
 
-    Ok(UpdateStepSummary {
+    summary.steps.push(UpdateStepSummary {
         step,
         updated: groups_summary.iter().find(|&g| g.updated).is_some(),
         started_timestamp,
         finished_timestamp: Utc::now(),
         groups: groups_summary,
-    })
+    });
 }
 
 fn build_action(config: &Config, step: Step) -> Box<dyn Action> {
