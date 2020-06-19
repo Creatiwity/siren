@@ -108,12 +108,12 @@ impl UpdatableModel for UniteLegaleModel {
 
     async fn update_daily_data(
         &self,
-        connectors: &Connectors,
+        connectors: &mut Connectors,
         start_timestamp: NaiveDateTime,
     ) -> Result<usize, UpdatableError> {
         let insee = connectors
             .insee
-            .as_ref()
+            .as_mut()
             .ok_or(UpdatableError::MissingInseeConnector)?;
 
         let connection = connectors.local.pool.get()?;

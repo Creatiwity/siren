@@ -16,7 +16,7 @@ pub trait UpdatableModel: Sync + Send {
     ) -> Result<Option<NaiveDateTime>, Error>;
     async fn update_daily_data(
         &self,
-        connectors: &Connectors,
+        connectors: &mut Connectors,
         start_timestamp: NaiveDateTime,
     ) -> Result<usize, Error>;
 }

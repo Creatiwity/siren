@@ -18,7 +18,7 @@ pub async fn execute_step(
     step: Step,
     config: &Config,
     groups: &Vec<GroupType>,
-    connectors: &Connectors,
+    connectors: &mut Connectors,
     summary: &mut Summary,
 ) {
     let started_timestamp = Utc::now();

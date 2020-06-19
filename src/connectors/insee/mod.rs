@@ -12,6 +12,7 @@ pub use implementation::INITIAL_CURSOR;
 
 pub struct Connector {
     pub token: String,
+    calls: u8,
 }
 
 #[derive(Clone)]
@@ -45,7 +46,9 @@ impl ConnectorBuilder {
     }
 
     pub async fn create(&self) -> Result<Connector, InseeTokenError> {
-        self.generate_token().await.map(|token| Connector { token })
+        self.generate_token()
+            .await
+            .map(|token| Connector { token, calls: 0 })
     }
 
     async fn generate_token(&self) -> Result<String, InseeTokenError> {
