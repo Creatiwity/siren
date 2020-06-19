@@ -1,8 +1,6 @@
 use crate::connectors::Connectors;
 use crate::models::update_metadata;
-use crate::models::update_metadata::common::{
-    Step, SyntheticGroupType, UpdateSummary,
-};
+use crate::models::update_metadata::common::{Step, SyntheticGroupType, UpdateSummary};
 use action::execute_step;
 use chrono::Utc;
 use common::Config;
@@ -61,16 +59,23 @@ async fn execute_workflow(
     let mut summary = Summary::new();
 
     for step in workflow.into_iter() {
-        execute_step(step, &config, &synthetic_group_type.into(), connectors, &mut summary).await;
+        execute_step(
+            step,
+            &config,
+            &synthetic_group_type.into(),
+            connectors,
+            &mut summary,
+        )
+        .await;
 
         if summary.error.is_some() {
-            break
+            break;
         }
     }
 
     if let Some(error) = summary.error {
         update_metadata::error_update(connectors, error.to_string(), Utc::now())?;
-            return Err(error);
+        return Err(error);
     }
 
     // End

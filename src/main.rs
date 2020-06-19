@@ -12,6 +12,7 @@ extern crate r2d2;
 extern crate reqwest;
 extern crate serde;
 extern crate serde_json;
+extern crate tokio;
 extern crate warp;
 extern crate zip;
 

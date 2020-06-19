@@ -6,10 +6,13 @@ use crate::models::group_metadata::common::GroupType;
 use crate::models::update_metadata::common::{Step, UpdateGroupSummary};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
+use futures::stream::TryStreamExt;
 use reqwest::header::LAST_MODIFIED;
 use std::fs::{create_dir_all, File};
-use std::io;
+use std::io::{self, prelude::*};
 use std::path::PathBuf;
+use tokio::fs::File as TokioFile;
+use tokio_util::compat::FuturesAsyncReadCompatExt;
 
 pub struct DownloadAction {
     pub temp_folder: String,
@@ -42,18 +45,17 @@ impl Action for DownloadAction {
         zip_path.set_extension("zip");
 
         // Prepare file download
-        // let mut resp = reqwest::blocking::get(metadata.url.as_str())
-        //     .map_err(|req_error| Error::DownloadError { req_error })?;
+        let resp = reqwest::get(metadata.url.as_str())
+            .await
+            .map_err(|req_error| Error::DownloadError { req_error })?;
 
         // Decode Last-Modified header
-        // let last_modified_str = resp
-        //     .headers()
-        //     .get(LAST_MODIFIED)
-        //     .ok_or(Error::MissingLastModifiedHeader)?
-        //     .to_str()
-        //     .map_err(|head_error| Error::InvalidLastModifiedHeader { head_error })?;
-
-        let last_modified_str = "";
+        let last_modified_str = resp
+            .headers()
+            .get(LAST_MODIFIED)
+            .ok_or(Error::MissingLastModifiedHeader)?
+            .to_str()
+            .map_err(|head_error| Error::InvalidLastModifiedHeader { head_error })?;
 
         let last_modified = DateTime::parse_from_rfc2822(last_modified_str)
             .map_err(|date_error| Error::InvalidLastModifiedDate { date_error })?;
@@ -90,8 +92,35 @@ impl Action for DownloadAction {
         }
 
         // Download data and store it on filesystem
-        let mut out =
-            File::create(zip_path).map_err(|io_error| Error::FileCreationError { io_error })?;
+        // Implementation with chunk()
+        // let mut out =
+        //     File::create(zip_path).map_err(|io_error| Error::FileCreationError { io_error })?;
+
+        // while let Some(chunk) = resp
+        //     .chunk()
+        //     .await
+        //     .map_err(|req_error| Error::DownloadError { req_error })?
+        // {
+        //     out.write(chunk.as_ref())
+        //         .map_err(|io_error| Error::FileCopyError { io_error })?;
+        // }
+
+        // Implementation with tokio
+        // Create an output file into which we will save current stock.
+        let mut outfile = TokioFile::create(zip_path)
+            .await
+            .map_err(|io_error| Error::FileCreationError { io_error })?;
+
+        // Convert the body of the response into a futures::io::Stream.
+        // Convert the stream into an futures::io::AsyncRead.
+        // Convert the futures::io::AsyncRead into a tokio::io::AsyncRead.
+        let mut resp = resp.bytes_stream().into_async_read().compat();
+
+        // Invoke tokio::io::copy to actually perform the download.
+        tokio::io::copy(&mut resp, &mut outfile)
+            .await
+            .map_err(|io_error| Error::FileCopyError { io_error })?;
+
         // io::copy(&mut resp, &mut out).map_err(|io_error| Error::FileCopyError { io_error })?;
         // tokio::io::copy(&mut resp.bytes_stream(), &mut out)
         //     .map_err(|io_error| Error::FileCopyError { io_error })?;

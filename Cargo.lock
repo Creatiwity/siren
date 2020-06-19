@@ -1531,6 +1531,7 @@ dependencies = [
  "diesel",
  "diesel_migrations",
  "dotenv",
+ "futures",
  "log 0.4.8",
  "openssl",
  "pretty_env_logger",
@@ -1539,6 +1540,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
+ "tokio-util",
  "warp",
  "zip",
 ]
@@ -1706,6 +1708,7 @@ checksum = "be8242891f2b6cbef26a2d7e8605133c2c554cd35b3e4948ea892d6d68436499"
 dependencies = [
  "bytes",
  "futures-core",
+ "futures-io",
  "futures-sink",
  "log 0.4.8",
  "pin-project-lite",

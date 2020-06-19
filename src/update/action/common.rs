@@ -5,7 +5,7 @@ use crate::models::update_metadata::common::{Step, UpdateGroupSummary};
 use async_trait::async_trait;
 
 #[async_trait]
-pub trait Action {
+pub trait Action: Sync + Send {
     fn step(&self) -> Step;
     async fn execute(
         &self,
