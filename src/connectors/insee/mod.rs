@@ -7,12 +7,14 @@ use error::InseeTokenError;
 use reqwest::header::AUTHORIZATION;
 use serde::{Deserialize, Serialize};
 use std::env;
+use std::time::Instant;
 
 pub use implementation::INITIAL_CURSOR;
 
 pub struct Connector {
     pub token: String,
     calls: u8,
+    started_at: Instant,
 }
 
 #[derive(Clone)]
@@ -46,9 +48,11 @@ impl ConnectorBuilder {
     }
 
     pub async fn create(&self) -> Result<Connector, InseeTokenError> {
-        self.generate_token()
-            .await
-            .map(|token| Connector { token, calls: 0 })
+        self.generate_token().await.map(|token| Connector {
+            token,
+            calls: 0,
+            started_at: Instant::now(),
+        })
     }
 
     async fn generate_token(&self) -> Result<String, InseeTokenError> {

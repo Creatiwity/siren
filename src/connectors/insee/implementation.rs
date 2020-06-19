@@ -10,6 +10,7 @@ use chrono::{Duration, NaiveDateTime, Utc};
 use reqwest::header::{HeaderValue, ACCEPT, AUTHORIZATION};
 
 const MAX_CALL: u8 = 20;
+const MAX_DURATION: std::time::Duration = std::time::Duration::from_secs(60);
 const BASE_URL: &str = "https://api.insee.fr/entreprises/sirene/V3";
 pub const INITIAL_CURSOR: &str = "*";
 
@@ -20,13 +21,15 @@ struct EndpointConfig {
 }
 
 impl Connector {
-    async fn wait_if_needed(&mut self) {
+    async fn wait_for_insee_limitation(&mut self) {
+        if self.calls == 0 {
+            self.started_at = std::time::Instant::now();
+        }
+
         self.calls += 1;
 
-        println!("Calls: {}", self.calls);
-
-        if self.calls > MAX_CALL {
-            tokio::time::delay_for(std::time::Duration::from_secs(60)).await;
+        if self.calls > MAX_CALL && self.started_at.elapsed() < MAX_DURATION {
+            tokio::time::delay_for(MAX_DURATION).await;
             self.calls = 0;
         }
     }
@@ -36,7 +39,7 @@ impl Connector {
         start_timestamp: NaiveDateTime,
         cursor: String,
     ) -> Result<(Option<String>, Vec<UniteLegale>), InseeUpdateError> {
-        self.wait_if_needed().await;
+        self.wait_for_insee_limitation().await;
 
         let (next_cursor, response) = get_daily_data::<InseeUniteLegaleResponse>(
             EndpointConfig {
@@ -67,7 +70,7 @@ impl Connector {
         start_timestamp: NaiveDateTime,
         cursor: String,
     ) -> Result<(Option<String>, Vec<Etablissement>), InseeUpdateError> {
-        self.wait_if_needed().await;
+        self.wait_for_insee_limitation().await;
 
         let (next_cursor, response) = get_daily_data::<InseeEtablissementResponse>(
             EndpointConfig {
