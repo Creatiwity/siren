@@ -90,12 +90,12 @@ async fn get_daily_data<T: InseeResponse>(
     let client = reqwest::Client::new();
 
     let url = format!(
-        "{}/{}?q={}:%7B{} TO *]&nombre=1000&curseur={}",
+        "{}/{}?q={}:[{} TO *]&nombre=1000&curseur={}&tri={2} asc",
         BASE_URL,
         config.route,
         config.query_field,
         get_minimum_timestamp_for_request(start_timestamp).format("%Y-%m-%dT%H:%M:%S"),
-        cursor
+        cursor.replace("+", "%2B")
     );
 
     let response = match client
