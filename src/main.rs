@@ -43,7 +43,7 @@ async fn main() {
         String::from("Program unexpectedly closed"),
         Utc::now(),
     )
-    .unwrap(); // Fail launch in case of error
+    .expect("Unable to terminate last unfinished update"); // Fail launch in case of error
 
     // Run command
     commands::run(connectors_builders).await;

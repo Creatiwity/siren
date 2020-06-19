@@ -49,7 +49,7 @@ enum UpdateSubCommand {
 }
 
 pub async fn run(flags: UpdateFlags, folder_options: FolderOptions, builders: ConnectorsBuilders) {
-    let connectors = builders.create_with_insee().await.unwrap();
+    let connectors = builders.create_with_insee().await.expect("Unable to create INSEE connector");
     let synthetic_group_type: SyntheticGroupType = flags.group_type.into();
 
     // Prepare config
@@ -78,7 +78,7 @@ pub async fn run(flags: UpdateFlags, folder_options: FolderOptions, builders: Co
     };
 
     match summary_result {
-        Ok(summary) => println!("{}", serde_json::to_string(&summary).unwrap()),
+        Ok(summary) => println!("{}", serde_json::to_string(&summary).expect("Unable to stringify summary")),
         Err(error) => error.exit(),
     }
 }
