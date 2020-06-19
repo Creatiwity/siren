@@ -8,10 +8,9 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use futures::stream::TryStreamExt;
 use reqwest::header::LAST_MODIFIED;
-use std::fs::{create_dir_all, File};
-use std::io::{self, prelude::*};
+use std::fs::create_dir_all;
 use std::path::PathBuf;
-use tokio::fs::File as TokioFile;
+use tokio::fs::File;
 use tokio_util::compat::FuturesAsyncReadCompatExt;
 
 pub struct DownloadAction {
@@ -91,57 +90,21 @@ impl Action for DownloadAction {
             }
         }
 
-        // Download data and store it on filesystem
-        // Implementation with chunk()
-        // let mut out =
-        //     File::create(zip_path).map_err(|io_error| Error::FileCreationError { io_error })?;
-
-        // while let Some(chunk) = resp
-        //     .chunk()
-        //     .await
-        //     .map_err(|req_error| Error::DownloadError { req_error })?
-        // {
-        //     out.write(chunk.as_ref())
-        //         .map_err(|io_error| Error::FileCopyError { io_error })?;
-        // }
-
-        // Implementation with tokio
         // Create an output file into which we will save current stock.
-        let mut outfile = TokioFile::create(zip_path)
+        let mut outfile = File::create(zip_path)
             .await
             .map_err(|io_error| Error::FileCreationError { io_error })?;
 
-        // Convert the body of the response into a futures::io::Stream.
-        // Convert the stream into an futures::io::AsyncRead.
-        // We must first convert the reqwest::Error into an futures::io::Error.
-        // Convert the futures::io::AsyncRead into a tokio::io::AsyncRead.
-        let mut resp = resp
-            .bytes_stream()
-            .map_err(|e| futures::io::Error::new(futures::io::ErrorKind::Other, e))
-            .into_async_read()
-            .compat();
+        let mut stream = resp
+            .bytes_stream() // Convert the body of the response into a futures::io::Stream.
+            .map_err(|e| futures::io::Error::new(futures::io::ErrorKind::Other, e)) // We must first convert the reqwest::Error into an futures::io::Error.
+            .into_async_read() // Convert the stream into an futures::io::AsyncRead.
+            .compat(); // Convert the futures::io::AsyncRead into a tokio::io::AsyncRead.
 
         // Invoke tokio::io::copy to actually perform the download.
-        tokio::io::copy(&mut resp, &mut outfile)
+        tokio::io::copy(&mut stream, &mut outfile)
             .await
             .map_err(|io_error| Error::FileCopyError { io_error })?;
-
-        // io::copy(&mut resp, &mut out).map_err(|io_error| Error::FileCopyError { io_error })?;
-        // tokio::io::copy(&mut resp.bytes_stream(), &mut out)
-        //     .map_err(|io_error| Error::FileCopyError { io_error })?;
-
-        // Blocked at async read write
-        // let mut out = tokio::fs::File::create(zip_path)
-        //     .await
-        //     .map_err(|io_error| Error::FileCreationError { io_error })?;
-
-        // resp.bytes_stream()
-        //     .fold(out, |out, chunk| {
-        //         out.write_all(&chunk?)
-        //             .map(|(f, _c)| f)
-        //             .map_err(|io_error| Error::FileCopyError { io_error })
-        //     })
-        //     .await?;
 
         println!("[Download] Download of {:#?} finished", group_type);
 

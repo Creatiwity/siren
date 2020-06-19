@@ -1,10 +1,10 @@
 use super::common::Config;
+use super::summary::Summary;
 use crate::connectors::Connectors;
 use crate::models::group_metadata::common::GroupType;
 use crate::models::update_metadata::common::{Step, UpdateGroupSummary, UpdateStepSummary};
 use chrono::Utc;
 use common::Action;
-use super::summary::Summary;
 
 pub mod clean;
 pub mod common;

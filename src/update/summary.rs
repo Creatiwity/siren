@@ -1,5 +1,5 @@
-use crate::models::update_metadata::common::UpdateStepSummary;
 use super::error::Error;
+use crate::models::update_metadata::common::UpdateStepSummary;
 
 pub struct Summary {
     pub error: Option<Error>,
