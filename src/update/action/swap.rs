@@ -4,18 +4,20 @@ use crate::connectors::Connectors;
 use crate::models::group_metadata;
 use crate::models::group_metadata::common::GroupType;
 use crate::models::update_metadata::common::{Step, UpdateGroupSummary};
+use async_trait::async_trait;
 use chrono::Utc;
 
 pub struct SwapAction {
     pub force: bool,
 }
 
+#[async_trait]
 impl Action for SwapAction {
     fn step(&self) -> Step {
         Step::SwapData
     }
 
-    fn execute(
+    async fn execute(
         &self,
         group_type: GroupType,
         connectors: &Connectors,

@@ -1,5 +1,5 @@
 use super::common::Config;
-use super::error::Error;
+use super::summary::Summary;
 use crate::connectors::Connectors;
 use crate::models::group_metadata::common::GroupType;
 use crate::models::update_metadata::common::{Step, UpdateGroupSummary, UpdateStepSummary};
@@ -14,27 +14,34 @@ pub mod swap;
 pub mod sync_insee;
 pub mod unzip_stock;
 
-pub fn execute_step(
+pub async fn execute_step(
     step: Step,
     config: &Config,
     groups: &Vec<GroupType>,
     connectors: &Connectors,
-) -> Result<UpdateStepSummary, Error> {
+    summary: &mut Summary,
+) {
     let started_timestamp = Utc::now();
     let mut groups_summary: Vec<UpdateGroupSummary> = vec![];
     let action = build_action(config, step);
 
     for group in groups {
-        groups_summary.push(action.execute(*group, connectors)?);
+        match action.execute(*group, connectors).await {
+            Ok(group) => groups_summary.push(group),
+            Err(error) => {
+                summary.error = Some(error);
+                return;
+            }
+        }
     }
 
-    Ok(UpdateStepSummary {
+    summary.steps.push(UpdateStepSummary {
         step,
         updated: groups_summary.iter().find(|&g| g.updated).is_some(),
         started_timestamp,
         finished_timestamp: Utc::now(),
         groups: groups_summary,
-    })
+    });
 }
 
 fn build_action(config: &Config, step: Step) -> Box<dyn Action> {

@@ -4,16 +4,18 @@ use crate::connectors::Connectors;
 use crate::models::group_metadata;
 use crate::models::group_metadata::common::GroupType;
 use crate::models::update_metadata::common::{Step, UpdateGroupSummary};
+use async_trait::async_trait;
 use chrono::Utc;
 
 pub struct SyncInseeAction {}
 
+#[async_trait]
 impl Action for SyncInseeAction {
     fn step(&self) -> Step {
         Step::SyncInsee
     }
 
-    fn execute(
+    async fn execute(
         &self,
         group_type: GroupType,
         connectors: &Connectors,
@@ -28,7 +30,7 @@ impl Action for SyncInseeAction {
             let model = group_type.get_updatable_model();
 
             if let Some(timestamp) = model.get_last_insee_synced_timestamp(connectors)? {
-                let updated_count = model.update_daily_data(connectors, timestamp)?;
+                let updated_count = model.update_daily_data(connectors, timestamp).await?;
                 println!("[SyncInsee] {} {:#?} synced", updated_count, group_type);
 
                 group_metadata::set_last_insee_synced_timestamp(

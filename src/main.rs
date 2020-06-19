@@ -1,5 +1,3 @@
-#![feature(proc_macro_hygiene, decl_macro)]
-
 extern crate chrono;
 #[macro_use]
 extern crate clap;
@@ -14,6 +12,7 @@ extern crate r2d2;
 extern crate reqwest;
 extern crate serde;
 extern crate serde_json;
+extern crate tokio;
 extern crate warp;
 extern crate zip;
 
@@ -44,7 +43,7 @@ async fn main() {
         String::from("Program unexpectedly closed"),
         Utc::now(),
     )
-    .unwrap(); // Fail launch in case of error
+    .expect("Unable to terminate last unfinished update"); // Fail launch in case of error
 
     // Run command
     commands::run(connectors_builders).await;

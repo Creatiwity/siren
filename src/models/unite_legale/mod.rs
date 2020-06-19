@@ -5,6 +5,7 @@ pub mod error;
 use super::common::{Error as UpdatableError, UpdatableModel};
 use super::schema::unite_legale::dsl;
 use crate::connectors::{insee::INITIAL_CURSOR, Connectors};
+use async_trait::async_trait;
 use chrono::NaiveDateTime;
 use common::UniteLegale;
 use diesel::pg::upsert::excluded;
@@ -22,6 +23,7 @@ pub fn get(connectors: &Connectors, siren: &String) -> Result<UniteLegale, Error
 
 pub struct UniteLegaleModel {}
 
+#[async_trait]
 impl UpdatableModel for UniteLegaleModel {
     fn count(&self, connectors: &Connectors) -> Result<i64, UpdatableError> {
         let connection = connectors.local.pool.get()?;
@@ -104,7 +106,7 @@ impl UpdatableModel for UniteLegaleModel {
             .map_err(|error| error.into())
     }
 
-    fn update_daily_data(
+    async fn update_daily_data(
         &self,
         connectors: &Connectors,
         start_timestamp: NaiveDateTime,
@@ -120,8 +122,9 @@ impl UpdatableModel for UniteLegaleModel {
         let mut updated_count: usize = 0;
 
         while let Some(cursor) = current_cursor {
-            let (next_cursor, unites_legales) =
-                insee.get_daily_unites_legales(start_timestamp, cursor)?;
+            let (next_cursor, unites_legales) = insee
+                .get_daily_unites_legales(start_timestamp, cursor)
+                .await?;
 
             current_cursor = next_cursor;
 
