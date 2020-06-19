@@ -113,8 +113,13 @@ impl Action for DownloadAction {
 
         // Convert the body of the response into a futures::io::Stream.
         // Convert the stream into an futures::io::AsyncRead.
+        // We must first convert the reqwest::Error into an futures::io::Error.
         // Convert the futures::io::AsyncRead into a tokio::io::AsyncRead.
-        let mut resp = resp.bytes_stream().into_async_read().compat();
+        let mut resp = resp
+            .bytes_stream()
+            .map_err(|e| futures::io::Error::new(futures::io::ErrorKind::Other, e))
+            .into_async_read()
+            .compat();
 
         // Invoke tokio::io::copy to actually perform the download.
         tokio::io::copy(&mut resp, &mut outfile)
