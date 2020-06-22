@@ -78,6 +78,8 @@ async fn execute_workflow(
         return Err(error);
     }
 
+    summary.steps.reverse();
+
     // End
     println!("[Update] Finished");
     let summary = UpdateSummary {

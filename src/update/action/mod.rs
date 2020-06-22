@@ -35,6 +35,8 @@ pub async fn execute_step(
         }
     }
 
+    groups_summary.reverse();
+
     summary.steps.push(UpdateStepSummary {
         step,
         updated: groups_summary.iter().find(|&g| g.updated).is_some(),
