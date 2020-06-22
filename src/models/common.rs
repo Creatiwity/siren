@@ -18,7 +18,8 @@ pub trait UpdatableModel: Sync + Send {
         &self,
         connectors: &mut Connectors,
         start_timestamp: NaiveDateTime,
-    ) -> Result<usize, Error>;
+        cursor: String,
+    ) -> Result<(Option<String>, usize), Error>;
 }
 
 custom_error! { pub Error

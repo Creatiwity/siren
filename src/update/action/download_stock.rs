@@ -72,6 +72,9 @@ impl Action for DownloadAction {
                         status_label: String::from("already imported"),
                         started_timestamp,
                         finished_timestamp: Utc::now(),
+                        planned_count: 1,
+                        done_count: 0,
+                        reference_timestamp: Utc::now(),
                     });
                 }
             }
@@ -85,6 +88,9 @@ impl Action for DownloadAction {
                         status_label: String::from("already downloaded"),
                         started_timestamp,
                         finished_timestamp: Utc::now(),
+                        planned_count: 1,
+                        done_count: 0,
+                        reference_timestamp: Utc::now(),
                     });
                 }
             }
@@ -117,6 +123,9 @@ impl Action for DownloadAction {
             status_label: String::from("downloaded"),
             started_timestamp,
             finished_timestamp: Utc::now(),
+            planned_count: 1,
+            done_count: 1,
+            reference_timestamp: Utc::now(),
         });
     }
 }

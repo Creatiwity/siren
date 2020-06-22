@@ -28,6 +28,7 @@ impl Action for CleanAction {
         println!("[Clean] Cleaning {:#?}", group_type);
         let started_timestamp = Utc::now();
         let mut updated = true;
+        let mut done_count = 2;
         let mut status_label = String::from("cleaned");
 
         let metadata = group_metadata::get(connectors, group_type)?;
@@ -45,12 +46,14 @@ impl Action for CleanAction {
         if let Err(error) = remove_file(zip_path) {
             println!("[Clean] Zip not deleted ({})", error);
             updated = false;
+            done_count -= 1;
             status_label = String::from("zip not deleted");
         }
 
         if let Err(error) = remove_file(csv_path) {
             println!("[Clean] CSV not deleted ({})", error);
             updated = false;
+            done_count -= 1;
             status_label = String::from("csv not deleted");
         }
 
@@ -64,6 +67,9 @@ impl Action for CleanAction {
             status_label,
             started_timestamp,
             finished_timestamp: Utc::now(),
+            planned_count: 2,
+            done_count,
+            reference_timestamp: Utc::now(),
         })
     }
 }

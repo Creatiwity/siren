@@ -43,6 +43,9 @@ impl Action for UnzipAction {
                     status_label: String::from("nothing to unzip"),
                     started_timestamp,
                     finished_timestamp: Utc::now(),
+                    planned_count: 1,
+                    done_count: 0,
+                    reference_timestamp: Utc::now(),
                 });
             }
         };
@@ -59,6 +62,9 @@ impl Action for UnzipAction {
                             status_label: String::from("already imported"),
                             started_timestamp,
                             finished_timestamp: Utc::now(),
+                            planned_count: 1,
+                            done_count: 0,
+                            reference_timestamp: Utc::now(),
                         });
                     }
                 }
@@ -71,6 +77,9 @@ impl Action for UnzipAction {
                         status_label: String::from("already unzipped"),
                         started_timestamp,
                         finished_timestamp: Utc::now(),
+                        planned_count: 1,
+                        done_count: 0,
+                        reference_timestamp: Utc::now(),
                     });
                 }
             }
@@ -142,6 +151,9 @@ impl Action for UnzipAction {
             status_label: String::from("unzipped"),
             started_timestamp,
             finished_timestamp: Utc::now(),
+            planned_count: 1,
+            done_count: 1,
+            reference_timestamp: Utc::now(),
         })
     }
 }

@@ -1,11 +1,11 @@
 use super::super::error::Error;
 use super::common::Action;
-use crate::connectors::Connectors;
+use crate::connectors::{insee::INITIAL_CURSOR, Connectors};
 use crate::models::group_metadata;
 use crate::models::group_metadata::common::GroupType;
 use crate::models::update_metadata::common::{Step, UpdateGroupSummary};
 use async_trait::async_trait;
-use chrono::Utc;
+use chrono::{Duration, NaiveDateTime, Utc};
 
 pub struct SyncInseeAction {}
 
@@ -29,8 +29,20 @@ impl Action for SyncInseeAction {
         if connectors.insee.is_some() {
             let model = group_type.get_updatable_model();
 
-            if let Some(timestamp) = model.get_last_insee_synced_timestamp(connectors)? {
-                let updated_count = model.update_daily_data(connectors, timestamp).await?;
+            if let Some(last_timestamp) = model.get_last_insee_synced_timestamp(connectors)? {
+                let mut current_cursor: Option<String> = Some(INITIAL_CURSOR.to_string());
+                let mut updated_count = 0;
+                let timestamp = get_minimum_timestamp_for_request(last_timestamp);
+
+                while let Some(cursor) = current_cursor {
+                    let (next_cursor, inserted_count) = model
+                        .update_daily_data(connectors, timestamp, cursor)
+                        .await?;
+
+                    current_cursor = next_cursor;
+                    updated_count += inserted_count;
+                }
+
                 println!("[SyncInsee] {} {:#?} synced", updated_count, group_type);
 
                 group_metadata::set_last_insee_synced_timestamp(
@@ -55,6 +67,13 @@ impl Action for SyncInseeAction {
             status_label,
             started_timestamp,
             finished_timestamp: Utc::now(),
+            planned_count: 0,
+            done_count: 0,
+            reference_timestamp: Utc::now(),
         })
     }
+}
+
+fn get_minimum_timestamp_for_request(timestamp: NaiveDateTime) -> NaiveDateTime {
+    timestamp.max(Utc::now().naive_local() - Duration::days(31))
 }

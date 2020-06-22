@@ -58,7 +58,7 @@ pub fn finished_update(connectors: &Connectors, summary: UpdateSummary) -> Resul
     diesel::update(dsl::update_metadata.filter(dsl::status.eq(UpdateStatus::Launched)))
         .set(&FinishedUpdateMetadata {
             status: UpdateStatus::Finished,
-            summary: summary,
+            summary,
             finished_timestamp,
         })
         .execute(&connection)

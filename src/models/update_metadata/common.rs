@@ -58,6 +58,9 @@ pub struct UpdateGroupSummary {
     pub status_label: String,
     pub started_timestamp: DateTime<Utc>,
     pub finished_timestamp: DateTime<Utc>,
+    pub planned_count: u32,
+    pub done_count: u32,
+    pub reference_timestamp: DateTime<Utc>,
 }
 
 #[derive(Deserialize, Serialize, Clone, Copy, Debug)]

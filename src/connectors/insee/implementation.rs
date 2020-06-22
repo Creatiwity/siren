@@ -6,7 +6,7 @@ use super::types::{
 use super::Connector;
 use crate::models::etablissement::common::Etablissement;
 use crate::models::unite_legale::common::UniteLegale;
-use chrono::{Duration, NaiveDateTime, Utc};
+use chrono::NaiveDateTime;
 use reqwest::header::{HeaderValue, ACCEPT, AUTHORIZATION};
 
 const MAX_CALL: u8 = 20;
@@ -98,10 +98,6 @@ impl Connector {
             },
         ))
     }
-}
-
-fn get_minimum_timestamp_for_request(timestamp: NaiveDateTime) -> NaiveDateTime {
-    timestamp.max(Utc::now().naive_local() - Duration::days(31))
 }
 
 async fn get_daily_data<T: InseeResponse>(
