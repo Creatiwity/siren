@@ -111,7 +111,7 @@ async fn get_daily_data<T: InseeResponse>(
 ) -> Result<(Option<String>, Option<T>), InseeUpdateError> {
     let client = reqwest::Client::new();
 
-    let url = format!("{}/{}", BASE_URL, config.route,);
+    let url = format!("{}/{}", BASE_URL, config.route);
 
     let response = match client
         .get(&url)
