@@ -1,7 +1,7 @@
 use super::error::InseeUpdateError;
 use super::types::{
     etablissement::InseeEtablissementResponse, unite_legale::InseeUniteLegaleResponse,
-    InseeResponse,
+    InseeQueryParams, InseeResponse,
 };
 use super::Connector;
 use crate::models::etablissement::common::Etablissement;
@@ -111,19 +111,22 @@ async fn get_daily_data<T: InseeResponse>(
 ) -> Result<(Option<String>, Option<T>), InseeUpdateError> {
     let client = reqwest::Client::new();
 
-    let url = format!(
-        "{}/{}?q={}:[{} TO *]&nombre=1000&curseur={}&tri={2} asc",
-        BASE_URL,
-        config.route,
-        config.query_field,
-        get_minimum_timestamp_for_request(start_timestamp).format("%Y-%m-%dT%H:%M:%S"),
-        cursor.replace("+", "%2B")
-    );
+    let url = format!("{}/{}", BASE_URL, config.route,);
 
     let response = match client
         .get(&url)
         .header(AUTHORIZATION, format!("Bearer {}", config.token))
         .header(ACCEPT, HeaderValue::from_static("application/json"))
+        .query(&InseeQueryParams {
+            q: format!(
+                "{}:[{} TO *]",
+                config.query_field,
+                get_minimum_timestamp_for_request(start_timestamp).format("%Y-%m-%dT%H:%M:%S")
+            ),
+            nombre: 1000,
+            curseur: cursor,
+            tri: format!("{} asc", config.query_field),
+        })
         .send()
         .await?
         .error_for_status()

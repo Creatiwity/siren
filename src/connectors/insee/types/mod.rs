@@ -1,9 +1,17 @@
 pub mod etablissement;
 pub mod unite_legale;
 
-use serde::{de::DeserializeOwned, Deserialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::fmt::Display;
 use std::str::FromStr;
+
+#[derive(Serialize)]
+pub struct InseeQueryParams {
+    pub q: String,
+    pub nombre: u16,
+    pub curseur: String,
+    pub tri: String,
+}
 
 pub trait InseeResponse: DeserializeOwned {
     fn header(&self) -> Header;
