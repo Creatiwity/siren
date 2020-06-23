@@ -23,7 +23,7 @@ impl Action for CleanAction {
     async fn execute(
         &self,
         group_type: GroupType,
-        connectors: &Connectors,
+        connectors: &mut Connectors,
     ) -> Result<UpdateGroupSummary, Error> {
         println!("[Clean] Cleaning {:#?}", group_type);
         let started_timestamp = Utc::now();

@@ -18,7 +18,7 @@ impl Action for SyncInseeAction {
     async fn execute(
         &self,
         group_type: GroupType,
-        connectors: &Connectors,
+        connectors: &mut Connectors,
     ) -> Result<UpdateGroupSummary, Error> {
         println!("[SyncInsee] Syncing {:#?}", group_type);
         let started_timestamp = Utc::now();

@@ -27,7 +27,7 @@ impl Action for DownloadAction {
     async fn execute(
         &self,
         group_type: GroupType,
-        connectors: &Connectors,
+        connectors: &mut Connectors,
     ) -> Result<UpdateGroupSummary, Error> {
         println!("[Download] Downloading {:#?}", group_type);
         let started_timestamp = Utc::now();

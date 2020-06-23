@@ -15,7 +15,7 @@ pub mod summary;
 pub async fn update(
     synthetic_group_type: SyntheticGroupType,
     config: Config,
-    connectors: &Connectors,
+    connectors: &mut Connectors,
 ) -> Result<UpdateSummary, Error> {
     // Build and execute workflow
     execute_workflow(
@@ -31,7 +31,7 @@ pub async fn update_step(
     step: Step,
     synthetic_group_type: SyntheticGroupType,
     config: Config,
-    connectors: &Connectors,
+    connectors: &mut Connectors,
 ) -> Result<UpdateSummary, Error> {
     // Execute step
     execute_workflow(vec![step], synthetic_group_type, config, connectors).await
@@ -41,7 +41,7 @@ async fn execute_workflow(
     workflow: Vec<Step>,
     synthetic_group_type: SyntheticGroupType,
     config: Config,
-    connectors: &Connectors,
+    connectors: &mut Connectors,
 ) -> Result<UpdateSummary, Error> {
     // Register start
     update_metadata::launch_update(
