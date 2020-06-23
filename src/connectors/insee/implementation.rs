@@ -117,7 +117,7 @@ async fn get_daily_data<T: InseeResponse>(
             q: format!(
                 "{}:[{} TO *]",
                 config.query_field,
-                get_minimum_timestamp_for_request(start_timestamp).format("%Y-%m-%dT%H:%M:%S")
+                start_timestamp.format("%Y-%m-%dT%H:%M:%S")
             ),
             nombre: 1000,
             curseur: cursor,
