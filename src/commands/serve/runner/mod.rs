@@ -49,6 +49,14 @@ async fn update(options: UpdateOptions, context: Context) -> Result<impl Reply, 
     Ok(warp::reply::json(&UpdateResponse { summary }))
 }
 
+async fn status(context: Context) -> Result<impl Reply, Rejection> {
+    let connectors = context.builders.create();
+
+    let update_metadata = models::update_metadata::current_update(&connectors)?;
+
+    Ok(warp::reply::json(&update_metadata))
+}
+
 async fn unites_legales(siren: String, context: Context) -> Result<impl Reply, Rejection> {
     if siren.len() != 9 {
         return Err(Error::InvalidData.into());
@@ -120,13 +128,22 @@ pub async fn run(addr: SocketAddr, context: Context) {
         .and_then(etablissements);
     log::info!("[Warp] Mount GET /v3/etablissements/<siret>");
 
+    let admin_update_route = warp::path!("admin" / "update" / ..);
+
     // POST /admin/update {json}
-    let admin_update_route = warp::post()
-        .and(warp::path!("admin" / "update"))
+    let update_route = warp::post()
+        .and(warp::path::end())
         .and(warp::body::json::<UpdateOptions>())
-        .and(with_context(context))
+        .and(with_context(context.clone()))
         .and_then(update);
     log::info!("[Warp] Mount POST /admin/update {{json}}");
+
+    // GET /admin/update/status
+    let status_route = warp::get()
+        .and(warp::path!("status"))
+        .and(with_context(context))
+        .and_then(status);
+    log::info!("[Warp] Mount GET /admin/update/status");
 
     // Cors
     let cors = warp::cors()
@@ -140,7 +157,7 @@ pub async fn run(addr: SocketAddr, context: Context) {
                 .or(v3_etablissement_route)
                 .or(v3_index),
         ))
-        .or(admin_update_route)
+        .or(admin_update_route.and(status_route.or(update_route)))
         .recover(error::handle_rejection)
         .with(cors);
 

@@ -8,6 +8,21 @@ use diesel::sql_types::{Jsonb, Text};
 use serde::{Deserialize, Serialize};
 use std::io::Write;
 
+#[derive(Queryable, Serialize)]
+pub struct UpdateMetadata {
+    pub id: i32,
+    pub synthetic_group_type: SyntheticGroupType,
+    pub force: bool,
+    pub data_only: bool,
+    pub status: String,
+    pub summary: Option<UpdateSummary>,
+    pub error: Option<String>,
+    pub launched_timestamp: DateTime<Utc>,
+    pub finished_timestamp: Option<DateTime<Utc>>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
 #[derive(Insertable)]
 #[table_name = "update_metadata"]
 pub struct LaunchUpdateMetadata {

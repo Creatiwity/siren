@@ -1,5 +1,5 @@
 use crate::connectors::Error as ConnectorError;
-use crate::models::{etablissement, unite_legale};
+use crate::models::{etablissement, unite_legale, update_metadata};
 use crate::update::error::Error as InternalUpdateError;
 use custom_error::custom_error;
 use serde::Serialize;
@@ -14,6 +14,7 @@ custom_error! { pub Error
     UpdateError {source: InternalUpdateError} = "[Update] {source}",
     UniteLegaleError {source: unite_legale::error::Error} = "[UniteLegale] {source}",
     EtablissementError {source: etablissement::error::Error} = "[Etablissement] {source}",
+    StatusError {source: update_metadata::error::Error} = "[Status] {source}",
 }
 
 impl warp::reject::Reject for Error {}
@@ -52,6 +53,13 @@ impl From<etablissement::error::Error> for Rejection {
     }
 }
 
+impl From<update_metadata::error::Error> for Rejection {
+    fn from(e: update_metadata::error::Error) -> Self {
+        let error: Error = e.into();
+        error.into()
+    }
+}
+
 #[derive(Debug, Serialize)]
 struct ErrorResponse {
     code: u16,
@@ -75,6 +83,10 @@ pub async fn handle_rejection(err: Rejection) -> Result<impl Reply, Infallible> 
                 },
                 Error::EtablissementError { source } => match source {
                     etablissement::error::Error::EtablissementNotFound => StatusCode::NOT_FOUND,
+                    _ => StatusCode::INTERNAL_SERVER_ERROR,
+                },
+                Error::StatusError { source } => match source {
+                    update_metadata::error::Error::MetadataNotFound => StatusCode::NOT_FOUND,
                     _ => StatusCode::INTERNAL_SERVER_ERROR,
                 },
             },

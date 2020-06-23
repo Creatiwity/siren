@@ -6,7 +6,7 @@ use crate::connectors::Connectors;
 use chrono::{DateTime, Utc};
 use common::{
     ErrorUpdateMetadata, FinishedUpdateMetadata, LaunchUpdateMetadata, SyntheticGroupType,
-    UpdateStatus, UpdateSummary,
+    UpdateMetadata, UpdateStatus, UpdateSummary,
 };
 use diesel::prelude::*;
 use error::Error;
@@ -81,5 +81,14 @@ pub fn error_update(
         })
         .execute(&connection)
         .map(|count| count > 0)
+        .map_err(|error| error.into())
+}
+
+pub fn current_update(connectors: &Connectors) -> Result<UpdateMetadata, Error> {
+    let connection = connectors.local.pool.get()?;
+
+    dsl::update_metadata
+        .filter(dsl::status.eq(UpdateStatus::Launched))
+        .first::<UpdateMetadata>(&connection)
         .map_err(|error| error.into())
 }
