@@ -6,6 +6,7 @@ use crate::models::group_metadata::common::GroupType;
 use crate::models::update_metadata::common::{Step, UpdateGroupSummary};
 use async_trait::async_trait;
 use chrono::{Duration, NaiveDateTime, Utc};
+use super::super::summary::SummaryGroupDelegate;
 
 pub struct SyncInseeAction {}
 
@@ -15,11 +16,12 @@ impl Action for SyncInseeAction {
         Step::SyncInsee
     }
 
-    async fn execute(
+    async fn execute<'a, 'b>(
         &self,
         group_type: GroupType,
         connectors: &mut Connectors,
-    ) -> Result<UpdateGroupSummary, Error> {
+        summary_delegate: &'b mut SummaryGroupDelegate<'a, 'b>,
+    ) -> Result<(), Error> {
         println!("[SyncInsee] Syncing {:#?}", group_type);
         let started_timestamp = Utc::now();
         let status_label: String;

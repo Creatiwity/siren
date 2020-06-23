@@ -5,6 +5,7 @@ use crate::models::group_metadata;
 use crate::models::group_metadata::common::GroupType;
 use crate::models::update_metadata::common::{Step, UpdateGroupSummary};
 use async_trait::async_trait;
+use super::super::summary::SummaryGroupDelegate;
 use chrono::Utc;
 
 pub struct SwapAction {
@@ -17,11 +18,12 @@ impl Action for SwapAction {
         Step::SwapData
     }
 
-    async fn execute(
+    async fn execute<'a, 'b>(
         &self,
         group_type: GroupType,
         connectors: &mut Connectors,
-    ) -> Result<UpdateGroupSummary, Error> {
+        summary_delegate: &'b mut SummaryGroupDelegate<'a, 'b>,
+    ) -> Result<(), Error> {
         println!("[Insert] Swapping {:#?}", group_type);
         let started_timestamp = Utc::now();
 

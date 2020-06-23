@@ -8,6 +8,7 @@ use async_trait::async_trait;
 use chrono::Utc;
 use std::fs::canonicalize;
 use std::path::PathBuf;
+use super::super::summary::SummaryGroupDelegate;
 
 pub struct InsertAction {
     pub db_folder: String,
@@ -20,11 +21,12 @@ impl Action for InsertAction {
         Step::InsertData
     }
 
-    async fn execute(
+    async fn execute<'a, 'b>(
         &self,
         group_type: GroupType,
         connectors: &mut Connectors,
-    ) -> Result<UpdateGroupSummary, Error> {
+        summary_delegate: &'b mut SummaryGroupDelegate<'a, 'b>,
+    ) -> Result<(), Error> {
         println!("[Insert] Insert {:#?}", group_type);
         let started_timestamp = Utc::now();
 

@@ -9,6 +9,7 @@ use chrono::Utc;
 use std::fs::{create_dir_all, set_permissions, File, Permissions};
 use std::io;
 use std::path::PathBuf;
+use super::super::summary::SummaryGroupDelegate;
 
 pub struct UnzipAction {
     pub temp_folder: String,
@@ -22,11 +23,12 @@ impl Action for UnzipAction {
         Step::UnzipFile
     }
 
-    async fn execute(
+    async fn execute<'a, 'b>(
         &self,
         group_type: GroupType,
         connectors: &mut Connectors,
-    ) -> Result<UpdateGroupSummary, Error> {
+        summary_delegate: &'b mut SummaryGroupDelegate<'a, 'b>,
+    ) -> Result<(), Error> {
         println!("[Unzip] Unzipping {:#?}", group_type);
         let started_timestamp = Utc::now();
 

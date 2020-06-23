@@ -64,21 +64,14 @@ async fn execute_workflow(
             &config,
             &synthetic_group_type.into(),
             connectors,
-            &mut summary,
+            &mut summary.step_delegate(step),
         )
-        .await;
-
-        if summary.error.is_some() {
-            break;
-        }
+        .await
+        .map_err(|e| {
+            update_metadata::error_update(connectors, e.to_string(), Utc::now());
+            e
+        })?;
     }
-
-    if let Some(error) = summary.error {
-        update_metadata::error_update(connectors, error.to_string(), Utc::now())?;
-        return Err(error);
-    }
-
-    summary.steps.reverse();
 
     // End
     println!("[Update] Finished");

@@ -3,7 +3,7 @@ use super::common::Action;
 use crate::connectors::Connectors;
 use crate::models::group_metadata;
 use crate::models::group_metadata::common::GroupType;
-use crate::models::update_metadata::common::{Step, UpdateGroupSummary};
+use crate::models::update_metadata::common::Step;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use futures::stream::TryStreamExt;
@@ -12,6 +12,7 @@ use std::fs::create_dir_all;
 use std::path::PathBuf;
 use tokio::fs::File;
 use tokio_util::compat::FuturesAsyncReadCompatExt;
+use super::super::summary::SummaryGroupDelegate;
 
 pub struct DownloadAction {
     pub temp_folder: String,
@@ -24,13 +25,16 @@ impl Action for DownloadAction {
         Step::DownloadFile
     }
 
-    async fn execute(
+    async fn execute<'a, 'b>(
         &self,
         group_type: GroupType,
         connectors: &mut Connectors,
-    ) -> Result<UpdateGroupSummary, Error> {
+        summary_delegate: &'b mut SummaryGroupDelegate<'a, 'b>,
+    ) -> Result<(), Error> {
         println!("[Download] Downloading {:#?}", group_type);
         let started_timestamp = Utc::now();
+
+        summary_delegate.start(connectors, 1);
 
         let metadata = group_metadata::get(connectors, group_type)?;
 
@@ -66,32 +70,21 @@ impl Action for DownloadAction {
             if let Some(last_imported_timestamp) = metadata.last_imported_timestamp {
                 if last_modified.le(&last_imported_timestamp) {
                     println!("[Download] {:#?} already imported", group_type);
-                    return Ok(UpdateGroupSummary {
-                        group_type,
-                        updated: false,
-                        status_label: String::from("already imported"),
-                        started_timestamp,
-                        finished_timestamp: Utc::now(),
-                        planned_count: 1,
-                        done_count: 0,
-                        reference_timestamp: Utc::now(),
-                    });
+
+                    // TODO: Finish group with status "already imported"
+                    summary_delegate.finish(connectors, 0, "already imported");
+
+                    return Ok(());
                 }
             }
 
             if let Some(staging_file_timestamp) = metadata.staging_file_timestamp {
                 if last_modified.le(&staging_file_timestamp) {
                     println!("[Download] {:#?} already downloaded", group_type);
-                    return Ok(UpdateGroupSummary {
-                        group_type,
-                        updated: false,
-                        status_label: String::from("already downloaded"),
-                        started_timestamp,
-                        finished_timestamp: Utc::now(),
-                        planned_count: 1,
-                        done_count: 0,
-                        reference_timestamp: Utc::now(),
-                    });
+
+                    // TODO: Finish group with status "already downloaded"
+
+                    return Ok(());
                 }
             }
         }
@@ -117,15 +110,8 @@ impl Action for DownloadAction {
         // Update staging file timestamp
         group_metadata::set_staging_file_timestamp(connectors, group_type, last_modified)?;
 
-        return Ok(UpdateGroupSummary {
-            group_type,
-            updated: true,
-            status_label: String::from("downloaded"),
-            started_timestamp,
-            finished_timestamp: Utc::now(),
-            planned_count: 1,
-            done_count: 1,
-            reference_timestamp: Utc::now(),
-        });
+        // TODO: Finish group with status "downloaded" and done_count: 1 and updated: true
+
+        Ok(())
     }
 }
