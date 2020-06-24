@@ -92,6 +92,20 @@ impl UpdatableModel for UniteLegaleModel {
         })
     }
 
+    async fn get_total_count(
+        &self,
+        connectors: &mut Connectors,
+        start_timestamp: NaiveDateTime,
+    ) -> u32 {
+        match connectors.insee.as_mut() {
+            Some(insee) => match insee.get_total_unites_legales(start_timestamp).await {
+                Ok(total) => total,
+                Err(_) => 0,
+            },
+            None => 0,
+        }
+    }
+
     // SELECT date_dernier_traitement FROM unite_legale WHERE date_dernier_traitement IS NOT NULL ORDER BY date_dernier_traitement DESC LIMIT 1;
     fn get_last_insee_synced_timestamp(
         &self,

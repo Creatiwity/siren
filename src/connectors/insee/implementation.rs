@@ -37,6 +37,40 @@ impl Connector {
         }
     }
 
+    pub async fn get_total_unites_legales(
+        &mut self,
+        start_timestamp: NaiveDateTime,
+    ) -> Result<u32, InseeUpdateError> {
+        self.wait_for_insee_limitation().await;
+
+        get_total::<InseeUniteLegaleResponse>(
+            EndpointConfig {
+                token: self.token.clone(),
+                route: String::from("siren"),
+                query_field: String::from("dateDernierTraitementUniteLegale"),
+            },
+            start_timestamp,
+        )
+        .await
+    }
+
+    pub async fn get_total_etablissements(
+        &mut self,
+        start_timestamp: NaiveDateTime,
+    ) -> Result<u32, InseeUpdateError> {
+        self.wait_for_insee_limitation().await;
+
+        get_total::<InseeEtablissementResponse>(
+            EndpointConfig {
+                token: self.token.clone(),
+                route: String::from("siret"),
+                query_field: String::from("dateDernierTraitementEtablissement"),
+            },
+            start_timestamp,
+        )
+        .await
+    }
+
     pub async fn get_daily_unites_legales(
         &mut self,
         start_timestamp: NaiveDateTime,
@@ -148,4 +182,36 @@ async fn get_daily_data<T: InseeResponse>(
     };
 
     Ok((next_cursor, Some(response)))
+}
+
+async fn get_total<T: InseeResponse>(
+    config: EndpointConfig,
+    start_timestamp: NaiveDateTime,
+) -> Result<u32, InseeUpdateError> {
+    let client = reqwest::Client::new();
+
+    let url = format!("{}/{}", BASE_URL, config.route);
+
+    // TODO: Special Header type for count
+    // TODO: Reimplements error_for_status()
+    let response = client
+        .get(&url)
+        .header(AUTHORIZATION, format!("Bearer {}", config.token))
+        .header(ACCEPT, HeaderValue::from_static("application/json"))
+        .query(&InseeQueryParams {
+            q: format!(
+                "{}:[{} TO *]",
+                config.query_field,
+                start_timestamp.format("%Y-%m-%dT%H:%M:%S")
+            ),
+            nombre: 1,
+            curseur: String::from("*"),
+            tri: String::from(""),
+        })
+        .send()
+        .await?
+        .json::<T>()
+        .await?;
+
+    Ok(response.header().total)
 }

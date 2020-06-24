@@ -83,7 +83,7 @@ pub async fn run(flags: UpdateFlags, folder_options: FolderOptions, builders: Co
     match summary_result {
         Ok(summary) => println!(
             "{}",
-            serde_json::to_string(&summary).expect("Unable to stringify summary")
+            serde_json::to_string_pretty(&summary).expect("Unable to stringify summary")
         ),
         Err(error) => error.exit(),
     }

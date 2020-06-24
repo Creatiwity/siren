@@ -1,4 +1,5 @@
 use super::super::error::Error;
+use super::super::summary::SummaryGroupDelegate;
 use super::common::Action;
 use crate::connectors::Connectors;
 use crate::models::group_metadata;
@@ -12,7 +13,6 @@ use std::fs::create_dir_all;
 use std::path::PathBuf;
 use tokio::fs::File;
 use tokio_util::compat::FuturesAsyncReadCompatExt;
-use super::super::summary::SummaryGroupDelegate;
 
 pub struct DownloadAction {
     pub temp_folder: String,
@@ -32,9 +32,7 @@ impl Action for DownloadAction {
         summary_delegate: &'b mut SummaryGroupDelegate<'a, 'b>,
     ) -> Result<(), Error> {
         println!("[Download] Downloading {:#?}", group_type);
-        let started_timestamp = Utc::now();
-
-        summary_delegate.start(connectors, 1);
+        summary_delegate.start(None, 1);
 
         let metadata = group_metadata::get(connectors, group_type)?;
 
@@ -72,7 +70,7 @@ impl Action for DownloadAction {
                     println!("[Download] {:#?} already imported", group_type);
 
                     // TODO: Finish group with status "already imported"
-                    summary_delegate.finish(connectors, 0, "already imported");
+                    summary_delegate.finish(String::from("already imported"), 0, false);
 
                     return Ok(());
                 }
@@ -83,6 +81,7 @@ impl Action for DownloadAction {
                     println!("[Download] {:#?} already downloaded", group_type);
 
                     // TODO: Finish group with status "already downloaded"
+                    summary_delegate.finish(String::from("already downloaded"), 0, false);
 
                     return Ok(());
                 }
@@ -111,6 +110,7 @@ impl Action for DownloadAction {
         group_metadata::set_staging_file_timestamp(connectors, group_type, last_modified)?;
 
         // TODO: Finish group with status "downloaded" and done_count: 1 and updated: true
+        summary_delegate.finish(String::from("downloaded"), 1, true);
 
         Ok(())
     }

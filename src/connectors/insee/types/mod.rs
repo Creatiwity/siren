@@ -20,7 +20,7 @@ pub trait InseeResponse: DeserializeOwned {
 #[derive(Clone, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct Header {
-    total: u32,
+    pub total: u32,
     debut: u32,
     nombre: u32,
     pub curseur: String,

@@ -1,12 +1,12 @@
 use super::super::error::Error;
+use super::super::summary::SummaryGroupDelegate;
 use super::common::Action;
 use crate::connectors::{insee::INITIAL_CURSOR, Connectors};
 use crate::models::group_metadata;
 use crate::models::group_metadata::common::GroupType;
-use crate::models::update_metadata::common::{Step, UpdateGroupSummary};
+use crate::models::update_metadata::common::Step;
 use async_trait::async_trait;
-use chrono::{Duration, NaiveDateTime, Utc};
-use super::super::summary::SummaryGroupDelegate;
+use chrono::{DateTime, Duration, NaiveDateTime, Utc};
 
 pub struct SyncInseeAction {}
 
@@ -23,9 +23,6 @@ impl Action for SyncInseeAction {
         summary_delegate: &'b mut SummaryGroupDelegate<'a, 'b>,
     ) -> Result<(), Error> {
         println!("[SyncInsee] Syncing {:#?}", group_type);
-        let started_timestamp = Utc::now();
-        let status_label: String;
-        let mut updated = false;
 
         // Use Insee connector only if present
         if connectors.insee.is_some() {
@@ -36,6 +33,11 @@ impl Action for SyncInseeAction {
                 let mut updated_count = 0;
                 let timestamp = get_minimum_timestamp_for_request(last_timestamp);
 
+                summary_delegate.start(
+                    Some(DateTime::<Utc>::from_utc(timestamp, Utc)),
+                    model.get_total_count(connectors, timestamp).await,
+                );
+
                 while let Some(cursor) = current_cursor {
                     let (next_cursor, inserted_count) = model
                         .update_daily_data(connectors, timestamp, cursor)
@@ -43,6 +45,8 @@ impl Action for SyncInseeAction {
 
                     current_cursor = next_cursor;
                     updated_count += inserted_count;
+
+                    summary_delegate.progress(updated_count as u32);
                 }
 
                 println!("[SyncInsee] {} {:#?} synced", updated_count, group_type);
@@ -53,26 +57,21 @@ impl Action for SyncInseeAction {
                     Utc::now(),
                 )?;
 
-                updated = updated_count > 0;
-                status_label = String::from("synced");
+                summary_delegate.finish(
+                    String::from("synced"),
+                    updated_count as u32,
+                    updated_count > 0,
+                );
             } else {
-                status_label = String::from("missing last treatment date");
+                summary_delegate.finish(String::from("missing last treatment date"), 0, false);
             }
         } else {
-            status_label = String::from("no insee connector configured");
+            summary_delegate.finish(String::from("no insee connector configured"), 0, false);
         }
 
         println!("[SyncInsee] Syncing of {:#?} done", group_type);
-        Ok(UpdateGroupSummary {
-            group_type,
-            updated,
-            status_label,
-            started_timestamp,
-            finished_timestamp: Utc::now(),
-            planned_count: 0,
-            done_count: 0,
-            reference_timestamp: Utc::now(),
-        })
+
+        Ok(())
     }
 }
 

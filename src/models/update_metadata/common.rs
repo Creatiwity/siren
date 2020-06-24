@@ -72,10 +72,10 @@ pub struct UpdateGroupSummary {
     pub updated: bool,
     pub status_label: String,
     pub started_timestamp: DateTime<Utc>,
-    pub finished_timestamp: DateTime<Utc>,
+    pub finished_timestamp: Option<DateTime<Utc>>,
     pub planned_count: u32,
     pub done_count: u32,
-    pub reference_timestamp: DateTime<Utc>,
+    pub reference_timestamp: Option<DateTime<Utc>>,
 }
 
 #[derive(Deserialize, Serialize, Clone, Copy, Debug)]
@@ -93,7 +93,7 @@ pub struct UpdateStepSummary {
     pub step: Step,
     pub updated: bool,
     pub started_timestamp: DateTime<Utc>,
-    pub finished_timestamp: DateTime<Utc>,
+    pub finished_timestamp: Option<DateTime<Utc>>,
     pub groups: Vec<UpdateGroupSummary>,
 }
 

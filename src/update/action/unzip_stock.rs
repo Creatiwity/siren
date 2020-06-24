@@ -1,15 +1,14 @@
 use super::super::error::Error;
+use super::super::summary::SummaryGroupDelegate;
 use super::common::Action;
 use crate::connectors::Connectors;
 use crate::models::group_metadata;
 use crate::models::group_metadata::common::GroupType;
-use crate::models::update_metadata::common::{Step, UpdateGroupSummary};
+use crate::models::update_metadata::common::Step;
 use async_trait::async_trait;
-use chrono::Utc;
 use std::fs::{create_dir_all, set_permissions, File, Permissions};
 use std::io;
 use std::path::PathBuf;
-use super::super::summary::SummaryGroupDelegate;
 
 pub struct UnzipAction {
     pub temp_folder: String,
@@ -30,7 +29,7 @@ impl Action for UnzipAction {
         summary_delegate: &'b mut SummaryGroupDelegate<'a, 'b>,
     ) -> Result<(), Error> {
         println!("[Unzip] Unzipping {:#?}", group_type);
-        let started_timestamp = Utc::now();
+        summary_delegate.start(None, 1);
 
         let metadata = group_metadata::get(connectors, group_type)?;
 
@@ -39,16 +38,10 @@ impl Action for UnzipAction {
             Some(staging_file_timestamp) => staging_file_timestamp,
             None => {
                 println!("[Unzip] Nothing to unzip for {:#?}", group_type);
-                return Ok(UpdateGroupSummary {
-                    group_type,
-                    updated: false,
-                    status_label: String::from("nothing to unzip"),
-                    started_timestamp,
-                    finished_timestamp: Utc::now(),
-                    planned_count: 1,
-                    done_count: 0,
-                    reference_timestamp: Utc::now(),
-                });
+
+                summary_delegate.finish(String::from("nothing to unzip"), 0, false);
+
+                return Ok(());
             }
         };
 
@@ -58,31 +51,19 @@ impl Action for UnzipAction {
                 if let Some(last_imported_timestamp) = metadata.last_imported_timestamp {
                     if staging_csv_file_timestamp.le(&last_imported_timestamp) {
                         println!("[Unzip] {:#?} already imported", group_type);
-                        return Ok(UpdateGroupSummary {
-                            group_type,
-                            updated: false,
-                            status_label: String::from("already imported"),
-                            started_timestamp,
-                            finished_timestamp: Utc::now(),
-                            planned_count: 1,
-                            done_count: 0,
-                            reference_timestamp: Utc::now(),
-                        });
+
+                        summary_delegate.finish(String::from("already imported"), 0, false);
+
+                        return Ok(());
                     }
                 }
 
                 if staging_file_timestamp.le(&staging_csv_file_timestamp) {
                     println!("[Unzip] {:#?} already unzipped", group_type);
-                    return Ok(UpdateGroupSummary {
-                        group_type,
-                        updated: false,
-                        status_label: String::from("already unzipped"),
-                        started_timestamp,
-                        finished_timestamp: Utc::now(),
-                        planned_count: 1,
-                        done_count: 0,
-                        reference_timestamp: Utc::now(),
-                    });
+
+                    summary_delegate.finish(String::from("already unzipped"), 0, false);
+
+                    return Ok(());
                 }
             }
         }
@@ -147,15 +128,8 @@ impl Action for UnzipAction {
 
         println!("[Unzip] Unzip of {:#?} finished", group_type);
 
-        Ok(UpdateGroupSummary {
-            group_type,
-            updated: true,
-            status_label: String::from("unzipped"),
-            started_timestamp,
-            finished_timestamp: Utc::now(),
-            planned_count: 1,
-            done_count: 1,
-            reference_timestamp: Utc::now(),
-        })
+        summary_delegate.finish(String::from("unzipped"), 1, true);
+
+        Ok(())
     }
 }

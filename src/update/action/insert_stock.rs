@@ -1,14 +1,13 @@
 use super::super::error::Error;
+use super::super::summary::SummaryGroupDelegate;
 use super::common::Action;
 use crate::connectors::Connectors;
 use crate::models::group_metadata;
 use crate::models::group_metadata::common::GroupType;
-use crate::models::update_metadata::common::{Step, UpdateGroupSummary};
+use crate::models::update_metadata::common::Step;
 use async_trait::async_trait;
-use chrono::Utc;
 use std::fs::canonicalize;
 use std::path::PathBuf;
-use super::super::summary::SummaryGroupDelegate;
 
 pub struct InsertAction {
     pub db_folder: String,
@@ -28,7 +27,7 @@ impl Action for InsertAction {
         summary_delegate: &'b mut SummaryGroupDelegate<'a, 'b>,
     ) -> Result<(), Error> {
         println!("[Insert] Insert {:#?}", group_type);
-        let started_timestamp = Utc::now();
+        summary_delegate.start(None, 1);
 
         let metadata = group_metadata::get(connectors, group_type)?;
 
@@ -37,16 +36,10 @@ impl Action for InsertAction {
             Some(staging_csv_file_timestamp) => staging_csv_file_timestamp,
             None => {
                 println!("[Insert] Nothing to insert for {:#?}", group_type);
-                return Ok(UpdateGroupSummary {
-                    group_type,
-                    updated: false,
-                    status_label: String::from("nothing to insert"),
-                    started_timestamp,
-                    finished_timestamp: Utc::now(),
-                    planned_count: 1,
-                    done_count: 0,
-                    reference_timestamp: Utc::now(),
-                });
+
+                summary_delegate.finish(String::from("nothing to insert"), 0, false);
+
+                return Ok(());
             }
         };
 
@@ -56,31 +49,19 @@ impl Action for InsertAction {
                 if let Some(last_imported_timestamp) = metadata.last_imported_timestamp {
                     if staging_imported_timestamp.le(&last_imported_timestamp) {
                         println!("[Insert] {:#?} already imported", group_type);
-                        return Ok(UpdateGroupSummary {
-                            group_type,
-                            updated: false,
-                            status_label: String::from("already imported"),
-                            started_timestamp,
-                            finished_timestamp: Utc::now(),
-                            planned_count: 1,
-                            done_count: 0,
-                            reference_timestamp: Utc::now(),
-                        });
+
+                        summary_delegate.finish(String::from("already imported"), 0, false);
+
+                        return Ok(());
                     }
                 }
 
                 if staging_csv_file_timestamp.le(&staging_imported_timestamp) {
                     println!("[Insert] {:#?} already inserted", group_type);
-                    return Ok(UpdateGroupSummary {
-                        group_type,
-                        updated: false,
-                        status_label: String::from("already inserted"),
-                        started_timestamp,
-                        finished_timestamp: Utc::now(),
-                        planned_count: 1,
-                        done_count: 0,
-                        reference_timestamp: Utc::now(),
-                    });
+
+                    summary_delegate.finish(String::from("already inserted"), 0, false);
+
+                    return Ok(());
                 }
             }
         }
@@ -89,8 +70,10 @@ impl Action for InsertAction {
         let mut csv_path = PathBuf::from(self.db_folder.clone());
         csv_path.push(metadata.file_name);
         csv_path.set_extension("csv");
+
         let absolute_csv_path = canonicalize(csv_path)
             .map_err(|io_error| Error::InvalidComponentInCSVPath { io_error })?;
+
         let csv_path_str = absolute_csv_path
             .into_os_string()
             .into_string()
@@ -108,15 +91,8 @@ impl Action for InsertAction {
 
         println!("[Insert] Finished insert of {:#?}", group_type);
 
-        Ok(UpdateGroupSummary {
-            group_type,
-            updated: true,
-            status_label: String::from("inserted"),
-            started_timestamp,
-            finished_timestamp: Utc::now(),
-            planned_count: 1,
-            done_count: 1,
-            reference_timestamp: Utc::now(),
-        })
+        summary_delegate.finish(String::from("inserted"), 1, true);
+
+        Ok(())
     }
 }

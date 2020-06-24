@@ -1,8 +1,9 @@
-use crate::models::update_metadata::common::UpdateStepSummary;
-use chrono::{DateTime, Utc};
-use crate::models::update_metadata::common::Step;
 use crate::models::group_metadata::common::GroupType;
+use crate::models::update_metadata::common::Step;
+use crate::models::update_metadata::common::{UpdateGroupSummary, UpdateStepSummary};
+use chrono::{DateTime, Utc};
 
+#[derive(Debug)]
 pub struct Summary {
     pub steps: Vec<UpdateStepSummary>,
     pub updated: bool,
@@ -11,13 +12,12 @@ pub struct Summary {
 }
 
 pub struct SummaryStepDelegate<'a> {
-    step: Step,
-
+    _step: Step,
     summary: &'a mut Summary,
 }
 
 pub struct SummaryGroupDelegate<'a, 'b> {
-    group: GroupType,
+    _group: GroupType,
     step_delegate: &'b mut SummaryStepDelegate<'a>,
 }
 
@@ -43,32 +43,82 @@ impl Summary {
         self.steps.insert(0, step_summary);
 
         SummaryStepDelegate {
-            step,
+            _step: step,
             summary: self,
         }
+    }
+
+    pub fn finish(&mut self) {
+        self.finished_timestamp = Some(Utc::now());
+        // TODO: Create UpdateSummary here + stringify
     }
 }
 
 impl<'a> SummaryStepDelegate<'a> {
     pub fn group_delegate<'b>(&'b mut self, group: GroupType) -> SummaryGroupDelegate<'a, 'b> {
-        // TODO: Insert GroupSummary
+        if let Some(step) = self.summary.steps.first_mut() {
+            let group_summary = UpdateGroupSummary {
+                group_type: group,
+                updated: false,
+                status_label: String::from("Initialized"),
+                started_timestamp: Utc::now(),
+                finished_timestamp: None,
+                planned_count: 0,
+                done_count: 0,
+                reference_timestamp: None,
+            };
+
+            step.groups.insert(0, group_summary);
+        }
+
         SummaryGroupDelegate {
-            group,
+            _group: group,
             step_delegate: self,
         }
     }
 
-    pub fn start(self) {
-        if let Some(step_summary) = self.summary.steps.get_mut(0) {
-
-        }
-
+    pub fn start(&self) {
         // Save DB
     }
 
-    pub fn finish(self) {
+    pub fn finish(&mut self) {
         // Get step in summary
-        // Modify it
+        if let Some(step_summary) = self.summary.steps.first_mut() {
+            // Modify it
+            step_summary.finished_timestamp = Some(Utc::now());
+        }
+
         // Save
+    }
+}
+
+impl<'a, 'b> SummaryGroupDelegate<'a, 'b> {
+    fn get_current_mut(&mut self) -> Option<&mut UpdateGroupSummary> {
+        match self.step_delegate.summary.steps.first_mut() {
+            Some(step_summary) => step_summary.groups.first_mut(),
+            None => None,
+        }
+    }
+
+    pub fn start(&mut self, reference_timestamp: Option<DateTime<Utc>>, planned_count: u32) {
+        if let Some(group_summary) = self.get_current_mut() {
+            group_summary.reference_timestamp = reference_timestamp;
+            group_summary.planned_count = planned_count;
+        }
+    }
+
+    pub fn progress(&mut self, done_count: u32) {
+        if let Some(group_summary) = self.get_current_mut() {
+            group_summary.done_count = done_count;
+        }
+    }
+
+    pub fn finish(&mut self, status_label: String, done_count: u32, updated: bool) {
+        if let Some(group_summary) = self.get_current_mut() {
+            group_summary.status_label = status_label;
+            group_summary.done_count = done_count;
+            group_summary.updated = updated;
+            group_summary.finished_timestamp = Some(Utc::now());
+        }
     }
 }

@@ -1,12 +1,11 @@
 use super::super::error::Error;
+use super::super::summary::SummaryGroupDelegate;
 use super::common::Action;
 use crate::connectors::Connectors;
 use crate::models::group_metadata;
 use crate::models::group_metadata::common::GroupType;
-use crate::models::update_metadata::common::{Step, UpdateGroupSummary};
-use super::super::summary::SummaryGroupDelegate;
+use crate::models::update_metadata::common::Step;
 use async_trait::async_trait;
-use chrono::Utc;
 use std::fs::remove_file;
 use std::path::PathBuf;
 
@@ -28,7 +27,9 @@ impl Action for CleanAction {
         summary_delegate: &'b mut SummaryGroupDelegate<'a, 'b>,
     ) -> Result<(), Error> {
         println!("[Clean] Cleaning {:#?}", group_type);
-        let started_timestamp = Utc::now();
+
+        summary_delegate.start(None, 2);
+
         let mut updated = true;
         let mut done_count = 2;
         let mut status_label = String::from("cleaned");
@@ -61,17 +62,10 @@ impl Action for CleanAction {
 
         group_metadata::reset_staging_timestamps(connectors, group_type)?;
 
+        summary_delegate.finish(status_label, done_count, updated);
+
         println!("[Clean] Finished cleaning of {:#?}", group_type);
 
-        Ok(UpdateGroupSummary {
-            group_type,
-            updated,
-            status_label,
-            started_timestamp,
-            finished_timestamp: Utc::now(),
-            planned_count: 2,
-            done_count,
-            reference_timestamp: Utc::now(),
-        })
+        Ok(())
     }
 }

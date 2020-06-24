@@ -1,10 +1,10 @@
 use super::common::Config;
+use super::error::Error;
 use super::summary::SummaryStepDelegate;
 use crate::connectors::Connectors;
 use crate::models::group_metadata::common::GroupType;
 use crate::models::update_metadata::common::Step;
 use common::Action;
-use super::error::Error;
 
 pub mod clean;
 pub mod common;
@@ -24,12 +24,20 @@ pub async fn execute_step<'a>(
     let action = build_action(config, step);
 
     // TODO: Start step in summary_delegate
+    summary_delegate.start();
 
     for group in groups {
-        action.execute(*group, connectors, &mut summary_delegate.group_delegate(*group)).await?;
+        action
+            .execute(
+                *group,
+                connectors,
+                &mut summary_delegate.group_delegate(*group),
+            )
+            .await?;
     }
 
     // TODO: Finish step in summary_delegate
+    summary_delegate.finish();
 
     Ok(())
 }

@@ -73,12 +73,14 @@ async fn execute_workflow(
         })?;
     }
 
+    summary.finish();
+
     // End
     println!("[Update] Finished");
     let summary = UpdateSummary {
         updated: summary.steps.iter().find(|&s| s.updated).is_some(),
         started_timestamp,
-        finished_timestamp: Utc::now(),
+        finished_timestamp: summary.finished_timestamp.unwrap_or(Utc::now()),
         steps: summary.steps,
     };
     update_metadata::finished_update(connectors, summary.clone())?;
