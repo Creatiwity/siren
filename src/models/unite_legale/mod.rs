@@ -100,7 +100,10 @@ impl UpdatableModel for UniteLegaleModel {
         match connectors.insee.as_mut() {
             Some(insee) => match insee.get_total_unites_legales(start_timestamp).await {
                 Ok(total) => total,
-                Err(_) => 0,
+                Err(e @ _) => {
+                    log::warn!("Returning total count 0 with error ({:?})", e);
+                    0
+                }
             },
             None => 0,
         }

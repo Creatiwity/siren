@@ -59,7 +59,7 @@ async fn execute_workflow(
     let mut summary = Summary::new();
 
     for step in workflow.into_iter() {
-        execute_step(
+        if let Err(error) = execute_step(
             step,
             &config,
             &synthetic_group_type.into(),
@@ -67,10 +67,10 @@ async fn execute_workflow(
             &mut summary.step_delegate(step),
         )
         .await
-        .map_err(|e| {
-            update_metadata::error_update(connectors, e.to_string(), Utc::now());
-            e
-        })?;
+        {
+            update_metadata::error_update(connectors, error.to_string(), Utc::now())?;
+            return Err(error);
+        }
     }
 
     summary.finish();
@@ -80,7 +80,7 @@ async fn execute_workflow(
     let summary = UpdateSummary {
         updated: summary.steps.iter().find(|&s| s.updated).is_some(),
         started_timestamp,
-        finished_timestamp: summary.finished_timestamp.unwrap_or(Utc::now()),
+        finished_timestamp: summary.finished_timestamp,
         steps: summary.steps,
     };
     update_metadata::finished_update(connectors, summary.clone())?;

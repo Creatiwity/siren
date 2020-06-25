@@ -13,6 +13,13 @@ pub struct InseeQueryParams {
     pub tri: String,
 }
 
+#[derive(Serialize)]
+pub struct InseeCountQueryParams {
+    pub q: String,
+    pub nombre: u16,
+    pub champs: String,
+}
+
 pub trait InseeResponse: DeserializeOwned {
     fn header(&self) -> Header;
 }
@@ -20,11 +27,22 @@ pub trait InseeResponse: DeserializeOwned {
 #[derive(Clone, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct Header {
-    pub total: u32,
+    total: u32,
     debut: u32,
     nombre: u32,
     pub curseur: String,
     pub curseur_suivant: String,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct CountHeader {
+    #[serde(default = "default_as_zero")]
+    pub total: u32,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct InseeCountResponse {
+    pub header: CountHeader,
 }
 
 fn from_str_optional<'de, T, D>(deserializer: D) -> Result<Option<T>, D::Error>
@@ -49,4 +67,8 @@ where
 
 fn default_as_false() -> bool {
     false
+}
+
+fn default_as_zero() -> u32 {
+    0
 }

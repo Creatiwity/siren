@@ -1,7 +1,7 @@
 use super::error::InseeUpdateError;
 use super::types::{
     etablissement::InseeEtablissementResponse, unite_legale::InseeUniteLegaleResponse,
-    InseeQueryParams, InseeResponse,
+    InseeCountQueryParams, InseeCountResponse, InseeQueryParams, InseeResponse,
 };
 use super::Connector;
 use crate::models::etablissement::common::Etablissement;
@@ -43,7 +43,7 @@ impl Connector {
     ) -> Result<u32, InseeUpdateError> {
         self.wait_for_insee_limitation().await;
 
-        get_total::<InseeUniteLegaleResponse>(
+        get_total(
             EndpointConfig {
                 token: self.token.clone(),
                 route: String::from("siren"),
@@ -60,7 +60,7 @@ impl Connector {
     ) -> Result<u32, InseeUpdateError> {
         self.wait_for_insee_limitation().await;
 
-        get_total::<InseeEtablissementResponse>(
+        get_total(
             EndpointConfig {
                 token: self.token.clone(),
                 route: String::from("siret"),
@@ -184,7 +184,7 @@ async fn get_daily_data<T: InseeResponse>(
     Ok((next_cursor, Some(response)))
 }
 
-async fn get_total<T: InseeResponse>(
+async fn get_total(
     config: EndpointConfig,
     start_timestamp: NaiveDateTime,
 ) -> Result<u32, InseeUpdateError> {
@@ -192,26 +192,23 @@ async fn get_total<T: InseeResponse>(
 
     let url = format!("{}/{}", BASE_URL, config.route);
 
-    // TODO: Special Header type for count
-    // TODO: Reimplements error_for_status()
     let response = client
         .get(&url)
         .header(AUTHORIZATION, format!("Bearer {}", config.token))
         .header(ACCEPT, HeaderValue::from_static("application/json"))
-        .query(&InseeQueryParams {
+        .query(&InseeCountQueryParams {
             q: format!(
                 "{}:[{} TO *]",
                 config.query_field,
                 start_timestamp.format("%Y-%m-%dT%H:%M:%S")
             ),
             nombre: 1,
-            curseur: String::from("*"),
-            tri: String::from(""),
+            champs: config.route,
         })
         .send()
         .await?
-        .json::<T>()
+        .json::<InseeCountResponse>()
         .await?;
 
-    Ok(response.header().total)
+    Ok(response.header.total)
 }

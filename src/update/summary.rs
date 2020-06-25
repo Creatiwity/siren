@@ -50,7 +50,6 @@ impl Summary {
 
     pub fn finish(&mut self) {
         self.finished_timestamp = Some(Utc::now());
-        // TODO: Create UpdateSummary here + stringify
     }
 }
 

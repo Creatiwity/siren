@@ -76,5 +76,7 @@ impl Action for SyncInseeAction {
 }
 
 fn get_minimum_timestamp_for_request(timestamp: NaiveDateTime) -> NaiveDateTime {
+    // Uncomment the next line to force custom date to be used
+    // return NaiveDateTime::parse_from_str("2020-06-25 12:00:00", "%Y-%m-%d %H:%M:%S").unwrap();
     timestamp.max(Utc::now().naive_local() - Duration::days(31))
 }

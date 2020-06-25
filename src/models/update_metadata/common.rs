@@ -38,7 +38,7 @@ pub struct LaunchUpdateMetadata {
 pub struct FinishedUpdateMetadata {
     pub status: UpdateStatus,
     pub summary: UpdateSummary,
-    pub finished_timestamp: DateTime<Utc>,
+    pub finished_timestamp: Option<DateTime<Utc>>,
 }
 
 #[derive(AsChangeset)]
@@ -102,7 +102,7 @@ pub struct UpdateStepSummary {
 pub struct UpdateSummary {
     pub updated: bool,
     pub started_timestamp: DateTime<Utc>,
-    pub finished_timestamp: DateTime<Utc>,
+    pub finished_timestamp: Option<DateTime<Utc>>,
     pub steps: Vec<UpdateStepSummary>,
 }
 
