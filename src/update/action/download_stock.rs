@@ -32,7 +32,7 @@ impl Action for DownloadAction {
         summary_delegate: &'b mut SummaryGroupDelegate<'a, 'b>,
     ) -> Result<(), Error> {
         println!("[Download] Downloading {:#?}", group_type);
-        summary_delegate.start(None, 1);
+        summary_delegate.start(connectors, None, 1)?;
 
         let metadata = group_metadata::get(connectors, group_type)?;
 
@@ -69,8 +69,12 @@ impl Action for DownloadAction {
                 if last_modified.le(&last_imported_timestamp) {
                     println!("[Download] {:#?} already imported", group_type);
 
-                    // TODO: Finish group with status "already imported"
-                    summary_delegate.finish(String::from("already imported"), 0, false);
+                    summary_delegate.finish(
+                        connectors,
+                        String::from("already imported"),
+                        0,
+                        false,
+                    )?;
 
                     return Ok(());
                 }
@@ -80,8 +84,12 @@ impl Action for DownloadAction {
                 if last_modified.le(&staging_file_timestamp) {
                     println!("[Download] {:#?} already downloaded", group_type);
 
-                    // TODO: Finish group with status "already downloaded"
-                    summary_delegate.finish(String::from("already downloaded"), 0, false);
+                    summary_delegate.finish(
+                        connectors,
+                        String::from("already downloaded"),
+                        0,
+                        false,
+                    )?;
 
                     return Ok(());
                 }
@@ -109,8 +117,7 @@ impl Action for DownloadAction {
         // Update staging file timestamp
         group_metadata::set_staging_file_timestamp(connectors, group_type, last_modified)?;
 
-        // TODO: Finish group with status "downloaded" and done_count: 1 and updated: true
-        summary_delegate.finish(String::from("downloaded"), 1, true);
+        summary_delegate.finish(connectors, String::from("downloaded"), 1, true)?;
 
         Ok(())
     }

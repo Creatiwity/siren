@@ -36,9 +36,10 @@ impl Action for SyncInseeAction {
                 let planned_count = model.get_total_count(connectors, timestamp).await?;
 
                 summary_delegate.start(
+                    connectors,
                     Some(DateTime::<Utc>::from_utc(timestamp, Utc)),
                     planned_count,
-                );
+                )?;
 
                 while let Some(cursor) = current_cursor {
                     let (next_cursor, inserted_count) = model
@@ -48,7 +49,7 @@ impl Action for SyncInseeAction {
                     current_cursor = next_cursor;
                     updated_count += inserted_count;
 
-                    summary_delegate.progress(updated_count as u32);
+                    summary_delegate.progress(connectors, updated_count as u32)?;
                 }
 
                 println!("[SyncInsee] {} {:#?} synced", updated_count, group_type);
@@ -60,15 +61,26 @@ impl Action for SyncInseeAction {
                 )?;
 
                 summary_delegate.finish(
+                    connectors,
                     String::from("synced"),
                     updated_count as u32,
                     updated_count > 0,
-                );
+                )?;
             } else {
-                summary_delegate.finish(String::from("missing last treatment date"), 0, false);
+                summary_delegate.finish(
+                    connectors,
+                    String::from("missing last treatment date"),
+                    0,
+                    false,
+                )?;
             }
         } else {
-            summary_delegate.finish(String::from("no insee connector configured"), 0, false);
+            summary_delegate.finish(
+                connectors,
+                String::from("no insee connector configured"),
+                0,
+                false,
+            )?;
         }
 
         println!("[SyncInsee] Syncing of {:#?} done", group_type);

@@ -1,8 +1,8 @@
 use super::super::error::Error;
+use super::super::summary::SummaryGroupDelegate;
 use crate::connectors::Connectors;
 use crate::models::group_metadata::common::GroupType;
 use crate::models::update_metadata::common::Step;
-use super::super::summary::SummaryGroupDelegate;
 use async_trait::async_trait;
 
 #[async_trait]

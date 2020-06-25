@@ -28,7 +28,7 @@ impl Action for CleanAction {
     ) -> Result<(), Error> {
         println!("[Clean] Cleaning {:#?}", group_type);
 
-        summary_delegate.start(None, 2);
+        summary_delegate.start(connectors, None, 2)?;
 
         let mut updated = true;
         let mut done_count = 2;
@@ -62,7 +62,7 @@ impl Action for CleanAction {
 
         group_metadata::reset_staging_timestamps(connectors, group_type)?;
 
-        summary_delegate.finish(status_label, done_count, updated);
+        summary_delegate.finish(connectors, status_label, done_count, updated)?;
 
         println!("[Clean] Finished cleaning of {:#?}", group_type);
 
