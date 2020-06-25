@@ -5,7 +5,6 @@ use action::execute_step;
 use chrono::Utc;
 use common::Config;
 use error::Error;
-use summary::Summary;
 
 pub mod action;
 pub mod common;
@@ -47,7 +46,7 @@ async fn execute_workflow(
     println!("[Update] Starting");
 
     // Execute workflow
-    let mut summary = Summary::new();
+    let mut summary = UpdateSummary::new();
 
     summary.start(
         connectors,
@@ -57,7 +56,7 @@ async fn execute_workflow(
     )?;
 
     for step in workflow.into_iter() {
-        if let Err(error) = execute_step(
+        execute_step(
             step,
             &config,
             &synthetic_group_type.into(),
@@ -65,13 +64,13 @@ async fn execute_workflow(
             &mut summary.step_delegate(step),
         )
         .await
-        {
+        .or_else(|error| {
             update_metadata::error_update(connectors, error.to_string(), Utc::now())?;
-            return Err(error);
-        }
+            Err(error)
+        })?;
     }
 
-    summary.finish(connectors);
+    summary.finish(connectors)?;
 
     // End
     println!("[Update] Finished");

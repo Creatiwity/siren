@@ -7,17 +7,9 @@ use crate::models::update_metadata::{
 };
 use chrono::{DateTime, Utc};
 
-#[derive(Debug)]
-pub struct Summary {
-    pub steps: Vec<UpdateStepSummary>,
-    pub updated: bool,
-    pub started_timestamp: DateTime<Utc>,
-    pub finished_timestamp: Option<DateTime<Utc>>,
-}
-
 pub struct SummaryStepDelegate<'a> {
     _step: Step,
-    summary: &'a mut Summary,
+    summary: &'a mut UpdateSummary,
 }
 
 pub struct SummaryGroupDelegate<'a, 'b> {
@@ -25,9 +17,9 @@ pub struct SummaryGroupDelegate<'a, 'b> {
     step_delegate: &'b mut SummaryStepDelegate<'a>,
 }
 
-impl Summary {
+impl UpdateSummary {
     pub fn new() -> Self {
-        Summary {
+        UpdateSummary {
             steps: vec![],
             updated: false,
             started_timestamp: Utc::now(),
@@ -72,12 +64,7 @@ impl Summary {
 
         update_metadata::finished_update(
             connectors,
-            UpdateSummary {
-                started_timestamp: self.started_timestamp,
-                finished_timestamp: self.finished_timestamp,
-                steps: self.steps,
-                updated: self.steps.iter().find(|&s| s.updated).is_some(),
-            },
+            self.clone(),
         )
         .map(|_| Ok(()))?
     }
