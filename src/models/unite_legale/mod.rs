@@ -96,17 +96,13 @@ impl UpdatableModel for UniteLegaleModel {
         &self,
         connectors: &mut Connectors,
         start_timestamp: NaiveDateTime,
-    ) -> u32 {
-        match connectors.insee.as_mut() {
-            Some(insee) => match insee.get_total_unites_legales(start_timestamp).await {
-                Ok(total) => total,
-                Err(e @ _) => {
-                    log::warn!("Returning total count 0 with error ({:?})", e);
-                    0
-                }
-            },
-            None => 0,
-        }
+    ) -> Result<u32, UpdatableError> {
+        let insee = connectors
+            .insee
+            .as_mut()
+            .ok_or(UpdatableError::MissingInseeConnector)?;
+
+        Ok(insee.get_total_unites_legales(start_timestamp).await?)
     }
 
     // SELECT date_dernier_traitement FROM unite_legale WHERE date_dernier_traitement IS NOT NULL ORDER BY date_dernier_traitement DESC LIMIT 1;

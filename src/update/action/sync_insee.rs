@@ -33,9 +33,11 @@ impl Action for SyncInseeAction {
                 let mut updated_count = 0;
                 let timestamp = get_minimum_timestamp_for_request(last_timestamp);
 
+                let planned_count = model.get_total_count(connectors, timestamp).await?;
+
                 summary_delegate.start(
                     Some(DateTime::<Utc>::from_utc(timestamp, Utc)),
-                    model.get_total_count(connectors, timestamp).await,
+                    planned_count,
                 );
 
                 while let Some(cursor) = current_cursor {

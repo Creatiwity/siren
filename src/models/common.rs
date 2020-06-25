@@ -14,7 +14,7 @@ pub trait UpdatableModel: Sync + Send {
         &self,
         connectors: &mut Connectors,
         start_timestamp: NaiveDateTime,
-    ) -> u32;
+    ) -> Result<u32, Error>;
     fn get_last_insee_synced_timestamp(
         &self,
         connectors: &Connectors,
