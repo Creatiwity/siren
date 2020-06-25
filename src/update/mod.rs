@@ -43,20 +43,18 @@ async fn execute_workflow(
     config: Config,
     connectors: &mut Connectors,
 ) -> Result<UpdateSummary, Error> {
-    // Register start
-    update_metadata::launch_update(
+    // Start
+    println!("[Update] Starting");
+
+    // Execute workflow
+    let mut summary = Summary::new();
+
+    summary.start(
         connectors,
         synthetic_group_type,
         config.force,
         config.data_only,
     )?;
-
-    // Start
-    println!("[Update] Starting");
-    let started_timestamp = Utc::now();
-
-    // Execute workflow
-    let mut summary = Summary::new();
 
     for step in workflow.into_iter() {
         if let Err(error) = execute_step(
@@ -73,17 +71,10 @@ async fn execute_workflow(
         }
     }
 
-    summary.finish();
+    summary.finish(connectors);
 
     // End
     println!("[Update] Finished");
-    let summary = UpdateSummary {
-        updated: summary.steps.iter().find(|&s| s.updated).is_some(),
-        started_timestamp,
-        finished_timestamp: summary.finished_timestamp,
-        steps: summary.steps,
-    };
-    update_metadata::finished_update(connectors, summary.clone())?;
 
     Ok(summary)
 }

@@ -51,6 +51,16 @@ pub fn launch_update(
     }
 }
 
+pub fn progress_update(connectors: &Connectors, summary: UpdateSummary) -> Result<bool, Error> {
+    let connection = connectors.local.pool.get()?;
+
+    diesel::update(dsl::update_metadata.filter(dsl::status.eq(UpdateStatus::Launched)))
+        .set(dsl::summary.eq(summary))
+        .execute(&connection)
+        .map(|count| count > 0)
+        .map_err(|error| error.into())
+}
+
 pub fn finished_update(connectors: &Connectors, summary: UpdateSummary) -> Result<bool, Error> {
     let connection = connectors.local.pool.get()?;
     let finished_timestamp = summary.finished_timestamp;

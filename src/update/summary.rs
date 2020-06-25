@@ -1,6 +1,10 @@
+use crate::connectors::Connectors;
 use crate::models::group_metadata::common::GroupType;
-use crate::models::update_metadata::common::Step;
-use crate::models::update_metadata::common::{UpdateGroupSummary, UpdateStepSummary};
+use crate::models::update_metadata::{
+    self,
+    common::{Step, SyntheticGroupType, UpdateGroupSummary, UpdateStepSummary, UpdateSummary},
+    error::Error,
+};
 use chrono::{DateTime, Utc};
 
 #[derive(Debug)]
@@ -48,8 +52,34 @@ impl Summary {
         }
     }
 
-    pub fn finish(&mut self) {
+    pub fn start(
+        &mut self,
+        connectors: &Connectors,
+        synthetic_group: SyntheticGroupType,
+        force: bool,
+        data_only: bool,
+    ) -> Result<(), Error> {
+        update_metadata::launch_update(connectors, synthetic_group, force, data_only).map(
+            |date| {
+                self.started_timestamp = date;
+                Ok(())
+            },
+        )?
+    }
+
+    pub fn finish(&mut self, connectors: &Connectors) -> Result<(), Error> {
         self.finished_timestamp = Some(Utc::now());
+
+        update_metadata::finished_update(
+            connectors,
+            UpdateSummary {
+                started_timestamp: self.started_timestamp,
+                finished_timestamp: self.finished_timestamp,
+                steps: self.steps,
+                updated: self.steps.iter().find(|&s| s.updated).is_some(),
+            },
+        )
+        .map(|_| Ok(()))?
     }
 }
 
