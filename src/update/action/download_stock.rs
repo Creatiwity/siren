@@ -49,7 +49,7 @@ impl Action for DownloadAction {
         // Prepare file download
         let client = reqwest::Client::builder()
             .connect_timeout(Duration::from_secs(10))
-            .timeout(Duration::from_secs(20))
+            .timeout(Duration::from_secs(3600))
             .build()
             .map_err(|req_error| Error::DownloadError { req_error })?;
 
