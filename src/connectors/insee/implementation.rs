@@ -51,12 +51,7 @@ impl Connector {
     ) -> Result<u32, InseeUpdateError> {
         self.wait_for_insee_limitation().await;
 
-        get_total(
-            &self.client,
-            &UNITES_LEGALES_ENDPOINT,
-            start_timestamp,
-        )
-        .await
+        get_total(&self.client, &UNITES_LEGALES_ENDPOINT, start_timestamp).await
     }
 
     pub async fn get_total_etablissements(
@@ -65,12 +60,7 @@ impl Connector {
     ) -> Result<u32, InseeUpdateError> {
         self.wait_for_insee_limitation().await;
 
-        get_total(
-            &self.client,
-            &ETABLISSEMENTS_ENDPOINT,
-            start_timestamp,
-        )
-        .await
+        get_total(&self.client, &ETABLISSEMENTS_ENDPOINT, start_timestamp).await
     }
 
     pub async fn get_daily_unites_legales(
