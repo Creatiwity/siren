@@ -17,7 +17,7 @@ pub struct InseeQueryParams {
 pub struct InseeCountQueryParams {
     pub q: String,
     pub nombre: u16,
-    pub champs: String,
+    pub champs: &'static str,
 }
 
 pub trait InseeResponse: DeserializeOwned {

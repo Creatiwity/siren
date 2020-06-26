@@ -4,15 +4,15 @@ mod types;
 pub mod error;
 
 use error::InseeTokenError;
-use reqwest::header::AUTHORIZATION;
+use reqwest::header::{HeaderMap, HeaderValue, ACCEPT, AUTHORIZATION};
 use serde::{Deserialize, Serialize};
 use std::env;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 pub use implementation::INITIAL_CURSOR;
 
 pub struct Connector {
-    pub token: String,
+    client: reqwest::Client,
     calls: u8,
     started_at: Instant,
 }
@@ -48,10 +48,27 @@ impl ConnectorBuilder {
     }
 
     pub async fn create(&self) -> Result<Connector, InseeTokenError> {
-        self.generate_token().await.map(|token| Connector {
-            token,
-            calls: 0,
-            started_at: Instant::now(),
+        self.generate_token().await.and_then(|token| {
+            // Build headers
+            let mut headers = HeaderMap::new();
+            headers.insert(
+                AUTHORIZATION,
+                HeaderValue::from_str(format!("Bearer {}", token).as_str())?,
+            );
+            headers.insert(ACCEPT, HeaderValue::from_static("application/json"));
+
+            // Build client
+            let client = reqwest::Client::builder()
+                .connect_timeout(Duration::from_secs(10))
+                .timeout(Duration::from_secs(20))
+                .default_headers(headers)
+                .build()?;
+
+            Ok(Connector {
+                client,
+                calls: 0,
+                started_at: Instant::now(),
+            })
         })
     }
 

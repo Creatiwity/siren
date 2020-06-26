@@ -98,7 +98,7 @@ pub fn current_update(connectors: &Connectors) -> Result<UpdateMetadata, Error> 
     let connection = connectors.local.pool.get()?;
 
     dsl::update_metadata
-        .filter(dsl::status.eq(UpdateStatus::Launched))
+        .order(dsl::launched_timestamp.desc())
         .first::<UpdateMetadata>(&connection)
         .map_err(|error| error.into())
 }

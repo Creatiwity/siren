@@ -7,7 +7,6 @@ use super::Connector;
 use crate::models::etablissement::common::Etablissement;
 use crate::models::unite_legale::common::UniteLegale;
 use chrono::NaiveDateTime;
-use reqwest::header::{HeaderValue, ACCEPT, AUTHORIZATION};
 
 const MAX_CALL: u8 = 20;
 const MAX_DURATION: std::time::Duration = std::time::Duration::from_secs(60);
@@ -15,10 +14,19 @@ const BASE_URL: &str = "https://api.insee.fr/entreprises/sirene/V3";
 pub const INITIAL_CURSOR: &str = "*";
 
 struct EndpointConfig {
-    token: String,
-    route: String,
-    query_field: String,
+    route: &'static str,
+    query_field: &'static str,
 }
+
+const UNITES_LEGALES_ENDPOINT: EndpointConfig = EndpointConfig {
+    route: "siren",
+    query_field: "dateDernierTraitementUniteLegale",
+};
+
+const ETABLISSEMENTS_ENDPOINT: EndpointConfig = EndpointConfig {
+    route: "siret",
+    query_field: "dateDernierTraitementEtablissement",
+};
 
 impl Connector {
     async fn wait_for_insee_limitation(&mut self) {
@@ -44,11 +52,8 @@ impl Connector {
         self.wait_for_insee_limitation().await;
 
         get_total(
-            EndpointConfig {
-                token: self.token.clone(),
-                route: String::from("siren"),
-                query_field: String::from("dateDernierTraitementUniteLegale"),
-            },
+            &self.client,
+            &UNITES_LEGALES_ENDPOINT,
             start_timestamp,
         )
         .await
@@ -61,11 +66,8 @@ impl Connector {
         self.wait_for_insee_limitation().await;
 
         get_total(
-            EndpointConfig {
-                token: self.token.clone(),
-                route: String::from("siret"),
-                query_field: String::from("dateDernierTraitementEtablissement"),
-            },
+            &self.client,
+            &ETABLISSEMENTS_ENDPOINT,
             start_timestamp,
         )
         .await
@@ -79,11 +81,8 @@ impl Connector {
         self.wait_for_insee_limitation().await;
 
         let (next_cursor, response) = get_daily_data::<InseeUniteLegaleResponse>(
-            EndpointConfig {
-                token: self.token.clone(),
-                route: String::from("siren"),
-                query_field: String::from("dateDernierTraitementUniteLegale"),
-            },
+            &self.client,
+            &UNITES_LEGALES_ENDPOINT,
             start_timestamp,
             cursor,
         )
@@ -110,11 +109,8 @@ impl Connector {
         self.wait_for_insee_limitation().await;
 
         let (next_cursor, response) = get_daily_data::<InseeEtablissementResponse>(
-            EndpointConfig {
-                token: self.token.clone(),
-                route: String::from("siret"),
-                query_field: String::from("dateDernierTraitementEtablissement"),
-            },
+            &self.client,
+            &ETABLISSEMENTS_ENDPOINT,
             start_timestamp,
             cursor,
         )
@@ -135,18 +131,15 @@ impl Connector {
 }
 
 async fn get_daily_data<T: InseeResponse>(
-    config: EndpointConfig,
+    client: &reqwest::Client,
+    config: &EndpointConfig,
     start_timestamp: NaiveDateTime,
     cursor: String,
 ) -> Result<(Option<String>, Option<T>), InseeUpdateError> {
-    let client = reqwest::Client::new();
-
     let url = format!("{}/{}", BASE_URL, config.route);
 
     let response = match client
         .get(&url)
-        .header(AUTHORIZATION, format!("Bearer {}", config.token))
-        .header(ACCEPT, HeaderValue::from_static("application/json"))
         .query(&InseeQueryParams {
             q: format!(
                 "{}:[{} TO *]",
@@ -185,17 +178,14 @@ async fn get_daily_data<T: InseeResponse>(
 }
 
 async fn get_total(
-    config: EndpointConfig,
+    client: &reqwest::Client,
+    config: &EndpointConfig,
     start_timestamp: NaiveDateTime,
 ) -> Result<u32, InseeUpdateError> {
-    let client = reqwest::Client::new();
-
     let url = format!("{}/{}", BASE_URL, config.route);
 
     let response = client
         .get(&url)
-        .header(AUTHORIZATION, format!("Bearer {}", config.token))
-        .header(ACCEPT, HeaderValue::from_static("application/json"))
         .query(&InseeCountQueryParams {
             q: format!(
                 "{}:[{} TO *]",
