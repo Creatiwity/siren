@@ -5,7 +5,7 @@ pub mod common;
 use crate::models;
 use crate::update::{common::Config as DataConfig, update as update_data};
 use common::{
-    Context, EtablissementInnerResponse, EtablissementResponse,
+    Context, EtablissementInnerResponse, EtablissementResponse, StatusQueryString,
     UniteLegaleEtablissementInnerResponse, UniteLegaleInnerResponse, UniteLegaleResponse,
     UpdateOptions, UpdateResponse,
 };
@@ -49,7 +49,16 @@ async fn update(options: UpdateOptions, context: Context) -> Result<impl Reply, 
     Ok(warp::reply::json(&UpdateResponse { summary }))
 }
 
-async fn status(context: Context) -> Result<impl Reply, Rejection> {
+async fn status(query: StatusQueryString, context: Context) -> Result<impl Reply, Rejection> {
+    let api_key = match &context.api_key {
+        Some(key) => key,
+        None => return Err(Error::MissingApiKeyError.into()),
+    };
+
+    if &query.api_key != api_key {
+        return Err(Error::ApiKeyError.into());
+    }
+
     let connectors = context.builders.create();
 
     let update_metadata = models::update_metadata::current_update(&connectors)?;
@@ -138,12 +147,13 @@ pub async fn run(addr: SocketAddr, context: Context) {
         .and_then(update);
     log::info!("[Warp] Mount POST /admin/update {{json}}");
 
-    // GET /admin/update/status
+    // GET /admin/update/status?api_key=""
     let status_route = warp::get()
         .and(warp::path!("status"))
+        .and(warp::query::<StatusQueryString>())
         .and(with_context(context))
         .and_then(status);
-    log::info!("[Warp] Mount GET /admin/update/status");
+    log::info!("[Warp] Mount GET /admin/update/status?api_key=");
 
     // Cors
     let cors = warp::cors()
