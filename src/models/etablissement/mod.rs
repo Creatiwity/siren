@@ -4,7 +4,7 @@ pub mod error;
 
 use super::common::{Error as UpdatableError, UpdatableModel};
 use super::schema::etablissement::dsl;
-use crate::connectors::{insee::INITIAL_CURSOR, Connectors};
+use crate::connectors::Connectors;
 use async_trait::async_trait;
 use chrono::NaiveDateTime;
 use common::Etablissement;
@@ -114,6 +114,19 @@ impl UpdatableModel for EtablissementModel {
         })
     }
 
+    async fn get_total_count(
+        &self,
+        connectors: &mut Connectors,
+        start_timestamp: NaiveDateTime,
+    ) -> Result<u32, UpdatableError> {
+        let insee = connectors
+            .insee
+            .as_mut()
+            .ok_or(UpdatableError::MissingInseeConnector)?;
+
+        Ok(insee.get_total_etablissements(start_timestamp).await?)
+    }
+
     // SELECT date_dernier_traitement FROM etablissement WHERE date_dernier_traitement IS NOT NULL ORDER BY date_dernier_traitement DESC LIMIT 1;
     fn get_last_insee_synced_timestamp(
         &self,
@@ -132,7 +145,8 @@ impl UpdatableModel for EtablissementModel {
         &self,
         connectors: &mut Connectors,
         start_timestamp: NaiveDateTime,
-    ) -> Result<usize, UpdatableError> {
+        cursor: String,
+    ) -> Result<(Option<String>, usize), UpdatableError> {
         let insee = connectors
             .insee
             .as_mut()
@@ -140,74 +154,67 @@ impl UpdatableModel for EtablissementModel {
 
         let connection = connectors.local.pool.get()?;
 
-        let mut current_cursor: Option<String> = Some(INITIAL_CURSOR.to_string());
-        let mut updated_count: usize = 0;
+        let (next_cursor, etablissements) = insee
+            .get_daily_etablissements(start_timestamp, cursor)
+            .await?;
 
-        while let Some(cursor) = current_cursor {
-            let (next_cursor, etablissements) = insee
-                .get_daily_etablissements(start_timestamp, cursor)
-                .await?;
+        let updated_count = diesel::insert_into(dsl::etablissement)
+            .values(&etablissements)
+            .on_conflict(dsl::siret)
+            .do_update()
+            .set((
+                dsl::nic.eq(excluded(dsl::nic)),
+                dsl::siren.eq(excluded(dsl::siren)),
+                dsl::statut_diffusion.eq(excluded(dsl::statut_diffusion)),
+                dsl::date_creation.eq(excluded(dsl::date_creation)),
+                dsl::tranche_effectifs.eq(excluded(dsl::tranche_effectifs)),
+                dsl::annee_effectifs.eq(excluded(dsl::annee_effectifs)),
+                dsl::activite_principale_registre_metiers
+                    .eq(excluded(dsl::activite_principale_registre_metiers)),
+                dsl::date_dernier_traitement.eq(excluded(dsl::date_dernier_traitement)),
+                dsl::etablissement_siege.eq(excluded(dsl::etablissement_siege)),
+                dsl::nombre_periodes.eq(excluded(dsl::nombre_periodes)),
+                dsl::complement_adresse.eq(excluded(dsl::complement_adresse)),
+                dsl::numero_voie.eq(excluded(dsl::numero_voie)),
+                dsl::indice_repetition.eq(excluded(dsl::indice_repetition)),
+                dsl::type_voie.eq(excluded(dsl::type_voie)),
+                dsl::libelle_voie.eq(excluded(dsl::libelle_voie)),
+                dsl::code_postal.eq(excluded(dsl::code_postal)),
+                dsl::libelle_commune.eq(excluded(dsl::libelle_commune)),
+                dsl::libelle_commune_etranger.eq(excluded(dsl::libelle_commune_etranger)),
+                dsl::distribution_speciale.eq(excluded(dsl::distribution_speciale)),
+                dsl::code_commune.eq(excluded(dsl::code_commune)),
+                dsl::code_cedex.eq(excluded(dsl::code_cedex)),
+                dsl::libelle_cedex.eq(excluded(dsl::libelle_cedex)),
+                dsl::code_pays_etranger.eq(excluded(dsl::code_pays_etranger)),
+                dsl::libelle_pays_etranger.eq(excluded(dsl::libelle_pays_etranger)),
+                dsl::complement_adresse2.eq(excluded(dsl::complement_adresse2)),
+                dsl::numero_voie_2.eq(excluded(dsl::numero_voie_2)),
+                dsl::indice_repetition_2.eq(excluded(dsl::indice_repetition_2)),
+                dsl::type_voie_2.eq(excluded(dsl::type_voie_2)),
+                dsl::libelle_voie_2.eq(excluded(dsl::libelle_voie_2)),
+                dsl::code_postal_2.eq(excluded(dsl::code_postal_2)),
+                dsl::libelle_commune_2.eq(excluded(dsl::libelle_commune_2)),
+                dsl::libelle_commune_etranger_2.eq(excluded(dsl::libelle_commune_etranger_2)),
+                dsl::distribution_speciale_2.eq(excluded(dsl::distribution_speciale_2)),
+                dsl::code_commune_2.eq(excluded(dsl::code_commune_2)),
+                dsl::code_cedex_2.eq(excluded(dsl::code_cedex_2)),
+                dsl::libelle_cedex_2.eq(excluded(dsl::libelle_cedex_2)),
+                dsl::code_pays_etranger_2.eq(excluded(dsl::code_pays_etranger_2)),
+                dsl::libelle_pays_etranger_2.eq(excluded(dsl::libelle_pays_etranger_2)),
+                dsl::date_debut.eq(excluded(dsl::date_debut)),
+                dsl::etat_administratif.eq(excluded(dsl::etat_administratif)),
+                dsl::enseigne_1.eq(excluded(dsl::enseigne_1)),
+                dsl::enseigne_2.eq(excluded(dsl::enseigne_2)),
+                dsl::enseigne_3.eq(excluded(dsl::enseigne_3)),
+                dsl::denomination_usuelle.eq(excluded(dsl::denomination_usuelle)),
+                dsl::activite_principale.eq(excluded(dsl::activite_principale)),
+                dsl::nomenclature_activite_principale
+                    .eq(excluded(dsl::nomenclature_activite_principale)),
+                dsl::caractere_employeur.eq(excluded(dsl::caractere_employeur)),
+            ))
+            .execute(&connection)?;
 
-            current_cursor = next_cursor;
-
-            updated_count += diesel::insert_into(dsl::etablissement)
-                .values(&etablissements)
-                .on_conflict(dsl::siret)
-                .do_update()
-                .set((
-                    dsl::nic.eq(excluded(dsl::nic)),
-                    dsl::siren.eq(excluded(dsl::siren)),
-                    dsl::statut_diffusion.eq(excluded(dsl::statut_diffusion)),
-                    dsl::date_creation.eq(excluded(dsl::date_creation)),
-                    dsl::tranche_effectifs.eq(excluded(dsl::tranche_effectifs)),
-                    dsl::annee_effectifs.eq(excluded(dsl::annee_effectifs)),
-                    dsl::activite_principale_registre_metiers
-                        .eq(excluded(dsl::activite_principale_registre_metiers)),
-                    dsl::date_dernier_traitement.eq(excluded(dsl::date_dernier_traitement)),
-                    dsl::etablissement_siege.eq(excluded(dsl::etablissement_siege)),
-                    dsl::nombre_periodes.eq(excluded(dsl::nombre_periodes)),
-                    dsl::complement_adresse.eq(excluded(dsl::complement_adresse)),
-                    dsl::numero_voie.eq(excluded(dsl::numero_voie)),
-                    dsl::indice_repetition.eq(excluded(dsl::indice_repetition)),
-                    dsl::type_voie.eq(excluded(dsl::type_voie)),
-                    dsl::libelle_voie.eq(excluded(dsl::libelle_voie)),
-                    dsl::code_postal.eq(excluded(dsl::code_postal)),
-                    dsl::libelle_commune.eq(excluded(dsl::libelle_commune)),
-                    dsl::libelle_commune_etranger.eq(excluded(dsl::libelle_commune_etranger)),
-                    dsl::distribution_speciale.eq(excluded(dsl::distribution_speciale)),
-                    dsl::code_commune.eq(excluded(dsl::code_commune)),
-                    dsl::code_cedex.eq(excluded(dsl::code_cedex)),
-                    dsl::libelle_cedex.eq(excluded(dsl::libelle_cedex)),
-                    dsl::code_pays_etranger.eq(excluded(dsl::code_pays_etranger)),
-                    dsl::libelle_pays_etranger.eq(excluded(dsl::libelle_pays_etranger)),
-                    dsl::complement_adresse2.eq(excluded(dsl::complement_adresse2)),
-                    dsl::numero_voie_2.eq(excluded(dsl::numero_voie_2)),
-                    dsl::indice_repetition_2.eq(excluded(dsl::indice_repetition_2)),
-                    dsl::type_voie_2.eq(excluded(dsl::type_voie_2)),
-                    dsl::libelle_voie_2.eq(excluded(dsl::libelle_voie_2)),
-                    dsl::code_postal_2.eq(excluded(dsl::code_postal_2)),
-                    dsl::libelle_commune_2.eq(excluded(dsl::libelle_commune_2)),
-                    dsl::libelle_commune_etranger_2.eq(excluded(dsl::libelle_commune_etranger_2)),
-                    dsl::distribution_speciale_2.eq(excluded(dsl::distribution_speciale_2)),
-                    dsl::code_commune_2.eq(excluded(dsl::code_commune_2)),
-                    dsl::code_cedex_2.eq(excluded(dsl::code_cedex_2)),
-                    dsl::libelle_cedex_2.eq(excluded(dsl::libelle_cedex_2)),
-                    dsl::code_pays_etranger_2.eq(excluded(dsl::code_pays_etranger_2)),
-                    dsl::libelle_pays_etranger_2.eq(excluded(dsl::libelle_pays_etranger_2)),
-                    dsl::date_debut.eq(excluded(dsl::date_debut)),
-                    dsl::etat_administratif.eq(excluded(dsl::etat_administratif)),
-                    dsl::enseigne_1.eq(excluded(dsl::enseigne_1)),
-                    dsl::enseigne_2.eq(excluded(dsl::enseigne_2)),
-                    dsl::enseigne_3.eq(excluded(dsl::enseigne_3)),
-                    dsl::denomination_usuelle.eq(excluded(dsl::denomination_usuelle)),
-                    dsl::activite_principale.eq(excluded(dsl::activite_principale)),
-                    dsl::nomenclature_activite_principale
-                        .eq(excluded(dsl::nomenclature_activite_principale)),
-                    dsl::caractere_employeur.eq(excluded(dsl::caractere_employeur)),
-                ))
-                .execute(&connection)?;
-        }
-
-        Ok(updated_count)
+        Ok((next_cursor, updated_count))
     }
 }

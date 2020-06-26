@@ -1,11 +1,11 @@
 use super::super::error::Error;
+use super::super::summary::SummaryGroupDelegate;
 use super::common::Action;
 use crate::connectors::Connectors;
 use crate::models::group_metadata;
 use crate::models::group_metadata::common::GroupType;
-use crate::models::update_metadata::common::{Step, UpdateGroupSummary};
+use crate::models::update_metadata::common::Step;
 use async_trait::async_trait;
-use chrono::Utc;
 use std::fs::{create_dir_all, set_permissions, File, Permissions};
 use std::io;
 use std::path::PathBuf;
@@ -22,13 +22,14 @@ impl Action for UnzipAction {
         Step::UnzipFile
     }
 
-    async fn execute(
+    async fn execute<'a, 'b>(
         &self,
         group_type: GroupType,
         connectors: &mut Connectors,
-    ) -> Result<UpdateGroupSummary, Error> {
+        summary_delegate: &'b mut SummaryGroupDelegate<'a, 'b>,
+    ) -> Result<(), Error> {
         println!("[Unzip] Unzipping {:#?}", group_type);
-        let started_timestamp = Utc::now();
+        summary_delegate.start(connectors, None, 1)?;
 
         let metadata = group_metadata::get(connectors, group_type)?;
 
@@ -37,13 +38,10 @@ impl Action for UnzipAction {
             Some(staging_file_timestamp) => staging_file_timestamp,
             None => {
                 println!("[Unzip] Nothing to unzip for {:#?}", group_type);
-                return Ok(UpdateGroupSummary {
-                    group_type,
-                    updated: false,
-                    status_label: String::from("nothing to unzip"),
-                    started_timestamp,
-                    finished_timestamp: Utc::now(),
-                });
+
+                summary_delegate.finish(connectors, String::from("nothing to unzip"), 0, false)?;
+
+                return Ok(());
             }
         };
 
@@ -53,25 +51,29 @@ impl Action for UnzipAction {
                 if let Some(last_imported_timestamp) = metadata.last_imported_timestamp {
                     if staging_csv_file_timestamp.le(&last_imported_timestamp) {
                         println!("[Unzip] {:#?} already imported", group_type);
-                        return Ok(UpdateGroupSummary {
-                            group_type,
-                            updated: false,
-                            status_label: String::from("already imported"),
-                            started_timestamp,
-                            finished_timestamp: Utc::now(),
-                        });
+
+                        summary_delegate.finish(
+                            connectors,
+                            String::from("already imported"),
+                            0,
+                            false,
+                        )?;
+
+                        return Ok(());
                     }
                 }
 
                 if staging_file_timestamp.le(&staging_csv_file_timestamp) {
                     println!("[Unzip] {:#?} already unzipped", group_type);
-                    return Ok(UpdateGroupSummary {
-                        group_type,
-                        updated: false,
-                        status_label: String::from("already unzipped"),
-                        started_timestamp,
-                        finished_timestamp: Utc::now(),
-                    });
+
+                    summary_delegate.finish(
+                        connectors,
+                        String::from("already unzipped"),
+                        0,
+                        false,
+                    )?;
+
+                    return Ok(());
                 }
             }
         }
@@ -136,12 +138,8 @@ impl Action for UnzipAction {
 
         println!("[Unzip] Unzip of {:#?} finished", group_type);
 
-        Ok(UpdateGroupSummary {
-            group_type,
-            updated: true,
-            status_label: String::from("unzipped"),
-            started_timestamp,
-            finished_timestamp: Utc::now(),
-        })
+        summary_delegate.finish(connectors, String::from("unzipped"), 1, true)?;
+
+        Ok(())
     }
 }

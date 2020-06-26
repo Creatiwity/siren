@@ -1,7 +1,9 @@
 use super::common::{CmdGroupType, FolderOptions};
 use crate::connectors::ConnectorsBuilders;
 use crate::models::update_metadata::common::{Step, SyntheticGroupType};
-use crate::update::{common::Config, update, update_step};
+use crate::models::update_metadata::error_update;
+use crate::update::{common::Config, error::Error, update, update_step};
+use chrono::Utc;
 
 #[derive(Clap, Debug)]
 pub struct UpdateFlags {
@@ -46,6 +48,10 @@ enum UpdateSubCommand {
     /// Synchronise daily data from INSEE since the last modification
     #[clap(name = "sync-insee")]
     SyncInsee,
+
+    /// Set a staled update process to error, use only if the process is really stopped
+    #[clap(name = "finish-error")]
+    FinishError,
 }
 
 pub async fn run(flags: UpdateFlags, folder_options: FolderOptions, builders: ConnectorsBuilders) {
@@ -73,6 +79,18 @@ pub async fn run(flags: UpdateFlags, folder_options: FolderOptions, builders: Co
                 UpdateSubCommand::SwapData => Step::SwapData,
                 UpdateSubCommand::CleanFile => Step::CleanFile,
                 UpdateSubCommand::SyncInsee => Step::SyncInsee,
+                UpdateSubCommand::FinishError => {
+                    if let Err(err) = error_update(
+                        &connectors,
+                        "Process stopped manually.".to_string(),
+                        Utc::now(),
+                    ) {
+                        let error: Error = err.into();
+                        error.exit()
+                    }
+
+                    std::process::exit(0);
+                }
             };
 
             update_step(step, synthetic_group_type, config, &mut connectors).await
@@ -83,7 +101,7 @@ pub async fn run(flags: UpdateFlags, folder_options: FolderOptions, builders: Co
     match summary_result {
         Ok(summary) => println!(
             "{}",
-            serde_json::to_string(&summary).expect("Unable to stringify summary")
+            serde_json::to_string_pretty(&summary).expect("Unable to stringify summary")
         ),
         Err(error) => error.exit(),
     }

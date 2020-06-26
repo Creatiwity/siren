@@ -1,13 +1,12 @@
 use super::error::InseeUpdateError;
 use super::types::{
     etablissement::InseeEtablissementResponse, unite_legale::InseeUniteLegaleResponse,
-    InseeQueryParams, InseeResponse,
+    InseeCountQueryParams, InseeCountResponse, InseeQueryParams, InseeResponse,
 };
 use super::Connector;
 use crate::models::etablissement::common::Etablissement;
 use crate::models::unite_legale::common::UniteLegale;
-use chrono::{Duration, NaiveDateTime, Utc};
-use reqwest::header::{HeaderValue, ACCEPT, AUTHORIZATION};
+use chrono::NaiveDateTime;
 
 const MAX_CALL: u8 = 20;
 const MAX_DURATION: std::time::Duration = std::time::Duration::from_secs(60);
@@ -15,10 +14,19 @@ const BASE_URL: &str = "https://api.insee.fr/entreprises/sirene/V3";
 pub const INITIAL_CURSOR: &str = "*";
 
 struct EndpointConfig {
-    token: String,
-    route: String,
-    query_field: String,
+    route: &'static str,
+    query_field: &'static str,
 }
+
+const UNITES_LEGALES_ENDPOINT: EndpointConfig = EndpointConfig {
+    route: "siren",
+    query_field: "dateDernierTraitementUniteLegale",
+};
+
+const ETABLISSEMENTS_ENDPOINT: EndpointConfig = EndpointConfig {
+    route: "siret",
+    query_field: "dateDernierTraitementEtablissement",
+};
 
 impl Connector {
     async fn wait_for_insee_limitation(&mut self) {
@@ -37,6 +45,24 @@ impl Connector {
         }
     }
 
+    pub async fn get_total_unites_legales(
+        &mut self,
+        start_timestamp: NaiveDateTime,
+    ) -> Result<u32, InseeUpdateError> {
+        self.wait_for_insee_limitation().await;
+
+        get_total(&self.client, &UNITES_LEGALES_ENDPOINT, start_timestamp).await
+    }
+
+    pub async fn get_total_etablissements(
+        &mut self,
+        start_timestamp: NaiveDateTime,
+    ) -> Result<u32, InseeUpdateError> {
+        self.wait_for_insee_limitation().await;
+
+        get_total(&self.client, &ETABLISSEMENTS_ENDPOINT, start_timestamp).await
+    }
+
     pub async fn get_daily_unites_legales(
         &mut self,
         start_timestamp: NaiveDateTime,
@@ -45,11 +71,8 @@ impl Connector {
         self.wait_for_insee_limitation().await;
 
         let (next_cursor, response) = get_daily_data::<InseeUniteLegaleResponse>(
-            EndpointConfig {
-                token: self.token.clone(),
-                route: String::from("siren"),
-                query_field: String::from("dateDernierTraitementUniteLegale"),
-            },
+            &self.client,
+            &UNITES_LEGALES_ENDPOINT,
             start_timestamp,
             cursor,
         )
@@ -76,11 +99,8 @@ impl Connector {
         self.wait_for_insee_limitation().await;
 
         let (next_cursor, response) = get_daily_data::<InseeEtablissementResponse>(
-            EndpointConfig {
-                token: self.token.clone(),
-                route: String::from("siret"),
-                query_field: String::from("dateDernierTraitementEtablissement"),
-            },
+            &self.client,
+            &ETABLISSEMENTS_ENDPOINT,
             start_timestamp,
             cursor,
         )
@@ -100,28 +120,21 @@ impl Connector {
     }
 }
 
-fn get_minimum_timestamp_for_request(timestamp: NaiveDateTime) -> NaiveDateTime {
-    timestamp.max(Utc::now().naive_local() - Duration::days(31))
-}
-
 async fn get_daily_data<T: InseeResponse>(
-    config: EndpointConfig,
+    client: &reqwest::Client,
+    config: &EndpointConfig,
     start_timestamp: NaiveDateTime,
     cursor: String,
 ) -> Result<(Option<String>, Option<T>), InseeUpdateError> {
-    let client = reqwest::Client::new();
-
     let url = format!("{}/{}", BASE_URL, config.route);
 
     let response = match client
         .get(&url)
-        .header(AUTHORIZATION, format!("Bearer {}", config.token))
-        .header(ACCEPT, HeaderValue::from_static("application/json"))
         .query(&InseeQueryParams {
             q: format!(
                 "{}:[{} TO *]",
                 config.query_field,
-                get_minimum_timestamp_for_request(start_timestamp).format("%Y-%m-%dT%H:%M:%S")
+                start_timestamp.format("%Y-%m-%dT%H:%M:%S")
             ),
             nombre: 1000,
             curseur: cursor,
@@ -152,4 +165,30 @@ async fn get_daily_data<T: InseeResponse>(
     };
 
     Ok((next_cursor, Some(response)))
+}
+
+async fn get_total(
+    client: &reqwest::Client,
+    config: &EndpointConfig,
+    start_timestamp: NaiveDateTime,
+) -> Result<u32, InseeUpdateError> {
+    let url = format!("{}/{}", BASE_URL, config.route);
+
+    let response = client
+        .get(&url)
+        .query(&InseeCountQueryParams {
+            q: format!(
+                "{}:[{} TO *]",
+                config.query_field,
+                start_timestamp.format("%Y-%m-%dT%H:%M:%S")
+            ),
+            nombre: 1,
+            champs: config.route,
+        })
+        .send()
+        .await?
+        .json::<InseeCountResponse>()
+        .await?;
+
+    Ok(response.header.total)
 }

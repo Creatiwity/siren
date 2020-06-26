@@ -20,6 +20,11 @@ pub struct UpdateOptions {
     pub data_only: bool,
 }
 
+#[derive(Deserialize)]
+pub struct StatusQueryString {
+    pub api_key: String,
+}
+
 #[derive(Serialize)]
 pub struct UpdateResponse {
     pub summary: UpdateSummary,

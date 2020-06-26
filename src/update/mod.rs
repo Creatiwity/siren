@@ -5,7 +5,6 @@ use action::execute_step;
 use chrono::Utc;
 use common::Config;
 use error::Error;
-use summary::Summary;
 
 pub mod action;
 pub mod common;
@@ -43,20 +42,18 @@ async fn execute_workflow(
     config: Config,
     connectors: &mut Connectors,
 ) -> Result<UpdateSummary, Error> {
-    // Register start
-    update_metadata::launch_update(
+    // Start
+    println!("[Update] Starting");
+
+    // Execute workflow
+    let mut summary = UpdateSummary::new();
+
+    summary.start(
         connectors,
         synthetic_group_type,
         config.force,
         config.data_only,
     )?;
-
-    // Start
-    println!("[Update] Starting");
-    let started_timestamp = Utc::now();
-
-    // Execute workflow
-    let mut summary = Summary::new();
 
     for step in workflow.into_iter() {
         execute_step(
@@ -64,29 +61,19 @@ async fn execute_workflow(
             &config,
             &synthetic_group_type.into(),
             connectors,
-            &mut summary,
+            &mut summary.step_delegate(step),
         )
-        .await;
-
-        if summary.error.is_some() {
-            break;
-        }
+        .await
+        .or_else(|error| {
+            update_metadata::error_update(connectors, error.to_string(), Utc::now())?;
+            Err(error)
+        })?;
     }
 
-    if let Some(error) = summary.error {
-        update_metadata::error_update(connectors, error.to_string(), Utc::now())?;
-        return Err(error);
-    }
+    summary.finish(connectors)?;
 
     // End
     println!("[Update] Finished");
-    let summary = UpdateSummary {
-        updated: summary.steps.iter().find(|&s| s.updated).is_some(),
-        started_timestamp,
-        finished_timestamp: Utc::now(),
-        steps: summary.steps,
-    };
-    update_metadata::finished_update(connectors, summary.clone())?;
 
     Ok(summary)
 }

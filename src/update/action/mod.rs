@@ -1,9 +1,9 @@
 use super::common::Config;
-use super::summary::Summary;
+use super::error::Error;
+use super::summary::SummaryStepDelegate;
 use crate::connectors::Connectors;
 use crate::models::group_metadata::common::GroupType;
-use crate::models::update_metadata::common::{Step, UpdateGroupSummary, UpdateStepSummary};
-use chrono::Utc;
+use crate::models::update_metadata::common::Step;
 use common::Action;
 
 pub mod clean;
@@ -14,34 +14,30 @@ pub mod swap;
 pub mod sync_insee;
 pub mod unzip_stock;
 
-pub async fn execute_step(
+pub async fn execute_step<'a>(
     step: Step,
     config: &Config,
     groups: &Vec<GroupType>,
     connectors: &mut Connectors,
-    summary: &mut Summary,
-) {
-    let started_timestamp = Utc::now();
-    let mut groups_summary: Vec<UpdateGroupSummary> = vec![];
+    summary_delegate: &'a mut SummaryStepDelegate<'a>,
+) -> Result<(), Error> {
     let action = build_action(config, step);
 
+    summary_delegate.start(connectors)?;
+
     for group in groups {
-        match action.execute(*group, connectors).await {
-            Ok(group) => groups_summary.push(group),
-            Err(error) => {
-                summary.error = Some(error);
-                return;
-            }
-        }
+        action
+            .execute(
+                *group,
+                connectors,
+                &mut summary_delegate.group_delegate(*group),
+            )
+            .await?;
     }
 
-    summary.steps.push(UpdateStepSummary {
-        step,
-        updated: groups_summary.iter().find(|&g| g.updated).is_some(),
-        started_timestamp,
-        finished_timestamp: Utc::now(),
-        groups: groups_summary,
-    });
+    summary_delegate.finish(connectors)?;
+
+    Ok(())
 }
 
 fn build_action(config: &Config, step: Step) -> Box<dyn Action> {

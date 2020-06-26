@@ -1,15 +1,17 @@
 use super::super::error::Error;
+use super::super::summary::SummaryGroupDelegate;
 use super::common::Action;
 use crate::connectors::Connectors;
 use crate::models::group_metadata;
 use crate::models::group_metadata::common::GroupType;
-use crate::models::update_metadata::common::{Step, UpdateGroupSummary};
+use crate::models::update_metadata::common::Step;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use futures::stream::TryStreamExt;
 use reqwest::header::LAST_MODIFIED;
 use std::fs::create_dir_all;
 use std::path::PathBuf;
+use std::time::Duration;
 use tokio::fs::File;
 use tokio_util::compat::FuturesAsyncReadCompatExt;
 
@@ -24,13 +26,14 @@ impl Action for DownloadAction {
         Step::DownloadFile
     }
 
-    async fn execute(
+    async fn execute<'a, 'b>(
         &self,
         group_type: GroupType,
         connectors: &mut Connectors,
-    ) -> Result<UpdateGroupSummary, Error> {
+        summary_delegate: &'b mut SummaryGroupDelegate<'a, 'b>,
+    ) -> Result<(), Error> {
         println!("[Download] Downloading {:#?}", group_type);
-        let started_timestamp = Utc::now();
+        summary_delegate.start(connectors, None, 1)?;
 
         let metadata = group_metadata::get(connectors, group_type)?;
 
@@ -44,7 +47,15 @@ impl Action for DownloadAction {
         zip_path.set_extension("zip");
 
         // Prepare file download
-        let resp = reqwest::get(metadata.url.as_str())
+        let client = reqwest::Client::builder()
+            .connect_timeout(Duration::from_secs(10))
+            .timeout(Duration::from_secs(3600))
+            .build()
+            .map_err(|req_error| Error::DownloadError { req_error })?;
+
+        let resp = client
+            .get(&metadata.url)
+            .send()
             .await
             .map_err(|req_error| Error::DownloadError { req_error })?;
 
@@ -66,26 +77,30 @@ impl Action for DownloadAction {
             if let Some(last_imported_timestamp) = metadata.last_imported_timestamp {
                 if last_modified.le(&last_imported_timestamp) {
                     println!("[Download] {:#?} already imported", group_type);
-                    return Ok(UpdateGroupSummary {
-                        group_type,
-                        updated: false,
-                        status_label: String::from("already imported"),
-                        started_timestamp,
-                        finished_timestamp: Utc::now(),
-                    });
+
+                    summary_delegate.finish(
+                        connectors,
+                        String::from("already imported"),
+                        0,
+                        false,
+                    )?;
+
+                    return Ok(());
                 }
             }
 
             if let Some(staging_file_timestamp) = metadata.staging_file_timestamp {
                 if last_modified.le(&staging_file_timestamp) {
                     println!("[Download] {:#?} already downloaded", group_type);
-                    return Ok(UpdateGroupSummary {
-                        group_type,
-                        updated: false,
-                        status_label: String::from("already downloaded"),
-                        started_timestamp,
-                        finished_timestamp: Utc::now(),
-                    });
+
+                    summary_delegate.finish(
+                        connectors,
+                        String::from("already downloaded"),
+                        0,
+                        false,
+                    )?;
+
+                    return Ok(());
                 }
             }
         }
@@ -111,12 +126,8 @@ impl Action for DownloadAction {
         // Update staging file timestamp
         group_metadata::set_staging_file_timestamp(connectors, group_type, last_modified)?;
 
-        return Ok(UpdateGroupSummary {
-            group_type,
-            updated: true,
-            status_label: String::from("downloaded"),
-            started_timestamp,
-            finished_timestamp: Utc::now(),
-        });
+        summary_delegate.finish(connectors, String::from("downloaded"), 1, true)?;
+
+        Ok(())
     }
 }

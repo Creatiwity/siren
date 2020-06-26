@@ -10,6 +10,11 @@ pub trait UpdatableModel: Sync + Send {
     fn count_staging(&self, connectors: &Connectors) -> Result<i64, Error>;
     fn insert_in_staging(&self, connectors: &Connectors, file_path: String) -> Result<bool, Error>;
     fn swap(&self, connectors: &Connectors) -> Result<(), Error>;
+    async fn get_total_count(
+        &self,
+        connectors: &mut Connectors,
+        start_timestamp: NaiveDateTime,
+    ) -> Result<u32, Error>;
     fn get_last_insee_synced_timestamp(
         &self,
         connectors: &Connectors,
@@ -18,7 +23,8 @@ pub trait UpdatableModel: Sync + Send {
         &self,
         connectors: &mut Connectors,
         start_timestamp: NaiveDateTime,
-    ) -> Result<usize, Error>;
+        cursor: String,
+    ) -> Result<(Option<String>, usize), Error>;
 }
 
 custom_error! { pub Error
