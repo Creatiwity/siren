@@ -4,6 +4,7 @@ pub mod common;
 
 use crate::models;
 use crate::update::{common::Config as DataConfig, update as update_data};
+use chrono::Utc;
 use common::{
     Context, EtablissementInnerResponse, EtablissementResponse, StatusQueryString,
     UniteLegaleEtablissementInnerResponse, UniteLegaleInnerResponse, UniteLegaleResponse,
@@ -64,6 +65,30 @@ async fn status(query: StatusQueryString, context: Context) -> Result<impl Reply
     let update_metadata = models::update_metadata::current_update(&connectors)?;
 
     Ok(warp::reply::json(&update_metadata))
+}
+
+async fn set_status_to_error(
+    query: StatusQueryString,
+    context: Context,
+) -> Result<impl Reply, Rejection> {
+    let api_key = match &context.api_key {
+        Some(key) => key,
+        None => return Err(Error::MissingApiKeyError.into()),
+    };
+
+    if &query.api_key != api_key {
+        return Err(Error::ApiKeyError.into());
+    }
+
+    let connectors = context.builders.create();
+
+    models::update_metadata::error_update(
+        &connectors,
+        String::from("Process stopped manually."),
+        Utc::now(),
+    )?;
+
+    Ok(warp::reply())
 }
 
 async fn unites_legales(siren: String, context: Context) -> Result<impl Reply, Rejection> {
@@ -142,6 +167,7 @@ pub async fn run(addr: SocketAddr, context: Context) {
     // POST /admin/update {json}
     let update_route = warp::post()
         .and(warp::path::end())
+        .and(warp::body::content_length_limit(1024 * 32))
         .and(warp::body::json::<UpdateOptions>())
         .and(with_context(context.clone()))
         .and_then(update);
@@ -151,9 +177,18 @@ pub async fn run(addr: SocketAddr, context: Context) {
     let status_route = warp::get()
         .and(warp::path!("status"))
         .and(warp::query::<StatusQueryString>())
-        .and(with_context(context))
+        .and(with_context(context.clone()))
         .and_then(status);
     log::info!("[Warp] Mount GET /admin/update/status?api_key=");
+
+    // POST /admin/update/status/error { api_key }
+    let status_error_route = warp::post()
+        .and(warp::path!("status" / "error"))
+        .and(warp::body::content_length_limit(1024 * 32))
+        .and(warp::body::json::<StatusQueryString>())
+        .and(with_context(context))
+        .and_then(set_status_to_error);
+    log::info!("[Warp] Mount POST /admin/update/status/error {{api_key}}");
 
     // Cors
     let cors = warp::cors()
@@ -167,7 +202,7 @@ pub async fn run(addr: SocketAddr, context: Context) {
                 .or(v3_etablissement_route)
                 .or(v3_index),
         ))
-        .or(admin_update_route.and(status_route.or(update_route)))
+        .or(admin_update_route.and(status_route.or(update_route).or(status_error_route)))
         .recover(error::handle_rejection)
         .with(cors);
 
