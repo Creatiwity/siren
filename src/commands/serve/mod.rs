@@ -8,7 +8,7 @@ use std::net::ToSocketAddrs;
 
 #[derive(Clap, Debug)]
 pub struct ServeFlags {
-    /// production, staging or development, will change log level, you can set in environment variable as SIRENE_ENV
+    /// Configure log level, you can set in environment variable as SIRENE_ENV
     #[clap(arg_enum, long = "env")]
     environment: Option<CmdEnvironment>,
 

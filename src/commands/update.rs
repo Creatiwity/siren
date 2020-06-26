@@ -7,7 +7,7 @@ use chrono::Utc;
 
 #[derive(Clap, Debug)]
 pub struct UpdateFlags {
-    /// Configure which part will be updated, unites-legales, etablissements or all
+    /// Configure which part will be updated
     #[clap(arg_enum)]
     group_type: CmdGroupType,
 

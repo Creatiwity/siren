@@ -22,8 +22,8 @@ struct Opts {
     #[clap(long = "file-folder")]
     file_folder: Option<String>,
 
-    /// Path to the file storage folder for the database, you can set in environment variable as DB_FOLDER
-    /// Could be the same as FILE_FOLDER if this app and the database are on the same file system
+    /// Path to the file storage folder for the database, you can set in environment variable as DB_FOLDER.
+    /// Could be the same as FILE_FOLDER if this app and the database are on the same file system.
     /// Files copied by this app inside FILE_FOLDER must be visible by the database in DB_FOLDER
     #[clap(long = "db-folder")]
     db_folder: Option<String>,

@@ -34,6 +34,8 @@ createdb --owner=sirene sirene
 ```
 > sirene -h
 
+Sirene service used to update data in database and serve it through a HTTP REST API
+
 USAGE:
     sirene [OPTIONS] <SUBCOMMAND>
 
@@ -43,8 +45,8 @@ FLAGS:
 
 OPTIONS:
         --db-folder <db-folder>        Path to the file storage folder for the database, you can set in environment
-                                       variable as DB_FOLDER Could be the same as FILE_FOLDER if this app and the
-                                       database are on the same file system Files copied by this app inside FILE_FOLDER
+                                       variable as DB_FOLDER. Could be the same as FILE_FOLDER if this app and the
+                                       database are on the same file system. Files copied by this app inside FILE_FOLDER
                                        must be visible by the database in DB_FOLDER
         --file-folder <file-folder>    Path to the file storage folder for this app, you can set in environment variable
                                        as FILE_FOLDER
@@ -59,6 +61,9 @@ SUBCOMMANDS:
 **> sirene serve --help**
 
 ```
+sirene-serve
+Serve data from database to /unites_legales/<siren> and /etablissements/<siret>
+
 USAGE:
     sirene serve [OPTIONS]
 
@@ -69,8 +74,8 @@ FLAGS:
 OPTIONS:
     -k, --api-key <api-key>    API key needed to allow maintenance operation from HTTP, you can set in environment
                                variable as API_KEY
-        --env <environment>    production, staging or development, will change log level, you can set in environment
-                               variable as SIRENE_ENV
+        --env <environment>    Configure log level, you can set in environment variable as SIRENE_ENV [possible values:
+                               development, staging, production]
     -h, --host <host>          Listen this host, you can set in environment variable as HOST
     -p, --port <port>          Listen this port, you can set in environment variable as PORT
 ```
@@ -78,15 +83,14 @@ OPTIONS:
 **> sirene update --help**
 
 ```
-sirene-update 
+sirene-update
 Update data from CSV source files
 
 USAGE:
     sirene update [FLAGS] <group-type> [SUBCOMMAND]
 
 ARGS:
-    <group-type>    Configure which part will be updated, unites-legales, etablissements or all [possible values:
-                    unites-legales, etablissements, all]
+    <group-type>    Configure which part will be updated [possible values: unites-legales, etablissements, all]
 
 FLAGS:
         --data-only    Use an existing CSV file already present in FILE_FOLDER and does not delete it
