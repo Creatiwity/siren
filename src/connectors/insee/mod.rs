@@ -73,7 +73,11 @@ impl ConnectorBuilder {
     }
 
     async fn generate_token(&self) -> Result<String, InseeTokenError> {
-        let client = reqwest::Client::new();
+        let client = reqwest::Client::builder()
+            .connect_timeout(Duration::from_secs(10))
+            .timeout(Duration::from_secs(20))
+            .build()?;
+
         let response = client
             .post("https://api.insee.fr/token")
             .header(AUTHORIZATION, format!("Basic {}", self.credentials))

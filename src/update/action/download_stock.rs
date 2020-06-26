@@ -11,6 +11,7 @@ use futures::stream::TryStreamExt;
 use reqwest::header::LAST_MODIFIED;
 use std::fs::create_dir_all;
 use std::path::PathBuf;
+use std::time::Duration;
 use tokio::fs::File;
 use tokio_util::compat::FuturesAsyncReadCompatExt;
 
@@ -46,7 +47,15 @@ impl Action for DownloadAction {
         zip_path.set_extension("zip");
 
         // Prepare file download
-        let resp = reqwest::get(metadata.url.as_str())
+        let client = reqwest::Client::builder()
+            .connect_timeout(Duration::from_secs(10))
+            .timeout(Duration::from_secs(20))
+            .build()
+            .map_err(|req_error| Error::DownloadError { req_error })?;
+
+        let resp = client
+            .get(&metadata.url)
+            .send()
             .await
             .map_err(|req_error| Error::DownloadError { req_error })?;
 
