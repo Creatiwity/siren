@@ -67,7 +67,10 @@ struct ErrorResponse {
 }
 
 pub async fn handle_rejection(err: Rejection) -> Result<impl Reply, Infallible> {
-    let (code, message) = if let Some(e) = err.find::<Error>() {
+    let (code, message) =
+    if err.is_not_found() {
+        (StatusCode::NOT_FOUND, String::from("Not found"))
+    } else if let Some(e) = err.find::<Error>() {
         log::debug!("[Warp][Error] {:?}", e);
 
         (
