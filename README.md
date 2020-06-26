@@ -78,11 +78,15 @@ OPTIONS:
 **> sirene update --help**
 
 ```
+sirene-update 
+Update data from CSV source files
+
 USAGE:
     sirene update [FLAGS] <group-type> [SUBCOMMAND]
 
 ARGS:
-    <group-type>    Configure which part will be updated, unites-legales, etablissements or all
+    <group-type>    Configure which part will be updated, unites-legales, etablissements or all [possible values:
+                    unites-legales, etablissements, all]
 
 FLAGS:
         --data-only    Use an existing CSV file already present in FILE_FOLDER and does not delete it
@@ -93,11 +97,12 @@ FLAGS:
 SUBCOMMANDS:
     clean-file       Clean files from FILE_FOLDER
     download-file    Download file in TEMP_FOLDER
+    finish-error     Set a staled update process to error, use only if the process is really stopped
     help             Prints this message or the help of the given subcommand(s)
     insert-data      Load CSV file in database in loader-table from DB_FOLDER
     swap-data        Swap loader-table to production
-    unzip-file       Unzip file from TEMP_FOLDER, and move it to the FILE_FOLDER
     sync-insee       Synchronise daily data from INSEE since the last modification
+    unzip-file       Unzip file from TEMP_FOLDER, and move it to the FILE_FOLDER
 ```
 
 ### HTTP API
@@ -119,6 +124,18 @@ POST /admin/update
     group_type: "UnitesLegales" | "Etablissements" | "All",
     force: bool,
     data_only: bool,
+}
+```
+
+```
+GET /admin/update/status?api_key=string
+```
+
+```
+POST /admin/update/status/error
+
+{
+    api_key: string,
 }
 ```
 
