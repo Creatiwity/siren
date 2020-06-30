@@ -97,11 +97,16 @@ async fn unites_legales(siren: String, context: Context) -> Result<impl Reply, R
     }
 
     let connectors = context.builders.create();
+    let connection = connectors
+        .local
+        .pool
+        .get()
+        .map_err(|e| Error::LocalConnectionFailed { source: e })?;
 
-    let unite_legale = models::unite_legale::get(&connectors, &siren)?;
-    let etablissements = models::etablissement::get_with_siren(&connectors, &siren)?;
+    let unite_legale = models::unite_legale::get(&connection, &siren)?;
+    let etablissements = models::etablissement::get_with_siren(&connection, &siren)?;
     let etablissement_siege =
-        models::etablissement::get_siege_with_siren(&connectors, &unite_legale.siren)?;
+        models::etablissement::get_siege_with_siren(&connection, &unite_legale.siren)?;
 
     Ok(warp::reply::json(&UniteLegaleResponse {
         unite_legale: UniteLegaleInnerResponse {
@@ -118,11 +123,16 @@ async fn etablissements(siret: String, context: Context) -> Result<impl Reply, R
     }
 
     let connectors = context.builders.create();
+    let connection = connectors
+        .local
+        .pool
+        .get()
+        .map_err(|e| Error::LocalConnectionFailed { source: e })?;
 
-    let etablissement = models::etablissement::get(&connectors, &siret)?;
-    let unite_legale = models::unite_legale::get(&connectors, &etablissement.siren)?;
+    let etablissement = models::etablissement::get(&connection, &siret)?;
+    let unite_legale = models::unite_legale::get(&connection, &etablissement.siren)?;
     let etablissement_siege =
-        models::etablissement::get_siege_with_siren(&connectors, &etablissement.siren)?;
+        models::etablissement::get_siege_with_siren(&connection, &etablissement.siren)?;
 
     Ok(warp::reply::json(&EtablissementResponse {
         etablissement: EtablissementInnerResponse {

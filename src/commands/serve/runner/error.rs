@@ -10,6 +10,7 @@ custom_error! { pub Error
     InvalidData = "Invalid data",
     MissingApiKeyError = "[Admin] Missing API key in configuration",
     ApiKeyError = "[Admin] Wrong API key",
+    LocalConnectionFailed{source: r2d2::Error} = "Unable to connect to local database ({source}).",
     UpdateConnectorError {source: ConnectorError} = "[Update] Error while creating connector: {source}",
     UpdateError {source: InternalUpdateError} = "[Update] {source}",
     UniteLegaleError {source: unite_legale::error::Error} = "[UniteLegale] {source}",
@@ -67,8 +68,7 @@ struct ErrorResponse {
 }
 
 pub async fn handle_rejection(err: Rejection) -> Result<impl Reply, Infallible> {
-    let (code, message) =
-    if err.is_not_found() {
+    let (code, message) = if err.is_not_found() {
         (StatusCode::NOT_FOUND, String::from("Not found"))
     } else if let Some(e) = err.find::<Error>() {
         log::debug!("[Warp][Error] {:?}", e);
@@ -78,6 +78,7 @@ pub async fn handle_rejection(err: Rejection) -> Result<impl Reply, Infallible> 
                 Error::InvalidData => StatusCode::BAD_REQUEST,
                 Error::MissingApiKeyError => StatusCode::UNAUTHORIZED,
                 Error::ApiKeyError => StatusCode::UNAUTHORIZED,
+                Error::LocalConnectionFailed { source: _ } => StatusCode::INTERNAL_SERVER_ERROR,
                 Error::UpdateConnectorError { source: _ } => StatusCode::INTERNAL_SERVER_ERROR,
                 Error::UpdateError { source: _ } => StatusCode::INTERNAL_SERVER_ERROR,
                 Error::UniteLegaleError { source } => match source {

@@ -4,7 +4,7 @@ pub mod error;
 
 use super::common::{Error as UpdatableError, UpdatableModel};
 use super::schema::unite_legale::dsl;
-use crate::connectors::Connectors;
+use crate::connectors::{local::Connection, Connectors};
 use async_trait::async_trait;
 use chrono::NaiveDateTime;
 use common::UniteLegale;
@@ -13,11 +13,10 @@ use diesel::prelude::*;
 use diesel::sql_query;
 use error::Error;
 
-pub fn get(connectors: &Connectors, siren: &String) -> Result<UniteLegale, Error> {
-    let connection = connectors.local.pool.get()?;
+pub fn get(connection: &Connection, siren: &String) -> Result<UniteLegale, Error> {
     dsl::unite_legale
         .find(siren)
-        .first::<UniteLegale>(&connection)
+        .first::<UniteLegale>(connection)
         .map_err(|error| error.into())
 }
 

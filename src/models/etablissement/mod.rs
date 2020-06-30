@@ -4,7 +4,7 @@ pub mod error;
 
 use super::common::{Error as UpdatableError, UpdatableModel};
 use super::schema::etablissement::dsl;
-use crate::connectors::Connectors;
+use crate::connectors::{local::Connection, Connectors};
 use async_trait::async_trait;
 use chrono::NaiveDateTime;
 use common::Etablissement;
@@ -13,33 +13,30 @@ use diesel::prelude::*;
 use diesel::sql_query;
 use error::Error;
 
-pub fn get(connectors: &Connectors, siret: &String) -> Result<Etablissement, Error> {
-    let connection = connectors.local.pool.get()?;
+pub fn get(connection: &Connection, siret: &String) -> Result<Etablissement, Error> {
     dsl::etablissement
         .find(siret)
-        .first::<Etablissement>(&connection)
+        .first::<Etablissement>(connection)
         .map_err(|error| error.into())
 }
 
 pub fn get_with_siren(
-    connectors: &Connectors,
+    connection: &Connection,
     siren: &String,
 ) -> Result<Vec<Etablissement>, Error> {
-    let connection = connectors.local.pool.get()?;
     dsl::etablissement
         .filter(dsl::siren.eq(siren))
-        .load::<Etablissement>(&connection)
+        .load::<Etablissement>(connection)
         .map_err(|error| error.into())
 }
 
 pub fn get_siege_with_siren(
-    connectors: &Connectors,
+    connection: &Connection,
     siren: &String,
 ) -> Result<Etablissement, Error> {
-    let connection = connectors.local.pool.get()?;
     dsl::etablissement
         .filter(dsl::siren.eq(siren).and(dsl::etablissement_siege.eq(true)))
-        .first::<Etablissement>(&connection)
+        .first::<Etablissement>(connection)
         .map_err(|error| error.into())
 }
 
