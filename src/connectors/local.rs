@@ -17,11 +17,12 @@ pub struct ConnectorBuilder {
 impl ConnectorBuilder {
     pub fn new() -> ConnectorBuilder {
         let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+        let pool_size = env::var("DATABASE_POOL_SIZE").ok().and_then(|s| s.parse::<u32>().ok()).unwrap_or(15);
         let manager = ConnectionManager::<PgConnection>::new(database_url.clone());
 
         let builder = ConnectorBuilder {
             pool: Pool::builder()
-                .max_size(15)
+                .max_size(pool_size)
                 .build(manager)
                 .expect(&format!("Error connecting to {}", database_url)),
         };
