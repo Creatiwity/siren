@@ -32,15 +32,6 @@ impl Action for DownloadAction {
 
         let metadata = group_metadata::get(connectors, group_type)?;
 
-        // Create temp path
-        create_dir_all(self.temp_folder.clone())
-            .map_err(|io_error| Error::TempFolderCreationError { io_error })?;
-
-        // Get Zip path
-        let mut zip_path = PathBuf::from(self.temp_folder.clone());
-        zip_path.push(metadata.file_name);
-        zip_path.set_extension("zip");
-
         // Prepare file download
         let client = reqwest::Client::builder()
             .connect_timeout(Duration::from_secs(10))
@@ -99,6 +90,15 @@ impl Action for DownloadAction {
                 }
             }
         }
+
+        // Create temp path
+        create_dir_all(self.temp_folder.clone())
+            .map_err(|io_error| Error::TempFolderCreationError { io_error })?;
+
+        // Get Zip path
+        let mut zip_path = PathBuf::from(self.temp_folder.clone());
+        zip_path.push(metadata.file_name);
+        zip_path.set_extension("zip");
 
         // Create an output file into which we will save current stock.
         let mut outfile = File::create(zip_path)

@@ -38,13 +38,9 @@ struct InseeTokenResponse {
 
 impl ConnectorBuilder {
     pub fn new() -> Option<ConnectorBuilder> {
-        let credentials = env::var("INSEE_CREDENTIALS").ok();
-
-        if let Some(credentials) = credentials {
-            Some(ConnectorBuilder { credentials })
-        } else {
-            None
-        }
+        env::var("INSEE_CREDENTIALS")
+            .ok()
+            .map(|credentials| ConnectorBuilder { credentials })
     }
 
     pub async fn create(&self) -> Result<Connector, InseeTokenError> {

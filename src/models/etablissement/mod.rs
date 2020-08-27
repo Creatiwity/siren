@@ -149,11 +149,11 @@ impl UpdatableModel for EtablissementModel {
             .as_mut()
             .ok_or(UpdatableError::MissingInseeConnector)?;
 
-        let connection = connectors.local.pool.get()?;
-
         let (next_cursor, etablissements) = insee
             .get_daily_etablissements(start_timestamp, cursor)
             .await?;
+
+        let connection = connectors.local.pool.get()?;
 
         let updated_count = diesel::insert_into(dsl::etablissement)
             .values(&etablissements)

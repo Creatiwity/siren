@@ -129,11 +129,11 @@ impl UpdatableModel for UniteLegaleModel {
             .as_mut()
             .ok_or(UpdatableError::MissingInseeConnector)?;
 
-        let connection = connectors.local.pool.get()?;
-
         let (next_cursor, unites_legales) = insee
             .get_daily_unites_legales(start_timestamp, cursor)
             .await?;
+
+        let connection = connectors.local.pool.get()?;
 
         let updated_count = diesel::insert_into(dsl::unite_legale)
             .values(&unites_legales)
