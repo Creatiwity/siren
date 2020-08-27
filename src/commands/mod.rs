@@ -12,7 +12,7 @@ use update::UpdateFlags;
 /// Sirene service used to update data in database
 /// and serve it through a HTTP REST API
 #[derive(Clap, Debug)]
-#[clap(version = "1.0.0", author = "Julien Blatecky")]
+#[clap(version = "2.0.0", author = "Julien Blatecky")]
 struct Opts {
     /// Path to the temp folder, you can set in environment variable as TEMP_FOLDER
     #[clap(long = "temp-folder")]
