@@ -4,7 +4,6 @@ use super::common::Action;
 use crate::connectors::{insee::INITIAL_CURSOR, Connectors};
 use crate::models::group_metadata;
 use crate::models::group_metadata::common::GroupType;
-use crate::models::update_metadata::common::Step;
 use async_trait::async_trait;
 use chrono::{DateTime, Duration, NaiveDateTime, Utc};
 
@@ -12,10 +11,6 @@ pub struct SyncInseeAction {}
 
 #[async_trait]
 impl Action for SyncInseeAction {
-    fn step(&self) -> Step {
-        Step::SyncInsee
-    }
-
     async fn execute<'a, 'b>(
         &self,
         group_type: GroupType,

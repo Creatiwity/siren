@@ -4,7 +4,6 @@ use super::common::Action;
 use crate::connectors::Connectors;
 use crate::models::group_metadata;
 use crate::models::group_metadata::common::GroupType;
-use crate::models::update_metadata::common::Step;
 use async_trait::async_trait;
 
 pub struct SwapAction {
@@ -13,10 +12,6 @@ pub struct SwapAction {
 
 #[async_trait]
 impl Action for SwapAction {
-    fn step(&self) -> Step {
-        Step::SwapData
-    }
-
     async fn execute<'a, 'b>(
         &self,
         group_type: GroupType,

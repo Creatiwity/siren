@@ -2,12 +2,10 @@ use super::super::error::Error;
 use super::super::summary::SummaryGroupDelegate;
 use crate::connectors::Connectors;
 use crate::models::group_metadata::common::GroupType;
-use crate::models::update_metadata::common::Step;
 use async_trait::async_trait;
 
 #[async_trait]
 pub trait Action: Sync + Send {
-    fn step(&self) -> Step;
     async fn execute<'a, 'b>(
         &self,
         group_type: GroupType,

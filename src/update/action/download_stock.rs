@@ -4,7 +4,6 @@ use super::common::Action;
 use crate::connectors::Connectors;
 use crate::models::group_metadata;
 use crate::models::group_metadata::common::GroupType;
-use crate::models::update_metadata::common::Step;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use futures::stream::TryStreamExt;
@@ -22,10 +21,6 @@ pub struct DownloadAction {
 
 #[async_trait]
 impl Action for DownloadAction {
-    fn step(&self) -> Step {
-        Step::DownloadFile
-    }
-
     async fn execute<'a, 'b>(
         &self,
         group_type: GroupType,

@@ -4,7 +4,6 @@ use super::common::Action;
 use crate::connectors::Connectors;
 use crate::models::group_metadata;
 use crate::models::group_metadata::common::GroupType;
-use crate::models::update_metadata::common::Step;
 use async_trait::async_trait;
 use std::fs::canonicalize;
 use std::path::PathBuf;
@@ -16,10 +15,6 @@ pub struct InsertAction {
 
 #[async_trait]
 impl Action for InsertAction {
-    fn step(&self) -> Step {
-        Step::InsertData
-    }
-
     async fn execute<'a, 'b>(
         &self,
         group_type: GroupType,

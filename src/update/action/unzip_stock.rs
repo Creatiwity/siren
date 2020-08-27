@@ -4,7 +4,6 @@ use super::common::Action;
 use crate::connectors::Connectors;
 use crate::models::group_metadata;
 use crate::models::group_metadata::common::GroupType;
-use crate::models::update_metadata::common::Step;
 use async_trait::async_trait;
 use std::fs::{create_dir_all, set_permissions, File, Permissions};
 use std::io;
@@ -18,10 +17,6 @@ pub struct UnzipAction {
 
 #[async_trait]
 impl Action for UnzipAction {
-    fn step(&self) -> Step {
-        Step::UnzipFile
-    }
-
     async fn execute<'a, 'b>(
         &self,
         group_type: GroupType,
