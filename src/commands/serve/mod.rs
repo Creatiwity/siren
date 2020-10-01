@@ -13,15 +13,15 @@ pub struct ServeFlags {
     environment: Option<CmdEnvironment>,
 
     /// Listen this port, you can set in environment variable as PORT
-    #[clap(short = "p", long = "port")]
+    #[clap(short = 'p', long = "port")]
     port: Option<u16>,
 
     /// Listen this host, you can set in environment variable as HOST
-    #[clap(short = "h", long = "host")]
+    #[clap(short = 'h', long = "host")]
     host: Option<String>,
 
     /// API key needed to allow maintenance operation from HTTP, you can set in environment variable as API_KEY
-    #[clap(short = "k", long = "api-key")]
+    #[clap(short = 'k', long = "api-key")]
     api_key: Option<String>,
 }
 
