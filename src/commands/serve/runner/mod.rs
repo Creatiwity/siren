@@ -90,14 +90,26 @@ async fn status(query: StatusQueryString, context: Context) -> Result<impl Reply
 
     let update_metadata = models::update_metadata::current_update(&connectors)?;
 
-    let status_code = if update_metadata.status == "launched" {
-        StatusCode::ACCEPTED
-    } else {
-        StatusCode::OK
+    let status_code = match update_metadata.status.as_str() {
+        "launched" => StatusCode::ACCEPTED,
+        "error" => StatusCode::INTERNAL_SERVER_ERROR,
+        _ => StatusCode::OK,
     };
 
     Ok(warp::reply::with_status(
-        warp::reply::json(&update_metadata),
+        warp::reply::with_header(
+            warp::reply::with_header(
+                warp::reply::json(&update_metadata),
+                "Location",
+                format!(
+                    "{}/admin/update/status?api_key={}",
+                    context.base_url.unwrap_or_default(),
+                    api_key
+                ),
+            ),
+            "Retry-After",
+            "10",
+        ),
         status_code,
     ))
 }
