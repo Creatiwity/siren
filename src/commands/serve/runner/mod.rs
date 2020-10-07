@@ -14,7 +14,7 @@ use error::Error;
 use std::convert::Infallible;
 use std::net::SocketAddr;
 use warp::{
-    http::{header, Method},
+    http::{header, Method, StatusCode},
     Filter, Rejection, Reply,
 };
 
@@ -32,22 +32,48 @@ async fn update(options: UpdateOptions, context: Context) -> Result<impl Reply, 
         return Err(Error::ApiKeyError.into());
     }
 
+    if options.asynchronous && context.base_url == None {
+        return Err(Error::MissingBaseUrlForAsyncError.into());
+    }
+
     let mut connectors = context.builders.create_with_insee().await?;
 
     let summary = update_data(
         options.group_type,
         DataConfig {
             force: options.force,
-            data_only: options.data_only,
+            data_only: false,
             temp_folder: context.folder_options.temp.clone(),
             file_folder: context.folder_options.file.clone(),
             db_folder: context.folder_options.db.clone(),
+            asynchronous: options.asynchronous,
         },
         &mut connectors,
     )
     .await?;
 
-    Ok(warp::reply::json(&UpdateResponse { summary }))
+    let status_code = if options.asynchronous {
+        StatusCode::ACCEPTED
+    } else {
+        StatusCode::OK
+    };
+
+    Ok(warp::reply::with_status(
+        warp::reply::with_header(
+            warp::reply::with_header(
+                warp::reply::json(&UpdateResponse { summary }),
+                "Location",
+                format!(
+                    "{}/admin/update/status?api_key={}",
+                    context.base_url.unwrap_or_default(),
+                    api_key
+                ),
+            ),
+            "Retry-After",
+            "10",
+        ),
+        status_code,
+    ))
 }
 
 async fn status(query: StatusQueryString, context: Context) -> Result<impl Reply, Rejection> {
@@ -64,7 +90,16 @@ async fn status(query: StatusQueryString, context: Context) -> Result<impl Reply
 
     let update_metadata = models::update_metadata::current_update(&connectors)?;
 
-    Ok(warp::reply::json(&update_metadata))
+    let status_code = if update_metadata.status == "launched" {
+        StatusCode::ACCEPTED
+    } else {
+        StatusCode::OK
+    };
+
+    Ok(warp::reply::with_status(
+        warp::reply::json(&update_metadata),
+        status_code,
+    ))
 }
 
 async fn set_status_to_error(

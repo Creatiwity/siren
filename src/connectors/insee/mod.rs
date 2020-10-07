@@ -11,6 +11,7 @@ use std::time::{Duration, Instant};
 
 pub use implementation::INITIAL_CURSOR;
 
+#[derive(Clone)]
 pub struct Connector {
     client: reqwest::Client,
     calls: u8,
@@ -40,12 +41,10 @@ impl ConnectorBuilder {
     pub fn new() -> Option<ConnectorBuilder> {
         env::var("INSEE_CREDENTIALS")
             .ok()
-            .and_then(|credentials|
-                match credentials.len() {
-                    0 => None,
-                    _ => Some(ConnectorBuilder { credentials })
-                }
-            )
+            .and_then(|credentials| match credentials.len() {
+                0 => None,
+                _ => Some(ConnectorBuilder { credentials }),
+            })
     }
 
     pub async fn create(&self) -> Result<Connector, InseeTokenError> {

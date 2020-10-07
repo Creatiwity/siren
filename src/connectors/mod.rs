@@ -13,6 +13,7 @@ pub struct ConnectorsBuilders {
     insee: Option<insee::ConnectorBuilder>,
 }
 
+#[derive(Clone)]
 pub struct Connectors {
     pub local: local::Connector,
     pub insee: Option<insee::Connector>,

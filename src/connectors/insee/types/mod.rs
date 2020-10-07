@@ -58,7 +58,7 @@ where
             .map(Option::from),
         Ok(serde_json::Value::Null) => Ok(None),
         Ok(v) => {
-            println!("string expected but found something else: {}", v);
+            log::error!("string expected but found something else: {}", v);
             Ok(None)
         }
         Err(_) => Ok(None),

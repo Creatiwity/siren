@@ -7,6 +7,7 @@ embed_migrations!("./migrations");
 
 pub type Connection = r2d2::PooledConnection<diesel::r2d2::ConnectionManager<diesel::PgConnection>>;
 
+#[derive(Clone)]
 pub struct Connector {
     pub pool: Pool<ConnectionManager<PgConnection>>,
 }

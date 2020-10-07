@@ -5,6 +5,7 @@ use action::execute_step;
 use chrono::Utc;
 use common::Config;
 use error::Error;
+use tokio::task;
 
 pub mod action;
 pub mod common;
@@ -42,9 +43,6 @@ async fn execute_workflow(
     config: Config,
     connectors: &mut Connectors,
 ) -> Result<UpdateSummary, Error> {
-    // Start
-    println!("[Update] Starting");
-
     // Execute workflow
     let mut summary = UpdateSummary::new();
 
@@ -55,25 +53,59 @@ async fn execute_workflow(
         config.data_only,
     )?;
 
+    let asynchronous = config.asynchronous;
+    let started_summary = summary.clone();
+    let mut thread_connectors = connectors.clone();
+
+    let handle = task::spawn(async move {
+        task::yield_now().await;
+
+        execute_workflow_thread(
+            workflow,
+            synthetic_group_type,
+            config,
+            &mut thread_connectors,
+            summary,
+        )
+        .await
+    });
+
+    if asynchronous {
+        Ok(started_summary)
+    } else {
+        handle.await?
+    }
+}
+
+async fn execute_workflow_thread(
+    workflow: Vec<Step>,
+    synthetic_group_type: SyntheticGroupType,
+    config: Config,
+    mut connectors: &mut Connectors,
+    mut summary: UpdateSummary,
+) -> Result<UpdateSummary, Error> {
+    log::debug!("[Update] Starting");
+
     for step in workflow.into_iter() {
         execute_step(
             step,
             &config,
             &synthetic_group_type.into(),
-            connectors,
+            &mut connectors,
             &mut summary.step_delegate(step),
         )
         .await
         .or_else(|error| {
-            update_metadata::error_update(connectors, error.to_string(), Utc::now())?;
+            log::error!("[Update] Errored: {}", error.to_string());
+
+            update_metadata::error_update(&mut connectors, error.to_string(), Utc::now())?;
             Err(error)
         })?;
     }
 
-    summary.finish(connectors)?;
+    summary.finish(&mut connectors)?;
 
-    // End
-    println!("[Update] Finished");
+    log::debug!("[Update] Finished");
 
     Ok(summary)
 }

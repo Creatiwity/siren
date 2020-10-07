@@ -21,7 +21,7 @@ impl Action for CleanAction {
         connectors: &mut Connectors,
         summary_delegate: &'b mut SummaryGroupDelegate<'a, 'b>,
     ) -> Result<(), Error> {
-        println!("[Clean] Cleaning {:#?}", group_type);
+        log::debug!("[Clean] Cleaning {:#?}", group_type);
 
         summary_delegate.start(connectors, None, 2)?;
 
@@ -42,14 +42,14 @@ impl Action for CleanAction {
         csv_path.set_extension("csv");
 
         if let Err(error) = remove_file(zip_path) {
-            println!("[Clean] Zip not deleted ({})", error);
+            log::debug!("[Clean] Zip not deleted ({})", error);
             updated = false;
             done_count -= 1;
             status_label = String::from("zip not deleted");
         }
 
         if let Err(error) = remove_file(csv_path) {
-            println!("[Clean] CSV not deleted ({})", error);
+            log::debug!("[Clean] CSV not deleted ({})", error);
             updated = false;
             done_count -= 1;
             status_label = String::from("csv not deleted");
@@ -59,7 +59,7 @@ impl Action for CleanAction {
 
         summary_delegate.finish(connectors, status_label, done_count, updated)?;
 
-        println!("[Clean] Finished cleaning of {:#?}", group_type);
+        log::debug!("[Clean] Finished cleaning of {:#?}", group_type);
 
         Ok(())
     }

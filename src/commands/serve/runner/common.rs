@@ -10,6 +10,7 @@ pub struct Context {
     pub builders: ConnectorsBuilders,
     pub api_key: Option<String>,
     pub folder_options: FolderOptions,
+    pub base_url: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -17,7 +18,7 @@ pub struct UpdateOptions {
     pub api_key: String,
     pub group_type: SyntheticGroupType,
     pub force: bool,
-    pub data_only: bool,
+    pub asynchronous: bool,
 }
 
 #[derive(Deserialize)]

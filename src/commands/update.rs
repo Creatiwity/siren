@@ -68,6 +68,7 @@ pub async fn run(flags: UpdateFlags, folder_options: FolderOptions, builders: Co
         temp_folder: folder_options.temp,
         file_folder: folder_options.file,
         db_folder: folder_options.db,
+        asynchronous: false,
     };
 
     let summary_result = match flags.subcmd {

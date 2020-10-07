@@ -23,6 +23,10 @@ pub struct ServeFlags {
     /// API key needed to allow maintenance operation from HTTP, you can set in environment variable as API_KEY
     #[clap(short = 'k', long = "api-key")]
     api_key: Option<String>,
+
+    /// Base URL needed to configure asynchronous polling for updates, you can set in environment variable as BASE_URL
+    #[clap(short = 'b', long = "base-url")]
+    base_url: Option<String>,
 }
 
 #[derive(Clap, Debug)]
@@ -71,6 +75,11 @@ pub async fn run(flags: ServeFlags, folder_options: FolderOptions, builders: Con
         None => env::var("API_KEY").ok(),
     };
 
+    let base_url = match flags.base_url {
+        Some(key) => Some(key),
+        None => env::var("BASE_URL").ok(),
+    };
+
     log::info!("[Warp] Configuring for {:#?}", env);
 
     runner::run(
@@ -79,6 +88,7 @@ pub async fn run(flags: ServeFlags, folder_options: FolderOptions, builders: Con
             builders,
             api_key,
             folder_options,
+            base_url,
         },
     )
     .await;

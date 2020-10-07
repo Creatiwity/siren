@@ -17,7 +17,7 @@ impl Action for SyncInseeAction {
         connectors: &mut Connectors,
         summary_delegate: &'b mut SummaryGroupDelegate<'a, 'b>,
     ) -> Result<(), Error> {
-        println!("[SyncInsee] Syncing {:#?}", group_type);
+        log::debug!("[SyncInsee] Syncing {:#?}", group_type);
 
         // Use Insee connector only if present
         if connectors.insee.is_some() {
@@ -47,7 +47,7 @@ impl Action for SyncInseeAction {
                     summary_delegate.progress(connectors, updated_count as u32)?;
                 }
 
-                println!("[SyncInsee] {} {:#?} synced", updated_count, group_type);
+                log::debug!("[SyncInsee] {} {:#?} synced", updated_count, group_type);
 
                 group_metadata::set_last_insee_synced_timestamp(
                     connectors,
@@ -78,7 +78,7 @@ impl Action for SyncInseeAction {
             )?;
         }
 
-        println!("[SyncInsee] Syncing of {:#?} done", group_type);
+        log::debug!("[SyncInsee] Syncing of {:#?} done", group_type);
 
         Ok(())
     }

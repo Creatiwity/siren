@@ -18,7 +18,7 @@ impl Action for SwapAction {
         connectors: &mut Connectors,
         summary_delegate: &'b mut SummaryGroupDelegate<'a, 'b>,
     ) -> Result<(), Error> {
-        println!("[Swap] Swapping {:#?}", group_type);
+        log::debug!("[Swap] Swapping {:#?}", group_type);
         summary_delegate.start(connectors, None, 1)?;
 
         let metadata = group_metadata::get(connectors, group_type)?;
@@ -27,7 +27,7 @@ impl Action for SwapAction {
         let staging_imported_timestamp = match metadata.staging_imported_timestamp {
             Some(staging_imported_timestamp) => staging_imported_timestamp,
             None => {
-                println!("[Swap] Nothing to swap for {:#?}", group_type);
+                log::debug!("[Swap] Nothing to swap for {:#?}", group_type);
 
                 summary_delegate.finish(connectors, String::from("nothing to swap"), 0, false)?;
 
@@ -39,7 +39,7 @@ impl Action for SwapAction {
         if !self.force {
             if let Some(last_imported_timestamp) = metadata.last_imported_timestamp {
                 if staging_imported_timestamp.le(&last_imported_timestamp) {
-                    println!("[Swap] {:#?} already imported", group_type);
+                    log::debug!("[Swap] {:#?} already imported", group_type);
 
                     summary_delegate.finish(
                         connectors,
@@ -77,7 +77,7 @@ impl Action for SwapAction {
             staging_imported_timestamp,
         )?;
 
-        println!("[Swap] Swap of {:#?} finished", group_type);
+        log::debug!("[Swap] Swap of {:#?} finished", group_type);
 
         summary_delegate.finish(connectors, String::from("swapped"), 1, true)?;
 

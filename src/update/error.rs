@@ -28,11 +28,12 @@ custom_error! { pub Error
     InvalidComponentInCSVPath {io_error: std::io::Error} = "Invalid component in CSV path ({io_error}).",
     SwapStoppedTooMuchDifference {group_type: GroupType} = "Swapping stopped on {group_type}, more than 1% difference between the old values and the new ones. Use --force to override.",
     SyncInseeError {source: InseeUpdateError} = "[SyncInsee] {source}",
+    WaitThreadError {source: tokio::task::JoinError} = "[Asynchronous] Error while waiting for thread: {source}",
 }
 
 impl Error {
     pub fn exit(&self) -> ! {
-        eprintln!("{}", self);
+        log::error!("{}", self);
         process::exit(1);
     }
 }
