@@ -40,7 +40,12 @@ impl ConnectorBuilder {
     pub fn new() -> Option<ConnectorBuilder> {
         env::var("INSEE_CREDENTIALS")
             .ok()
-            .map(|credentials| ConnectorBuilder { credentials })
+            .and_then(|credentials|
+                match credentials.len() {
+                    0 => None,
+                    _ => Some(ConnectorBuilder { credentials })
+                }
+            )
     }
 
     pub async fn create(&self) -> Result<Connector, InseeTokenError> {
