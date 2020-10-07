@@ -32,7 +32,7 @@ createdb --owner=sirene sirene
 Recommended configuration for production with docker:
 
 ```
-RUST_LOG=api=warn
+RUST_LOG=sirene=warn
 SIRENE_ENV=production
 BASE_URL=[Your base URL, needed to update asynchronously]
 API_KEY=[Any randomized string, needed to use the HTTP admin endpoint]
