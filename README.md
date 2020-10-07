@@ -27,6 +27,30 @@ createdb --owner=sirene sirene
 
 ## Documentation
 
+### Configuration
+
+Recommended configuration for production with docker:
+
+```
+RUST_LOG=api=warn
+SIRENE_ENV=production
+API_KEY=[Any randomized string, needed to use the HTTP admin endpoint]
+DATABASE_URL=postgresql://[USER]:[PASSWORD]@[PG_HOST]:[PG_PORT]/[PG_DATABASE]
+DATABASE_POOL_SIZE=100
+INSEE_CREDENTIALS=[Base64(consumer-key:consumer-secret)]
+```
+
+**How to generate INSEE_CREDENTIALS**
+
+This variable is only needed if you want to have the daily updates.
+
+1. Go to https://api.insee.fr/catalogue/
+2. Create an account or sign in
+3. Create an application on this portal
+4. Subscribe this application to the *Sirene - V3* API
+5. Generate a key pair in the application details
+6. Copy the key from the `curl` example and paste it in `.env`: `Authorization: Basic [INSEE_CREDENTIALS]`
+
 ### CLI
 
 **> sirene**
