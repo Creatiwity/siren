@@ -2,7 +2,7 @@ use super::super::super::common::FolderOptions;
 use crate::connectors::ConnectorsBuilders;
 use crate::models::etablissement::common::Etablissement;
 use crate::models::unite_legale::common::UniteLegale;
-use crate::models::update_metadata::common::{SyntheticGroupType, UpdateSummary};
+use crate::models::update_metadata::common::SyntheticGroupType;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone)]
@@ -24,11 +24,6 @@ pub struct UpdateOptions {
 #[derive(Deserialize)]
 pub struct StatusQueryString {
     pub api_key: String,
-}
-
-#[derive(Serialize)]
-pub struct UpdateResponse {
-    pub summary: UpdateSummary,
 }
 
 #[derive(Serialize)]

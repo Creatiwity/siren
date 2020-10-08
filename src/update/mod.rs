@@ -1,6 +1,8 @@
 use crate::connectors::Connectors;
 use crate::models::update_metadata;
-use crate::models::update_metadata::common::{Step, SyntheticGroupType, UpdateSummary};
+use crate::models::update_metadata::common::{
+    Step, SyntheticGroupType, UpdateMetadata, UpdateSummary,
+};
 use action::execute_step;
 use chrono::Utc;
 use common::Config;
@@ -16,7 +18,7 @@ pub async fn update(
     synthetic_group_type: SyntheticGroupType,
     config: Config,
     connectors: &mut Connectors,
-) -> Result<UpdateSummary, Error> {
+) -> Result<UpdateMetadata, Error> {
     // Build and execute workflow
     execute_workflow(
         build_workflow(&config),
@@ -32,7 +34,7 @@ pub async fn update_step(
     synthetic_group_type: SyntheticGroupType,
     config: Config,
     connectors: &mut Connectors,
-) -> Result<UpdateSummary, Error> {
+) -> Result<UpdateMetadata, Error> {
     // Execute step
     execute_workflow(vec![step], synthetic_group_type, config, connectors).await
 }
@@ -42,7 +44,7 @@ async fn execute_workflow(
     synthetic_group_type: SyntheticGroupType,
     config: Config,
     connectors: &mut Connectors,
-) -> Result<UpdateSummary, Error> {
+) -> Result<UpdateMetadata, Error> {
     // Execute workflow
     let mut summary = UpdateSummary::new();
 
@@ -54,7 +56,6 @@ async fn execute_workflow(
     )?;
 
     let asynchronous = config.asynchronous;
-    let started_summary = summary.clone();
     let mut thread_connectors = connectors.clone();
 
     let handle = task::spawn(async move {
@@ -70,11 +71,11 @@ async fn execute_workflow(
         .await
     });
 
-    if asynchronous {
-        Ok(started_summary)
-    } else {
-        handle.await?
+    if !asynchronous {
+        handle.await??;
     }
+
+    Ok(update_metadata::current_update(&connectors)?)
 }
 
 async fn execute_workflow_thread(
@@ -83,7 +84,7 @@ async fn execute_workflow_thread(
     config: Config,
     mut connectors: &mut Connectors,
     mut summary: UpdateSummary,
-) -> Result<UpdateSummary, Error> {
+) -> Result<(), Error> {
     log::debug!("[Update] Starting");
 
     for step in workflow.into_iter() {
@@ -107,7 +108,7 @@ async fn execute_workflow_thread(
 
     log::debug!("[Update] Finished");
 
-    Ok(summary)
+    Ok(())
 }
 
 fn build_workflow(config: &Config) -> Vec<Step> {

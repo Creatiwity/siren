@@ -3,12 +3,13 @@ mod error;
 pub mod common;
 
 use crate::models;
+use crate::models::update_metadata::common::UpdateMetadata;
 use crate::update::{common::Config as DataConfig, update as update_data};
 use chrono::Utc;
 use common::{
     Context, EtablissementInnerResponse, EtablissementResponse, StatusQueryString,
     UniteLegaleEtablissementInnerResponse, UniteLegaleInnerResponse, UniteLegaleResponse,
-    UpdateOptions, UpdateResponse,
+    UpdateOptions,
 };
 use error::Error;
 use std::convert::Infallible;
@@ -38,7 +39,7 @@ async fn update(options: UpdateOptions, context: Context) -> Result<impl Reply, 
 
     let mut connectors = context.builders.create_with_insee().await?;
 
-    let summary = update_data(
+    let update_metadata = update_data(
         options.group_type,
         DataConfig {
             force: options.force,
@@ -52,28 +53,7 @@ async fn update(options: UpdateOptions, context: Context) -> Result<impl Reply, 
     )
     .await?;
 
-    let status_code = if options.asynchronous {
-        StatusCode::ACCEPTED
-    } else {
-        StatusCode::OK
-    };
-
-    Ok(warp::reply::with_status(
-        warp::reply::with_header(
-            warp::reply::with_header(
-                warp::reply::json(&UpdateResponse { summary }),
-                "Location",
-                format!(
-                    "{}/admin/update/status?api_key={}",
-                    context.base_url.unwrap_or_default(),
-                    api_key
-                ),
-            ),
-            "Retry-After",
-            "10",
-        ),
-        status_code,
-    ))
+    reply_with_update_metadata(&update_metadata, context.base_url, api_key)
 }
 
 async fn status(query: StatusQueryString, context: Context) -> Result<impl Reply, Rejection> {
@@ -90,6 +70,14 @@ async fn status(query: StatusQueryString, context: Context) -> Result<impl Reply
 
     let update_metadata = models::update_metadata::current_update(&connectors)?;
 
+    reply_with_update_metadata(&update_metadata, context.base_url, api_key)
+}
+
+fn reply_with_update_metadata(
+    update_metadata: &UpdateMetadata,
+    base_url: Option<String>,
+    api_key: &String,
+) -> Result<impl Reply, Rejection> {
     let status_code = match update_metadata.status.as_str() {
         "launched" => StatusCode::ACCEPTED,
         "error" => StatusCode::INTERNAL_SERVER_ERROR,
@@ -103,7 +91,7 @@ async fn status(query: StatusQueryString, context: Context) -> Result<impl Reply
                 "Location",
                 format!(
                     "{}/admin/update/status?api_key={}",
-                    context.base_url.unwrap_or_default(),
+                    base_url.unwrap_or_default(),
                     api_key
                 ),
             ),
