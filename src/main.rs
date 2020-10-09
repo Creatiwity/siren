@@ -2,6 +2,7 @@ extern crate chrono;
 #[macro_use]
 extern crate clap;
 extern crate custom_error;
+#[cfg(any(target_os = "unix", target_os = "linux"))]
 extern crate openssl; // Should be before diesel
 #[macro_use]
 extern crate diesel;
