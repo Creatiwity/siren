@@ -8,6 +8,21 @@ use diesel::sql_types::{Jsonb, Text};
 use serde::{Deserialize, Serialize};
 use std::io::Write;
 
+#[derive(Queryable, Serialize)]
+pub struct UpdateMetadata {
+    pub id: i32,
+    pub synthetic_group_type: SyntheticGroupType,
+    pub force: bool,
+    pub data_only: bool,
+    pub status: String,
+    pub summary: Option<UpdateSummary>,
+    pub error: Option<String>,
+    pub launched_timestamp: DateTime<Utc>,
+    pub finished_timestamp: Option<DateTime<Utc>>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
 #[derive(Insertable)]
 #[table_name = "update_metadata"]
 pub struct LaunchUpdateMetadata {
@@ -23,7 +38,7 @@ pub struct LaunchUpdateMetadata {
 pub struct FinishedUpdateMetadata {
     pub status: UpdateStatus,
     pub summary: UpdateSummary,
-    pub finished_timestamp: DateTime<Utc>,
+    pub finished_timestamp: Option<DateTime<Utc>>,
 }
 
 #[derive(AsChangeset)]
@@ -57,7 +72,10 @@ pub struct UpdateGroupSummary {
     pub updated: bool,
     pub status_label: String,
     pub started_timestamp: DateTime<Utc>,
-    pub finished_timestamp: DateTime<Utc>,
+    pub finished_timestamp: Option<DateTime<Utc>>,
+    pub planned_count: u32,
+    pub done_count: u32,
+    pub reference_timestamp: Option<DateTime<Utc>>,
 }
 
 #[derive(Deserialize, Serialize, Clone, Copy, Debug)]
@@ -67,6 +85,7 @@ pub enum Step {
     InsertData,
     SwapData,
     CleanFile,
+    SyncInsee,
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug)]
@@ -74,7 +93,7 @@ pub struct UpdateStepSummary {
     pub step: Step,
     pub updated: bool,
     pub started_timestamp: DateTime<Utc>,
-    pub finished_timestamp: DateTime<Utc>,
+    pub finished_timestamp: Option<DateTime<Utc>>,
     pub groups: Vec<UpdateGroupSummary>,
 }
 
@@ -83,7 +102,7 @@ pub struct UpdateStepSummary {
 pub struct UpdateSummary {
     pub updated: bool,
     pub started_timestamp: DateTime<Utc>,
-    pub finished_timestamp: DateTime<Utc>,
+    pub finished_timestamp: Option<DateTime<Utc>>,
     pub steps: Vec<UpdateStepSummary>,
 }
 

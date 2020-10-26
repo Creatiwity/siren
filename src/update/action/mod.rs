@@ -1,53 +1,57 @@
 use super::common::Config;
 use super::error::Error;
+use super::summary::SummaryStepDelegate;
 use crate::connectors::Connectors;
 use crate::models::group_metadata::common::GroupType;
-use crate::models::update_metadata::common::{Step, UpdateGroupSummary, UpdateStepSummary};
-use chrono::Utc;
+use crate::models::update_metadata::common::Step;
 use common::Action;
 
 pub mod clean;
 pub mod common;
-pub mod download;
-pub mod insert;
+pub mod download_stock;
+pub mod insert_stock;
 pub mod swap;
-pub mod unzip;
+pub mod sync_insee;
+pub mod unzip_stock;
 
-pub fn execute_step(
+pub async fn execute_step<'a>(
     step: Step,
     config: &Config,
     groups: &Vec<GroupType>,
-    connectors: &Connectors,
-) -> Result<UpdateStepSummary, Error> {
-    let started_timestamp = Utc::now();
-    let mut groups_summary: Vec<UpdateGroupSummary> = vec![];
+    connectors: &mut Connectors,
+    summary_delegate: &'a mut SummaryStepDelegate<'a>,
+) -> Result<(), Error> {
     let action = build_action(config, step);
 
+    summary_delegate.start(connectors)?;
+
     for group in groups {
-        groups_summary.push(action.execute(*group, connectors)?);
+        action
+            .execute(
+                *group,
+                connectors,
+                &mut summary_delegate.group_delegate(*group),
+            )
+            .await?;
     }
 
-    Ok(UpdateStepSummary {
-        step: Step::DownloadFile,
-        updated: groups_summary.iter().find(|&g| g.updated).is_some(),
-        started_timestamp,
-        finished_timestamp: Utc::now(),
-        groups: groups_summary,
-    })
+    summary_delegate.finish(connectors)?;
+
+    Ok(())
 }
 
 fn build_action(config: &Config, step: Step) -> Box<dyn Action> {
     match step {
-        Step::DownloadFile => Box::new(download::DownloadAction {
+        Step::DownloadFile => Box::new(download_stock::DownloadAction {
             temp_folder: config.temp_folder.clone(),
             force: config.force,
         }),
-        Step::UnzipFile => Box::new(unzip::UnzipAction {
+        Step::UnzipFile => Box::new(unzip_stock::UnzipAction {
             temp_folder: config.temp_folder.clone(),
             file_folder: config.file_folder.clone(),
             force: config.force,
         }),
-        Step::InsertData => Box::new(insert::InsertAction {
+        Step::InsertData => Box::new(insert_stock::InsertAction {
             db_folder: config.file_folder.clone(),
             force: config.force,
         }),
@@ -58,5 +62,6 @@ fn build_action(config: &Config, step: Step) -> Box<dyn Action> {
             temp_folder: config.temp_folder.clone(),
             file_folder: config.file_folder.clone(),
         }),
+        Step::SyncInsee => Box::new(sync_insee::SyncInseeAction {}),
     }
 }

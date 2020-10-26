@@ -1,4 +1,4 @@
-FROM alpine AS app
+FROM alpine
 WORKDIR /app
 COPY ./sirene /app/
 ENV HOST 0.0.0.0

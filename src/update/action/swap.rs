@@ -1,27 +1,25 @@
 use super::super::error::Error;
+use super::super::summary::SummaryGroupDelegate;
 use super::common::Action;
 use crate::connectors::Connectors;
 use crate::models::group_metadata;
 use crate::models::group_metadata::common::GroupType;
-use crate::models::update_metadata::common::{Step, UpdateGroupSummary};
-use chrono::Utc;
+use async_trait::async_trait;
 
 pub struct SwapAction {
     pub force: bool,
 }
 
+#[async_trait]
 impl Action for SwapAction {
-    fn step(&self) -> Step {
-        Step::SwapData
-    }
-
-    fn execute(
+    async fn execute<'a, 'b>(
         &self,
         group_type: GroupType,
-        connectors: &Connectors,
-    ) -> Result<UpdateGroupSummary, Error> {
-        println!("[Insert] Swapping {:#?}", group_type);
-        let started_timestamp = Utc::now();
+        connectors: &mut Connectors,
+        summary_delegate: &'b mut SummaryGroupDelegate<'a, 'b>,
+    ) -> Result<(), Error> {
+        log::debug!("[Swap] Swapping {:#?}", group_type);
+        summary_delegate.start(connectors, None, 1)?;
 
         let metadata = group_metadata::get(connectors, group_type)?;
 
@@ -29,14 +27,11 @@ impl Action for SwapAction {
         let staging_imported_timestamp = match metadata.staging_imported_timestamp {
             Some(staging_imported_timestamp) => staging_imported_timestamp,
             None => {
-                println!("[Swap] Nothing to swap for {:#?}", group_type);
-                return Ok(UpdateGroupSummary {
-                    group_type,
-                    updated: false,
-                    status_label: String::from("nothing to swap"),
-                    started_timestamp,
-                    finished_timestamp: Utc::now(),
-                });
+                log::debug!("[Swap] Nothing to swap for {:#?}", group_type);
+
+                summary_delegate.finish(connectors, String::from("nothing to swap"), 0, false)?;
+
+                return Ok(());
             }
         };
 
@@ -44,14 +39,16 @@ impl Action for SwapAction {
         if !self.force {
             if let Some(last_imported_timestamp) = metadata.last_imported_timestamp {
                 if staging_imported_timestamp.le(&last_imported_timestamp) {
-                    println!("[Swap] {:#?} already imported", group_type);
-                    return Ok(UpdateGroupSummary {
-                        group_type,
-                        updated: false,
-                        status_label: String::from("already imported"),
-                        started_timestamp,
-                        finished_timestamp: Utc::now(),
-                    });
+                    log::debug!("[Swap] {:#?} already imported", group_type);
+
+                    summary_delegate.finish(
+                        connectors,
+                        String::from("already imported"),
+                        0,
+                        false,
+                    )?;
+
+                    return Ok(());
                 }
             }
         }
@@ -80,14 +77,10 @@ impl Action for SwapAction {
             staging_imported_timestamp,
         )?;
 
-        println!("[Insert] Swap of {:#?} finished", group_type);
+        log::debug!("[Swap] Swap of {:#?} finished", group_type);
 
-        Ok(UpdateGroupSummary {
-            group_type,
-            updated: true,
-            status_label: String::from("swapped"),
-            started_timestamp,
-            finished_timestamp: Utc::now(),
-        })
+        summary_delegate.finish(connectors, String::from("swapped"), 1, true)?;
+
+        Ok(())
     }
 }

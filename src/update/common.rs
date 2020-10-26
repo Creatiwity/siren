@@ -5,4 +5,5 @@ pub struct Config {
     pub temp_folder: String,
     pub file_folder: String,
     pub db_folder: String,
+    pub asynchronous: bool,
 }

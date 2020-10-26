@@ -2,45 +2,38 @@ mod runner;
 
 use super::common::FolderOptions;
 use crate::connectors::ConnectorsBuilders;
-use rocket::config::{Config, Environment};
+use runner::common::Context;
 use std::env;
+use std::net::ToSocketAddrs;
 
 #[derive(Clap, Debug)]
 pub struct ServeFlags {
-    /// Production, Staging or Development, will change log level, you can set in environment variable as SIRENE_ENV
-    #[clap(long = "env")]
+    /// Configure log level, you can set in environment variable as SIRENE_ENV
+    #[clap(arg_enum, long = "env")]
     environment: Option<CmdEnvironment>,
 
     /// Listen this port, you can set in environment variable as PORT
-    #[clap(short = "p", long = "port")]
+    #[clap(short = 'p', long = "port")]
     port: Option<u16>,
 
     /// Listen this host, you can set in environment variable as HOST
-    #[clap(short = "h", long = "host")]
+    #[clap(short = 'h', long = "host")]
     host: Option<String>,
 
     /// API key needed to allow maintenance operation from HTTP, you can set in environment variable as API_KEY
-    #[clap(short = "k", long = "api-key")]
+    #[clap(short = 'k', long = "api-key")]
     api_key: Option<String>,
+
+    /// Base URL needed to configure asynchronous polling for updates, you can set in environment variable as BASE_URL
+    #[clap(short = 'b', long = "base-url")]
+    base_url: Option<String>,
 }
 
-arg_enum! {
-    #[derive(Debug)]
-    enum CmdEnvironment {
-        Development,
-        Staging,
-        Production
-    }
-}
-
-impl From<CmdEnvironment> for Environment {
-    fn from(env: CmdEnvironment) -> Self {
-        match env {
-            CmdEnvironment::Development => Environment::Development,
-            CmdEnvironment::Staging => Environment::Staging,
-            CmdEnvironment::Production => Environment::Production,
-        }
-    }
+#[derive(Clap, Debug)]
+enum CmdEnvironment {
+    Development,
+    Staging,
+    Production,
 }
 
 impl CmdEnvironment {
@@ -54,7 +47,7 @@ impl CmdEnvironment {
     }
 }
 
-pub fn run(flags: ServeFlags, folder_options: FolderOptions, builders: ConnectorsBuilders) {
+pub async fn run(flags: ServeFlags, folder_options: FolderOptions, builders: ConnectorsBuilders) {
     let env = flags.environment.unwrap_or_else(|| {
         CmdEnvironment::from_str(env::var("SIRENE_ENV").expect("Missing SIRENE_ENV"))
             .expect("Invalid SIRENE_ENV")
@@ -71,15 +64,32 @@ pub fn run(flags: ServeFlags, folder_options: FolderOptions, builders: Connector
         .host
         .unwrap_or_else(|| env::var("HOST").expect("Missing HOST"));
 
+    let addr = format!("{}:{}", host, port)
+        .to_socket_addrs()
+        .expect("Unable to resolve domain")
+        .next()
+        .expect("No address available");
+
     let api_key = match flags.api_key {
         Some(key) => Some(key),
         None => env::var("API_KEY").ok(),
     };
 
-    let config = Config::build(env.into())
-        .address(host)
-        .port(port)
-        .finalize();
+    let base_url = match flags.base_url {
+        Some(key) => Some(key),
+        None => env::var("BASE_URL").ok(),
+    };
 
-    runner::run(config.unwrap(), api_key, folder_options, builders)
+    log::info!("[Warp] Configuring for {:#?}", env);
+
+    runner::run(
+        addr,
+        Context {
+            builders,
+            api_key,
+            folder_options,
+            base_url,
+        },
+    )
+    .await;
 }

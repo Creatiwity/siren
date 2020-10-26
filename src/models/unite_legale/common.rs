@@ -1,7 +1,9 @@
+use super::super::schema::unite_legale;
 use chrono::{NaiveDate, NaiveDateTime};
 use serde::Serialize;
 
-#[derive(Queryable, Serialize, Clone, Debug)]
+#[derive(Insertable, Queryable, Serialize, Clone, Debug)]
+#[table_name = "unite_legale"]
 pub struct UniteLegale {
     pub siren: String,
     pub statut_diffusion: String,

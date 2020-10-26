@@ -117,6 +117,7 @@ table! {
         url -> Text,
         created_at -> Timestamptz,
         updated_at -> Timestamptz,
+        last_insee_synced_timestamp -> Nullable<Timestamptz>,
     }
 }
 

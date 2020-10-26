@@ -12,7 +12,7 @@ use update::UpdateFlags;
 /// Sirene service used to update data in database
 /// and serve it through a HTTP REST API
 #[derive(Clap, Debug)]
-#[clap(version = "1.0.0", author = "Julien Blatecky")]
+#[clap(version = "2.0.0", author = "Julien Blatecky")]
 struct Opts {
     /// Path to the temp folder, you can set in environment variable as TEMP_FOLDER
     #[clap(long = "temp-folder")]
@@ -22,8 +22,8 @@ struct Opts {
     #[clap(long = "file-folder")]
     file_folder: Option<String>,
 
-    /// Path to the file storage folder for the database, you can set in environment variable as DB_FOLDER
-    /// Could be the same as FILE_FOLDER if this app and the database are on the same file system
+    /// Path to the file storage folder for the database, you can set in environment variable as DB_FOLDER.
+    /// Could be the same as FILE_FOLDER if this app and the database are on the same file system.
     /// Files copied by this app inside FILE_FOLDER must be visible by the database in DB_FOLDER
     #[clap(long = "db-folder")]
     db_folder: Option<String>,
@@ -43,7 +43,7 @@ enum MainCommand {
     Serve(ServeFlags),
 }
 
-pub fn run(builders: ConnectorsBuilders) {
+pub async fn run(builders: ConnectorsBuilders) {
     let opts = Opts::parse();
 
     let temp_folder = opts
@@ -65,7 +65,9 @@ pub fn run(builders: ConnectorsBuilders) {
     };
 
     match opts.main_command {
-        MainCommand::Update(update_flags) => update::run(update_flags, folder_options, builders),
-        MainCommand::Serve(serve_flags) => serve::run(serve_flags, folder_options, builders),
+        MainCommand::Update(update_flags) => {
+            update::run(update_flags, folder_options, builders).await
+        }
+        MainCommand::Serve(serve_flags) => serve::run(serve_flags, folder_options, builders).await,
     }
 }

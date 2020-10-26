@@ -6,7 +6,7 @@ use crate::connectors::Connectors;
 use chrono::{DateTime, Utc};
 use common::{
     ErrorUpdateMetadata, FinishedUpdateMetadata, LaunchUpdateMetadata, SyntheticGroupType,
-    UpdateStatus, UpdateSummary,
+    UpdateMetadata, UpdateStatus, UpdateSummary,
 };
 use diesel::prelude::*;
 use error::Error;
@@ -51,6 +51,16 @@ pub fn launch_update(
     }
 }
 
+pub fn progress_update(connectors: &Connectors, summary: UpdateSummary) -> Result<bool, Error> {
+    let connection = connectors.local.pool.get()?;
+
+    diesel::update(dsl::update_metadata.filter(dsl::status.eq(UpdateStatus::Launched)))
+        .set(dsl::summary.eq(summary))
+        .execute(&connection)
+        .map(|count| count > 0)
+        .map_err(|error| error.into())
+}
+
 pub fn finished_update(connectors: &Connectors, summary: UpdateSummary) -> Result<bool, Error> {
     let connection = connectors.local.pool.get()?;
     let finished_timestamp = summary.finished_timestamp;
@@ -58,7 +68,7 @@ pub fn finished_update(connectors: &Connectors, summary: UpdateSummary) -> Resul
     diesel::update(dsl::update_metadata.filter(dsl::status.eq(UpdateStatus::Launched)))
         .set(&FinishedUpdateMetadata {
             status: UpdateStatus::Finished,
-            summary: summary,
+            summary,
             finished_timestamp,
         })
         .execute(&connection)
@@ -81,5 +91,14 @@ pub fn error_update(
         })
         .execute(&connection)
         .map(|count| count > 0)
+        .map_err(|error| error.into())
+}
+
+pub fn current_update(connectors: &Connectors) -> Result<UpdateMetadata, Error> {
+    let connection = connectors.local.pool.get()?;
+
+    dsl::update_metadata
+        .order(dsl::launched_timestamp.desc())
+        .first::<UpdateMetadata>(&connection)
         .map_err(|error| error.into())
 }

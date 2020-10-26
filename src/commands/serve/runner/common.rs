@@ -1,14 +1,16 @@
 use super::super::super::common::FolderOptions;
-use crate::connectors::Connectors;
+use crate::connectors::ConnectorsBuilders;
 use crate::models::etablissement::common::Etablissement;
 use crate::models::unite_legale::common::UniteLegale;
-use crate::models::update_metadata::common::{SyntheticGroupType, UpdateSummary};
+use crate::models::update_metadata::common::SyntheticGroupType;
 use serde::{Deserialize, Serialize};
 
+#[derive(Clone)]
 pub struct Context {
-    pub connectors: Connectors,
+    pub builders: ConnectorsBuilders,
     pub api_key: Option<String>,
     pub folder_options: FolderOptions,
+    pub base_url: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -16,12 +18,12 @@ pub struct UpdateOptions {
     pub api_key: String,
     pub group_type: SyntheticGroupType,
     pub force: bool,
-    pub data_only: bool,
+    pub asynchronous: bool,
 }
 
-#[derive(Serialize)]
-pub struct UpdateResponse {
-    pub summary: UpdateSummary,
+#[derive(Deserialize)]
+pub struct StatusQueryString {
+    pub api_key: String,
 }
 
 #[derive(Serialize)]

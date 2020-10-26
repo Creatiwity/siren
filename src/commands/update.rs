@@ -1,11 +1,14 @@
 use super::common::{CmdGroupType, FolderOptions};
 use crate::connectors::ConnectorsBuilders;
 use crate::models::update_metadata::common::{Step, SyntheticGroupType};
-use crate::update::{common::Config, update, update_step};
+use crate::models::update_metadata::error_update;
+use crate::update::{common::Config, error::Error, update, update_step};
+use chrono::Utc;
 
 #[derive(Clap, Debug)]
 pub struct UpdateFlags {
-    /// Configure which part will be updated, UnitesLegales, Etablissements or All
+    /// Configure which part will be updated
+    #[clap(arg_enum)]
     group_type: CmdGroupType,
 
     /// Force update even if the source data where not updated
@@ -41,10 +44,21 @@ enum UpdateSubCommand {
     /// Clean files from FILE_FOLDER
     #[clap(name = "clean-file")]
     CleanFile,
+
+    /// Synchronise daily data from INSEE since the last modification
+    #[clap(name = "sync-insee")]
+    SyncInsee,
+
+    /// Set a staled update process to error, use only if the process is really stopped
+    #[clap(name = "finish-error")]
+    FinishError,
 }
 
-pub fn run(flags: UpdateFlags, folder_options: FolderOptions, builders: ConnectorsBuilders) {
-    let connectors = builders.create();
+pub async fn run(flags: UpdateFlags, folder_options: FolderOptions, builders: ConnectorsBuilders) {
+    let mut connectors = builders
+        .create_with_insee()
+        .await
+        .expect("Unable to create INSEE connector");
     let synthetic_group_type: SyntheticGroupType = flags.group_type.into();
 
     // Prepare config
@@ -54,6 +68,7 @@ pub fn run(flags: UpdateFlags, folder_options: FolderOptions, builders: Connecto
         temp_folder: folder_options.temp,
         file_folder: folder_options.file,
         db_folder: folder_options.db,
+        asynchronous: false,
     };
 
     let summary_result = match flags.subcmd {
@@ -64,15 +79,31 @@ pub fn run(flags: UpdateFlags, folder_options: FolderOptions, builders: Connecto
                 UpdateSubCommand::InsertData => Step::InsertData,
                 UpdateSubCommand::SwapData => Step::SwapData,
                 UpdateSubCommand::CleanFile => Step::CleanFile,
+                UpdateSubCommand::SyncInsee => Step::SyncInsee,
+                UpdateSubCommand::FinishError => {
+                    if let Err(err) = error_update(
+                        &connectors,
+                        "Process stopped manually.".to_string(),
+                        Utc::now(),
+                    ) {
+                        let error: Error = err.into();
+                        error.exit()
+                    }
+
+                    std::process::exit(0);
+                }
             };
 
-            update_step(step, synthetic_group_type, config, &connectors)
+            update_step(step, synthetic_group_type, config, &mut connectors).await
         }
-        None => update(synthetic_group_type, config, &connectors),
+        None => update(synthetic_group_type, config, &mut connectors).await,
     };
 
     match summary_result {
-        Ok(summary) => println!("{}", serde_json::to_string(&summary).unwrap()),
+        Ok(summary) => println!(
+            "{}",
+            serde_json::to_string_pretty(&summary).expect("Unable to stringify summary")
+        ),
         Err(error) => error.exit(),
     }
 }

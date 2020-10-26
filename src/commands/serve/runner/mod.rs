@@ -1,69 +1,149 @@
-mod common;
 mod error;
 
-use super::super::common::FolderOptions;
-use crate::connectors::ConnectorsBuilders;
+pub mod common;
+
 use crate::models;
+use crate::models::update_metadata::common::UpdateMetadata;
 use crate::update::{common::Config as DataConfig, update as update_data};
+use chrono::Utc;
 use common::{
-    Context, EtablissementInnerResponse, EtablissementResponse,
+    Context, EtablissementInnerResponse, EtablissementResponse, StatusQueryString,
     UniteLegaleEtablissementInnerResponse, UniteLegaleInnerResponse, UniteLegaleResponse,
-    UpdateOptions, UpdateResponse,
+    UpdateOptions,
 };
 use error::Error;
-use rocket::config::Config;
-use rocket::State;
-use rocket_contrib::json::Json;
+use std::convert::Infallible;
+use std::net::SocketAddr;
+use warp::{
+    http::{header, Method, StatusCode},
+    Filter, Rejection, Reply,
+};
 
-#[get("/")]
 fn index() -> &'static str {
     "SIRENE API v3"
 }
 
-#[post("/update", format = "application/json", data = "<options>")]
-fn update(
-    state: State<Context>,
-    options: Json<UpdateOptions>,
-) -> Result<Json<UpdateResponse>, Error> {
-    let api_key = match &state.api_key {
+async fn update(options: UpdateOptions, context: Context) -> Result<impl Reply, Rejection> {
+    let api_key = match &context.api_key {
         Some(key) => key,
-        None => return Err(Error::MissingApiKeyError),
+        None => return Err(Error::MissingApiKeyError.into()),
     };
 
     if &options.api_key != api_key {
-        return Err(Error::ApiKeyError);
+        return Err(Error::ApiKeyError.into());
     }
 
-    let summary = update_data(
+    if options.asynchronous && context.base_url == None {
+        return Err(Error::MissingBaseUrlForAsyncError.into());
+    }
+
+    let mut connectors = context.builders.create_with_insee().await?;
+
+    let update_metadata = update_data(
         options.group_type,
         DataConfig {
             force: options.force,
-            data_only: options.data_only,
-            temp_folder: state.folder_options.temp.clone(),
-            file_folder: state.folder_options.file.clone(),
-            db_folder: state.folder_options.db.clone(),
+            data_only: false,
+            temp_folder: context.folder_options.temp.clone(),
+            file_folder: context.folder_options.file.clone(),
+            db_folder: context.folder_options.db.clone(),
+            asynchronous: options.asynchronous,
         },
-        &state.connectors,
-    )?;
+        &mut connectors,
+    )
+    .await?;
 
-    Ok(Json(UpdateResponse { summary }))
+    reply_with_update_metadata(&update_metadata, context.base_url, api_key)
 }
 
-#[get("/unites_legales/<siren>")]
-fn unites_legales(
-    state: State<Context>,
-    siren: String,
-) -> Result<Json<UniteLegaleResponse>, Error> {
-    if siren.len() != 9 {
-        return Err(Error::InvalidData);
+async fn status(query: StatusQueryString, context: Context) -> Result<impl Reply, Rejection> {
+    let api_key = match &context.api_key {
+        Some(key) => key,
+        None => return Err(Error::MissingApiKeyError.into()),
+    };
+
+    if &query.api_key != api_key {
+        return Err(Error::ApiKeyError.into());
     }
 
-    let unite_legale = models::unite_legale::get(&state.connectors, &siren)?;
-    let etablissements = models::etablissement::get_with_siren(&state.connectors, &siren)?;
-    let etablissement_siege =
-        models::etablissement::get_siege_with_siren(&state.connectors, &unite_legale.siren)?;
+    let connectors = context.builders.create();
 
-    Ok(Json(UniteLegaleResponse {
+    let update_metadata = models::update_metadata::current_update(&connectors)?;
+
+    reply_with_update_metadata(&update_metadata, context.base_url, api_key)
+}
+
+fn reply_with_update_metadata(
+    update_metadata: &UpdateMetadata,
+    base_url: Option<String>,
+    api_key: &String,
+) -> Result<impl Reply, Rejection> {
+    let status_code = match update_metadata.status.as_str() {
+        "launched" => StatusCode::ACCEPTED,
+        "error" => StatusCode::INTERNAL_SERVER_ERROR,
+        _ => StatusCode::OK,
+    };
+
+    Ok(warp::reply::with_status(
+        warp::reply::with_header(
+            warp::reply::with_header(
+                warp::reply::json(&update_metadata),
+                "Location",
+                format!(
+                    "{}/admin/update/status?api_key={}",
+                    base_url.unwrap_or_default(),
+                    api_key
+                ),
+            ),
+            "Retry-After",
+            "10",
+        ),
+        status_code,
+    ))
+}
+
+async fn set_status_to_error(
+    query: StatusQueryString,
+    context: Context,
+) -> Result<impl Reply, Rejection> {
+    let api_key = match &context.api_key {
+        Some(key) => key,
+        None => return Err(Error::MissingApiKeyError.into()),
+    };
+
+    if &query.api_key != api_key {
+        return Err(Error::ApiKeyError.into());
+    }
+
+    let connectors = context.builders.create();
+
+    models::update_metadata::error_update(
+        &connectors,
+        String::from("Process stopped manually."),
+        Utc::now(),
+    )?;
+
+    Ok(warp::reply())
+}
+
+async fn unites_legales(siren: String, context: Context) -> Result<impl Reply, Rejection> {
+    if siren.len() != 9 {
+        return Err(Error::InvalidData.into());
+    }
+
+    let connectors = context.builders.create();
+    let connection = connectors
+        .local
+        .pool
+        .get()
+        .map_err(|e| Error::LocalConnectionFailed { source: e })?;
+
+    let unite_legale = models::unite_legale::get(&connection, &siren)?;
+    let etablissements = models::etablissement::get_with_siren(&connection, &siren)?;
+    let etablissement_siege =
+        models::etablissement::get_siege_with_siren(&connection, &unite_legale.siren)?;
+
+    Ok(warp::reply::json(&UniteLegaleResponse {
         unite_legale: UniteLegaleInnerResponse {
             unite_legale,
             etablissements,
@@ -72,21 +152,24 @@ fn unites_legales(
     }))
 }
 
-#[get("/etablissements/<siret>")]
-fn etablissements(
-    state: State<Context>,
-    siret: String,
-) -> Result<Json<EtablissementResponse>, Error> {
+async fn etablissements(siret: String, context: Context) -> Result<impl Reply, Rejection> {
     if siret.len() != 14 {
-        return Err(Error::InvalidData);
+        return Err(Error::InvalidData.into());
     }
 
-    let etablissement = models::etablissement::get(&state.connectors, &siret)?;
-    let unite_legale = models::unite_legale::get(&state.connectors, &etablissement.siren)?;
-    let etablissement_siege =
-        models::etablissement::get_siege_with_siren(&state.connectors, &etablissement.siren)?;
+    let connectors = context.builders.create();
+    let connection = connectors
+        .local
+        .pool
+        .get()
+        .map_err(|e| Error::LocalConnectionFailed { source: e })?;
 
-    Ok(Json(EtablissementResponse {
+    let etablissement = models::etablissement::get(&connection, &siret)?;
+    let unite_legale = models::unite_legale::get(&connection, &etablissement.siren)?;
+    let etablissement_siege =
+        models::etablissement::get_siege_with_siren(&connection, &etablissement.siren)?;
+
+    Ok(warp::reply::json(&EtablissementResponse {
         etablissement: EtablissementInnerResponse {
             etablissement,
             unite_legale: UniteLegaleEtablissementInnerResponse {
@@ -97,19 +180,80 @@ fn etablissements(
     }))
 }
 
-pub fn run(
-    config: Config,
-    api_key: Option<String>,
-    folder_options: FolderOptions,
-    builders: ConnectorsBuilders,
-) {
-    rocket::custom(config)
-        .mount("/v3", routes![index, unites_legales, etablissements])
-        .mount("/admin", routes![update])
-        .manage(Context {
-            connectors: builders.create(),
-            api_key,
-            folder_options,
-        })
-        .launch();
+pub async fn run(addr: SocketAddr, context: Context) {
+    // GET / -> OK
+    let health_route = warp::get()
+        .and(warp::path::end())
+        .map(|| warp::reply::with_status("OK", warp::http::StatusCode::OK));
+    log::info!("[Warp] Mount GET /");
+
+    let v3_route = warp::path!("v3" / ..);
+
+    // GET /v3 -> "SIRENE API v3"
+    let v3_index = warp::path::end().map(index);
+    log::info!("[Warp] Mount GET /v3");
+
+    // GET /unites_legales/<siren>
+    let v3_unites_legales_route = warp::get()
+        .and(warp::path!("unites_legales" / String))
+        .and(with_context(context.clone()))
+        .and_then(unites_legales);
+    log::info!("[Warp] Mount GET /v3/unites_legales/<siren>");
+
+    // GET /etablissements/<siret>
+    let v3_etablissement_route = warp::get()
+        .and(warp::path!("etablissements" / String))
+        .and(with_context(context.clone()))
+        .and_then(etablissements);
+    log::info!("[Warp] Mount GET /v3/etablissements/<siret>");
+
+    let admin_update_route = warp::path!("admin" / "update" / ..);
+
+    // POST /admin/update {json}
+    let update_route = warp::post()
+        .and(warp::path::end())
+        .and(warp::body::content_length_limit(1024 * 32))
+        .and(warp::body::json::<UpdateOptions>())
+        .and(with_context(context.clone()))
+        .and_then(update);
+    log::info!("[Warp] Mount POST /admin/update {{json}}");
+
+    // GET /admin/update/status?api_key=""
+    let status_route = warp::get()
+        .and(warp::path!("status"))
+        .and(warp::query::<StatusQueryString>())
+        .and(with_context(context.clone()))
+        .and_then(status);
+    log::info!("[Warp] Mount GET /admin/update/status?api_key=");
+
+    // POST /admin/update/status/error { api_key }
+    let status_error_route = warp::post()
+        .and(warp::path!("status" / "error"))
+        .and(warp::body::content_length_limit(1024 * 32))
+        .and(warp::body::json::<StatusQueryString>())
+        .and(with_context(context))
+        .and_then(set_status_to_error);
+    log::info!("[Warp] Mount POST /admin/update/status/error {{api_key}}");
+
+    // Cors
+    let cors = warp::cors()
+        .allow_methods(&[Method::GET, Method::POST])
+        .allow_headers(vec![header::CONTENT_TYPE])
+        .allow_any_origin();
+
+    let routes = health_route
+        .or(v3_route.and(
+            v3_unites_legales_route
+                .or(v3_etablissement_route)
+                .or(v3_index),
+        ))
+        .or(admin_update_route.and(status_route.or(update_route).or(status_error_route)))
+        .recover(error::handle_rejection)
+        .with(cors);
+
+    warp::serve(routes).run(addr).await;
+}
+
+fn with_context(context: Context) -> impl Filter<Extract = (Context,), Error = Infallible> + Clone {
+    warp::any().map(move || context.clone())
 }
