@@ -1,6 +1,6 @@
 # SIREN API
 
-[![Build Status](https://travis-ci.com/Creatiwity/siren.svg?branch=master)](https://travis-ci.com/Creatiwity/siren)
+[![Build Status](https://github.com/Creatiwity/siren/workflows/Build/badge.svg?branch=develop)](https://github.com/Creatiwity/siren/actions?query=workflow%3ABuild)
 [![docker pulls](https://img.shields.io/docker/pulls/creatiwity/siren.svg)](https://hub.docker.com/r/creatiwity/siren/)
 [![docker image info](https://images.microbadger.com/badges/image/creatiwity/siren.svg)](http://microbadger.com/images/creatiwity/siren)
 [![docker tag](https://images.microbadger.com/badges/version/creatiwity/siren.svg)](https://hub.docker.com/r/creatiwity/siren/tags/)
@@ -48,7 +48,7 @@ This variable is only needed if you want to have the daily updates.
 1. Go to https://api.insee.fr/catalogue/
 2. Create an account or sign in
 3. Create an application on this portal
-4. Subscribe this application to the *Sirene - V3* API
+4. Subscribe this application to the _Sirene - V3_ API
 5. Generate a key pair in the application details
 6. Copy the key from the `curl` example and paste it in `.env`: `Authorization: Basic [INSEE_CREDENTIALS]`
 
@@ -88,7 +88,7 @@ SUBCOMMANDS:
 **> sirene serve --help**
 
 ```
-sirene-serve 
+sirene-serve
 Serve data from database to /unites_legales/<siren> and /etablissements/<siret>
 
 USAGE:
@@ -112,7 +112,7 @@ OPTIONS:
 **> sirene update --help**
 
 ```
-sirene-update 
+sirene-update
 Update data from CSV source files
 
 USAGE:
@@ -164,6 +164,7 @@ POST /admin/update
 ```
 
 If `asynchronous` is set to `true`, the update endpoint will immediately return the following:
+
 ```
 Status: 202 Accepted
 Location: /admin/update/status?api_key=string
@@ -175,6 +176,7 @@ Retry-After: 10
 ```
 GET /admin/update/status?api_key=string
 ```
+
 If an update is in progress, the status code will be 202, otherwise 200.
 
 ```
