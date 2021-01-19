@@ -4,6 +4,7 @@ pub mod unite_legale;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::fmt::Display;
 use std::str::FromStr;
+use tracing::error;
 
 #[derive(Serialize)]
 pub struct InseeQueryParams {
@@ -58,7 +59,7 @@ where
             .map(Option::from),
         Ok(serde_json::Value::Null) => Ok(None),
         Ok(v) => {
-            log::error!("string expected but found something else: {}", v);
+            error!("string expected but found something else: {}", v);
             Ok(None)
         }
         Err(_) => Ok(None),

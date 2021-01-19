@@ -13,6 +13,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 use tokio::fs::File;
 use tokio_util::compat::FuturesAsyncReadCompatExt;
+use tracing::debug;
 
 pub struct DownloadAction {
     pub temp_folder: String,
@@ -27,7 +28,7 @@ impl Action for DownloadAction {
         connectors: &mut Connectors,
         summary_delegate: &'b mut SummaryGroupDelegate<'a, 'b>,
     ) -> Result<(), Error> {
-        log::debug!("[Download] Downloading {:#?}", group_type);
+        debug!("Downloading {:#?}", group_type);
         summary_delegate.start(connectors, None, 1)?;
 
         let metadata = group_metadata::get(connectors, group_type)?;
@@ -62,7 +63,7 @@ impl Action for DownloadAction {
         if !self.force {
             if let Some(last_imported_timestamp) = metadata.last_imported_timestamp {
                 if last_modified.le(&last_imported_timestamp) {
-                    log::debug!("[Download] {:#?} already imported", group_type);
+                    debug!("{:#?} already imported", group_type);
 
                     summary_delegate.finish(
                         connectors,
@@ -77,7 +78,7 @@ impl Action for DownloadAction {
 
             if let Some(staging_file_timestamp) = metadata.staging_file_timestamp {
                 if last_modified.le(&staging_file_timestamp) {
-                    log::debug!("[Download] {:#?} already downloaded", group_type);
+                    debug!("{:#?} already downloaded", group_type);
 
                     summary_delegate.finish(
                         connectors,
@@ -116,7 +117,7 @@ impl Action for DownloadAction {
             .await
             .map_err(|io_error| Error::FileCopyError { io_error })?;
 
-        log::debug!("[Download] Download of {:#?} finished", group_type);
+        debug!("Download of {:#?} finished", group_type);
 
         // Update staging file timestamp
         group_metadata::set_staging_file_timestamp(connectors, group_type, last_modified)?;

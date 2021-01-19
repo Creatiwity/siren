@@ -8,6 +8,7 @@ use async_trait::async_trait;
 use std::fs::{create_dir_all, set_permissions, File, Permissions};
 use std::io;
 use std::path::PathBuf;
+use tracing::debug;
 
 pub struct UnzipAction {
     pub temp_folder: String,
@@ -23,7 +24,7 @@ impl Action for UnzipAction {
         connectors: &mut Connectors,
         summary_delegate: &'b mut SummaryGroupDelegate<'a, 'b>,
     ) -> Result<(), Error> {
-        log::debug!("[Unzip] Unzipping {:#?}", group_type);
+        debug!("Unzipping {:#?}", group_type);
         summary_delegate.start(connectors, None, 1)?;
 
         let metadata = group_metadata::get(connectors, group_type)?;
@@ -32,7 +33,7 @@ impl Action for UnzipAction {
         let staging_file_timestamp = match metadata.staging_file_timestamp {
             Some(staging_file_timestamp) => staging_file_timestamp,
             None => {
-                log::debug!("[Unzip] Nothing to unzip for {:#?}", group_type);
+                debug!("Nothing to unzip for {:#?}", group_type);
 
                 summary_delegate.finish(connectors, String::from("nothing to unzip"), 0, false)?;
 
@@ -45,7 +46,7 @@ impl Action for UnzipAction {
             if let Some(staging_csv_file_timestamp) = metadata.staging_csv_file_timestamp {
                 if let Some(last_imported_timestamp) = metadata.last_imported_timestamp {
                     if staging_csv_file_timestamp.le(&last_imported_timestamp) {
-                        log::debug!("[Unzip] {:#?} already imported", group_type);
+                        debug!("{:#?} already imported", group_type);
 
                         summary_delegate.finish(
                             connectors,
@@ -59,7 +60,7 @@ impl Action for UnzipAction {
                 }
 
                 if staging_file_timestamp.le(&staging_csv_file_timestamp) {
-                    log::debug!("[Unzip] {:#?} already unzipped", group_type);
+                    debug!("{:#?} already unzipped", group_type);
 
                     summary_delegate.finish(
                         connectors,
@@ -103,8 +104,8 @@ impl Action for UnzipAction {
             .by_index(0)
             .map_err(|zip_error| Error::ZipAccessFileError { zip_error })?;
 
-        log::debug!(
-            "[Unzip] Unzipping file {:#?} extracted to \"{}\" ({} bytes)",
+        debug!(
+            "Unzipping file {:#?} extracted to \"{}\" ({} bytes)",
             group_type,
             csv_path.as_path().display(),
             zipped_csv_file.size()
@@ -131,7 +132,7 @@ impl Action for UnzipAction {
             staging_file_timestamp,
         )?;
 
-        log::debug!("[Unzip] Unzip of {:#?} finished", group_type);
+        debug!("Unzip of {:#?} finished", group_type);
 
         summary_delegate.finish(connectors, String::from("unzipped"), 1, true)?;
 

@@ -5,6 +5,7 @@ use crate::connectors::ConnectorsBuilders;
 use runner::common::Context;
 use std::env;
 use std::net::ToSocketAddrs;
+use tracing::info;
 
 #[derive(Clap, Debug)]
 pub struct ServeFlags {
@@ -80,7 +81,7 @@ pub async fn run(flags: ServeFlags, folder_options: FolderOptions, builders: Con
         None => env::var("BASE_URL").ok(),
     };
 
-    log::info!("[Warp] Configuring for {:#?}", env);
+    info!("Configuring for {:#?}", env);
 
     runner::run(
         addr,
