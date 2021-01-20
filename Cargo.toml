@@ -20,7 +20,7 @@ reqwest = { version = "0.10", features = ["json", "stream"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tokio = { version = "0.2", features = ["macros", "io-util", "fs", "rt-threaded", "time"] }
-tokio-util = { version = "0.3", features = ["compat"] }
+tokio-util = { version = "0.6", features = ["compat"] }
 tracing = "0.1"
 tracing-subscriber = "0.2"
 warp = "0.2"
