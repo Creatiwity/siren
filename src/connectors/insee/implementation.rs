@@ -38,7 +38,7 @@ impl Connector {
 
         let elapsed = self.started_at.elapsed();
         if self.calls > MAX_CALL && elapsed < MAX_DURATION {
-            tokio::time::delay_for(MAX_DURATION).await;
+            tokio::time::sleep(MAX_DURATION).await;
             self.calls = 0;
         } else if elapsed >= MAX_DURATION {
             self.calls = 0;

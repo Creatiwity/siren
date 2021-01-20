@@ -22,12 +22,6 @@ custom_error! { pub Error
 
 impl warp::reject::Reject for Error {}
 
-impl From<Error> for Rejection {
-    fn from(e: Error) -> Self {
-        warp::reject::custom(e)
-    }
-}
-
 impl From<ConnectorError> for Rejection {
     fn from(e: ConnectorError) -> Self {
         let error: Error = e.into();
