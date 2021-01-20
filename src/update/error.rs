@@ -4,6 +4,7 @@ use crate::models::group_metadata::common::GroupType;
 use crate::models::{group_metadata, update_metadata};
 use custom_error::custom_error;
 use std::process;
+use tracing::error;
 
 custom_error! { pub Error
     MetadataModelError {source: group_metadata::error::Error} = "Error on Metadata model: {source}",
@@ -27,13 +28,13 @@ custom_error! { pub Error
     InvalidCSVPath = "Invalid CSV path, not UTF8 compatible",
     InvalidComponentInCSVPath {io_error: std::io::Error} = "Invalid component in CSV path ({io_error})",
     SwapStoppedTooMuchDifference {group_type: GroupType} = "Swapping stopped on {group_type}, more than 1% difference between the old values and the new ones. Use --force to override",
-    SyncInseeError {source: InseeUpdateError} = "[SyncInsee] {source}",
-    WaitThreadError {source: tokio::task::JoinError} = "[Asynchronous] Error while waiting for thread: {source}",
+    SyncInseeError {source: InseeUpdateError} = "{source}",
+    WaitThreadError {source: tokio::task::JoinError} = "Error while waiting for thread: {source}",
 }
 
 impl Error {
     pub fn exit(&self) -> ! {
-        log::error!("{}", self);
+        error!("{}", self);
         process::exit(1);
     }
 }

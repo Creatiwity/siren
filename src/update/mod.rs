@@ -8,6 +8,7 @@ use chrono::Utc;
 use common::Config;
 use error::Error;
 use tokio::task;
+use tracing::{debug, error};
 
 pub mod action;
 pub mod common;
@@ -85,7 +86,7 @@ async fn execute_workflow_thread(
     mut connectors: &mut Connectors,
     mut summary: UpdateSummary,
 ) -> Result<(), Error> {
-    log::debug!("[Update] Starting");
+    debug!("Starting");
 
     for step in workflow.into_iter() {
         execute_step(
@@ -97,7 +98,7 @@ async fn execute_workflow_thread(
         )
         .await
         .or_else(|error| {
-            log::error!("[Update] Errored: {}", error.to_string());
+            error!("Errored: {}", error.to_string());
 
             update_metadata::error_update(&mut connectors, error.to_string(), Utc::now())?;
             Err(error)
@@ -106,7 +107,7 @@ async fn execute_workflow_thread(
 
     summary.finish(&mut connectors)?;
 
-    log::debug!("[Update] Finished");
+    debug!("Finished");
 
     Ok(())
 }

@@ -14,6 +14,7 @@ use common::{
 use error::Error;
 use std::convert::Infallible;
 use std::net::SocketAddr;
+use tracing::info;
 use warp::{
     http::{header, Method, StatusCode},
     Filter, Rejection, Reply,
@@ -185,27 +186,27 @@ pub async fn run(addr: SocketAddr, context: Context) {
     let health_route = warp::get()
         .and(warp::path::end())
         .map(|| warp::reply::with_status("OK", warp::http::StatusCode::OK));
-    log::info!("[Warp] Mount GET /");
+    info!("Mount GET /");
 
     let v3_route = warp::path!("v3" / ..);
 
     // GET /v3 -> "SIRENE API v3"
     let v3_index = warp::path::end().map(index);
-    log::info!("[Warp] Mount GET /v3");
+    info!("Mount GET /v3");
 
     // GET /unites_legales/<siren>
     let v3_unites_legales_route = warp::get()
         .and(warp::path!("unites_legales" / String))
         .and(with_context(context.clone()))
         .and_then(unites_legales);
-    log::info!("[Warp] Mount GET /v3/unites_legales/<siren>");
+    info!("Mount GET /v3/unites_legales/<siren>");
 
     // GET /etablissements/<siret>
     let v3_etablissement_route = warp::get()
         .and(warp::path!("etablissements" / String))
         .and(with_context(context.clone()))
         .and_then(etablissements);
-    log::info!("[Warp] Mount GET /v3/etablissements/<siret>");
+    info!("Mount GET /v3/etablissements/<siret>");
 
     let admin_update_route = warp::path!("admin" / "update" / ..);
 
@@ -216,7 +217,7 @@ pub async fn run(addr: SocketAddr, context: Context) {
         .and(warp::body::json::<UpdateOptions>())
         .and(with_context(context.clone()))
         .and_then(update);
-    log::info!("[Warp] Mount POST /admin/update {{json}}");
+    info!("Mount POST /admin/update {{json}}");
 
     // GET /admin/update/status?api_key=""
     let status_route = warp::get()
@@ -224,7 +225,7 @@ pub async fn run(addr: SocketAddr, context: Context) {
         .and(warp::query::<StatusQueryString>())
         .and(with_context(context.clone()))
         .and_then(status);
-    log::info!("[Warp] Mount GET /admin/update/status?api_key=");
+    info!("Mount GET /admin/update/status?api_key=");
 
     // POST /admin/update/status/error { api_key }
     let status_error_route = warp::post()
@@ -233,7 +234,7 @@ pub async fn run(addr: SocketAddr, context: Context) {
         .and(warp::body::json::<StatusQueryString>())
         .and(with_context(context))
         .and_then(set_status_to_error);
-    log::info!("[Warp] Mount POST /admin/update/status/error {{api_key}}");
+    info!("Mount POST /admin/update/status/error {{api_key}}");
 
     // Cors
     let cors = warp::cors()

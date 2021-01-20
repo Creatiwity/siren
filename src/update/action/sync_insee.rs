@@ -6,6 +6,7 @@ use crate::models::group_metadata;
 use crate::models::group_metadata::common::GroupType;
 use async_trait::async_trait;
 use chrono::{DateTime, Duration, NaiveDateTime, Utc};
+use tracing::debug;
 
 pub struct SyncInseeAction {}
 
@@ -17,7 +18,7 @@ impl Action for SyncInseeAction {
         connectors: &mut Connectors,
         summary_delegate: &'b mut SummaryGroupDelegate<'a, 'b>,
     ) -> Result<(), Error> {
-        log::debug!("[SyncInsee] Syncing {:#?}", group_type);
+        debug!("Syncing {:#?}", group_type);
 
         // Use Insee connector only if present
         if connectors.insee.is_some() {
@@ -47,7 +48,7 @@ impl Action for SyncInseeAction {
                     summary_delegate.progress(connectors, updated_count as u32)?;
                 }
 
-                log::debug!("[SyncInsee] {} {:#?} synced", updated_count, group_type);
+                debug!("{} {:#?} synced", updated_count, group_type);
 
                 group_metadata::set_last_insee_synced_timestamp(
                     connectors,
@@ -78,7 +79,7 @@ impl Action for SyncInseeAction {
             )?;
         }
 
-        log::debug!("[SyncInsee] Syncing of {:#?} done", group_type);
+        debug!("Syncing of {:#?} done", group_type);
 
         Ok(())
     }

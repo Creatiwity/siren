@@ -7,6 +7,7 @@ use crate::models::group_metadata::common::GroupType;
 use async_trait::async_trait;
 use std::fs::remove_file;
 use std::path::PathBuf;
+use tracing::debug;
 
 pub struct CleanAction {
     pub temp_folder: String,
@@ -21,7 +22,7 @@ impl Action for CleanAction {
         connectors: &mut Connectors,
         summary_delegate: &'b mut SummaryGroupDelegate<'a, 'b>,
     ) -> Result<(), Error> {
-        log::debug!("[Clean] Cleaning {:#?}", group_type);
+        debug!("Cleaning {:#?}", group_type);
 
         summary_delegate.start(connectors, None, 2)?;
 
@@ -42,14 +43,14 @@ impl Action for CleanAction {
         csv_path.set_extension("csv");
 
         if let Err(error) = remove_file(zip_path) {
-            log::debug!("[Clean] Zip not deleted ({})", error);
+            debug!("Zip not deleted ({})", error);
             updated = false;
             done_count -= 1;
             status_label = String::from("zip not deleted");
         }
 
         if let Err(error) = remove_file(csv_path) {
-            log::debug!("[Clean] CSV not deleted ({})", error);
+            debug!("CSV not deleted ({})", error);
             updated = false;
             done_count -= 1;
             status_label = String::from("csv not deleted");
@@ -59,7 +60,7 @@ impl Action for CleanAction {
 
         summary_delegate.finish(connectors, status_label, done_count, updated)?;
 
-        log::debug!("[Clean] Finished cleaning of {:#?}", group_type);
+        debug!("Finished cleaning of {:#?}", group_type);
 
         Ok(())
     }

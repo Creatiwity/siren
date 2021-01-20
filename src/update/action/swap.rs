@@ -5,6 +5,7 @@ use crate::connectors::Connectors;
 use crate::models::group_metadata;
 use crate::models::group_metadata::common::GroupType;
 use async_trait::async_trait;
+use tracing::debug;
 
 pub struct SwapAction {
     pub force: bool,
@@ -18,7 +19,7 @@ impl Action for SwapAction {
         connectors: &mut Connectors,
         summary_delegate: &'b mut SummaryGroupDelegate<'a, 'b>,
     ) -> Result<(), Error> {
-        log::debug!("[Swap] Swapping {:#?}", group_type);
+        debug!("Swapping {:#?}", group_type);
         summary_delegate.start(connectors, None, 1)?;
 
         let metadata = group_metadata::get(connectors, group_type)?;
@@ -27,7 +28,7 @@ impl Action for SwapAction {
         let staging_imported_timestamp = match metadata.staging_imported_timestamp {
             Some(staging_imported_timestamp) => staging_imported_timestamp,
             None => {
-                log::debug!("[Swap] Nothing to swap for {:#?}", group_type);
+                debug!("Nothing to swap for {:#?}", group_type);
 
                 summary_delegate.finish(connectors, String::from("nothing to swap"), 0, false)?;
 
@@ -39,7 +40,7 @@ impl Action for SwapAction {
         if !self.force {
             if let Some(last_imported_timestamp) = metadata.last_imported_timestamp {
                 if staging_imported_timestamp.le(&last_imported_timestamp) {
-                    log::debug!("[Swap] {:#?} already imported", group_type);
+                    debug!("{:#?} already imported", group_type);
 
                     summary_delegate.finish(
                         connectors,
@@ -77,7 +78,7 @@ impl Action for SwapAction {
             staging_imported_timestamp,
         )?;
 
-        log::debug!("[Swap] Swap of {:#?} finished", group_type);
+        debug!("Swap of {:#?} finished", group_type);
 
         summary_delegate.finish(connectors, String::from("swapped"), 1, true)?;
 

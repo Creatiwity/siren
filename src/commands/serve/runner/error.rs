@@ -4,6 +4,7 @@ use crate::update::error::Error as InternalUpdateError;
 use custom_error::custom_error;
 use serde::Serialize;
 use std::convert::Infallible;
+use tracing::{debug, error, warn};
 use warp::{http::StatusCode, Rejection, Reply};
 
 custom_error! { pub Error
@@ -20,12 +21,6 @@ custom_error! { pub Error
 }
 
 impl warp::reject::Reject for Error {}
-
-impl From<Error> for Rejection {
-    fn from(e: Error) -> Self {
-        warp::reject::custom(e)
-    }
-}
 
 impl From<ConnectorError> for Rejection {
     fn from(e: ConnectorError) -> Self {
@@ -72,7 +67,7 @@ pub async fn handle_rejection(err: Rejection) -> Result<impl Reply, Infallible> 
     let (code, message) = if err.is_not_found() {
         (StatusCode::NOT_FOUND, String::from("Not found"))
     } else if let Some(e) = err.find::<Error>() {
-        log::debug!("[Warp][Error] {:?}", e);
+        debug!("[HandledError] {:?}", e);
 
         (
             match e {
@@ -99,15 +94,15 @@ pub async fn handle_rejection(err: Rejection) -> Result<impl Reply, Infallible> 
             e.to_string(),
         )
     } else if let Some(body_error) = err.find::<warp::body::BodyDeserializeError>() {
-        log::debug!("[Warp][Json] {}", body_error);
+        warn!("[Json] {}", body_error);
 
         (StatusCode::BAD_REQUEST, body_error.to_string())
     } else if let Some(e) = err.find::<warp::reject::MethodNotAllowed>() {
-        log::debug!("[Warp][Method] {}", e);
+        warn!("[Method] {}", e);
 
         (StatusCode::NOT_FOUND, String::from("Not found"))
     } else {
-        log::debug!("[Warp][Rejection] Unhandled error {:?}", err);
+        warn!("[Rejection] Unhandled error {:?}", err);
 
         (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -116,7 +111,7 @@ pub async fn handle_rejection(err: Rejection) -> Result<impl Reply, Infallible> 
     };
 
     if code == StatusCode::INTERNAL_SERVER_ERROR {
-        log::error!("[Warp][InternalServerError] {}", message);
+        error!("[InternalServerError] {}", message);
     }
 
     Ok(warp::reply::with_status(

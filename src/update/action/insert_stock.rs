@@ -7,6 +7,7 @@ use crate::models::group_metadata::common::GroupType;
 use async_trait::async_trait;
 use std::fs::canonicalize;
 use std::path::PathBuf;
+use tracing::debug;
 
 pub struct InsertAction {
     pub db_folder: String,
@@ -21,7 +22,7 @@ impl Action for InsertAction {
         connectors: &mut Connectors,
         summary_delegate: &'b mut SummaryGroupDelegate<'a, 'b>,
     ) -> Result<(), Error> {
-        log::debug!("[Insert] Insert {:#?}", group_type);
+        debug!("Insert {:#?}", group_type);
         summary_delegate.start(connectors, None, 1)?;
 
         let metadata = group_metadata::get(connectors, group_type)?;
@@ -30,7 +31,7 @@ impl Action for InsertAction {
         let staging_csv_file_timestamp = match metadata.staging_csv_file_timestamp {
             Some(staging_csv_file_timestamp) => staging_csv_file_timestamp,
             None => {
-                log::debug!("[Insert] Nothing to insert for {:#?}", group_type);
+                debug!("Nothing to insert for {:#?}", group_type);
 
                 summary_delegate.finish(connectors, String::from("nothing to insert"), 0, false)?;
 
@@ -43,7 +44,7 @@ impl Action for InsertAction {
             if let Some(staging_imported_timestamp) = metadata.staging_imported_timestamp {
                 if let Some(last_imported_timestamp) = metadata.last_imported_timestamp {
                     if staging_imported_timestamp.le(&last_imported_timestamp) {
-                        log::debug!("[Insert] {:#?} already imported", group_type);
+                        debug!("{:#?} already imported", group_type);
 
                         summary_delegate.finish(
                             connectors,
@@ -57,7 +58,7 @@ impl Action for InsertAction {
                 }
 
                 if staging_csv_file_timestamp.le(&staging_imported_timestamp) {
-                    log::debug!("[Insert] {:#?} already inserted", group_type);
+                    debug!("{:#?} already inserted", group_type);
 
                     summary_delegate.finish(
                         connectors,
@@ -94,7 +95,7 @@ impl Action for InsertAction {
             staging_csv_file_timestamp,
         )?;
 
-        log::debug!("[Insert] Finished insert of {:#?}", group_type);
+        debug!("Finished insert of {:#?}", group_type);
 
         summary_delegate.finish(connectors, String::from("inserted"), 1, true)?;
 
