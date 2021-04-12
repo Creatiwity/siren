@@ -25,7 +25,7 @@ pub fn launch_update(
         .first::<DateTime<Utc>>(&connection);
 
     if let Ok(launched_updated_at) = launched_update_result {
-        if launched_updated_at.signed_duration_since(Utc::now()) <= Duration::hours(1) {
+        if Utc::now().signed_duration_since(launched_updated_at) <= Duration::hours(1) {
             return Err(Error::AlreadyLaunched);
         }
 
