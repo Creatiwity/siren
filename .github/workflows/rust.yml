@@ -51,13 +51,14 @@ jobs:
       - name: Build for MUSL
         run: |
           mkdir -p ~/.cargo/{git,registry}
+          mkdir -p $GITHUB_WORKSPACE/target
           docker pull clux/muslrust:stable
           docker run \
             -v ~/.cargo/registry:/root/.cargo/registry \
             -v ~/.cargo/git:/root/.cargo/git \
             -v $GITHUB_WORKSPACE:/volume \
             --rm -t clux/muslrust:stable \
-            sh -c "/volume/build-musl.sh && chown -R $(id -u):$(id -g) ./target /root/.cargo/registry /root/.cargo/git"
+            sh -c "/volume/build-musl.sh"
 
       - name: Archive production artifact
         uses: actions/upload-artifact@v2

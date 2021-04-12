@@ -19,7 +19,25 @@ pub struct ConnectorBuilder {
 
 impl ConnectorBuilder {
     pub fn new() -> ConnectorBuilder {
-        let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+        let database_url = env::var("DATABASE_URL")
+            .ok()
+            .or_else(|| {
+                if let (Some(host), Some(port), Some(database), Some(user), Some(password)) = (
+                    env::var("DATABASE_HOST").ok(),
+                    env::var("DATABASE_PORT").ok(),
+                    env::var("DATABASE_NAME").ok(),
+                    env::var("DATABASE_USER").ok(),
+                    env::var("DATABASE_PASSWORD").ok(),
+                ) {
+                    Some(format!(
+                        "postgresql://{}:{}@{}:{}/{}",
+                        user, password, host, port, database
+                    ))
+                } else {
+                    None
+                }
+            })
+            .expect("DATABASE_URL must be set");
         let pool_size = env::var("DATABASE_POOL_SIZE")
             .ok()
             .and_then(|s| s.parse::<u32>().ok())
