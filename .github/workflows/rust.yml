@@ -51,6 +51,7 @@ jobs:
       - name: Build for MUSL
         run: |
           mkdir -p ~/.cargo/{git,registry}
+          mkdir -p $GITHUB_WORKSPACE/target
           docker pull clux/muslrust:stable
           docker run \
             -v ~/.cargo/registry:/root/.cargo/registry \
