@@ -3,7 +3,7 @@ pub mod error;
 
 use super::schema::update_metadata::dsl;
 use crate::connectors::Connectors;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Duration, Utc};
 use common::{
     ErrorUpdateMetadata, FinishedUpdateMetadata, LaunchUpdateMetadata, SyntheticGroupType,
     UpdateMetadata, UpdateStatus, UpdateSummary,
@@ -19,14 +19,21 @@ pub fn launch_update(
 ) -> Result<DateTime<Utc>, Error> {
     let connection = connectors.local.pool.get()?;
 
-    let already_launched = dsl::update_metadata
-        .select(diesel::dsl::count(dsl::id))
+    let launched_update_result = dsl::update_metadata
+        .select(dsl::updated_at)
         .filter(dsl::status.eq(UpdateStatus::Launched))
-        .first::<i64>(&connection)
-        .map(|count| count > 0)?;
+        .first::<DateTime<Utc>>(&connection);
 
-    if already_launched {
-        return Err(Error::AlreadyLaunched);
+    if let Ok(launched_updated_at) = launched_update_result {
+        if launched_updated_at.signed_duration_since(Utc::now()) <= Duration::hours(1) {
+            return Err(Error::AlreadyLaunched);
+        }
+
+        error_update(
+            connectors,
+            String::from("Process stopped automatically after being stucked."),
+            Utc::now(),
+        )?;
     }
 
     let launched_timestamp = Utc::now();
