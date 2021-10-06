@@ -7,7 +7,7 @@ use std::env;
 use std::net::ToSocketAddrs;
 use tracing::info;
 
-#[derive(Clap, Debug)]
+#[derive(clap::Args, Debug)]
 pub struct ServeFlags {
     /// Configure log level, you can set in environment variable as SIRENE_ENV
     #[clap(arg_enum, long = "env")]
@@ -30,7 +30,7 @@ pub struct ServeFlags {
     base_url: Option<String>,
 }
 
-#[derive(Clap, Debug)]
+#[derive(clap::ArgEnum, Debug)]
 enum CmdEnvironment {
     Development,
     Staging,

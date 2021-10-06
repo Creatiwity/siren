@@ -32,7 +32,7 @@ struct Opts {
     main_command: MainCommand,
 }
 
-#[derive(Clap, Debug)]
+#[derive(clap::Clap, Debug)]
 enum MainCommand {
     /// Update data from CSV source files
     #[clap(name = "update")]

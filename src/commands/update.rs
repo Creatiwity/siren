@@ -5,7 +5,7 @@ use crate::models::update_metadata::error_update;
 use crate::update::{common::Config, error::Error, update, update_step};
 use chrono::Utc;
 
-#[derive(Clap, Debug)]
+#[derive(clap::Clap, Debug)]
 pub struct UpdateFlags {
     /// Configure which part will be updated
     #[clap(arg_enum)]
@@ -23,7 +23,7 @@ pub struct UpdateFlags {
     subcmd: Option<UpdateSubCommand>,
 }
 
-#[derive(Clap, Debug)]
+#[derive(clap::Subcommand, Debug)]
 enum UpdateSubCommand {
     /// Download file in TEMP_FOLDER
     #[clap(name = "download-file")]
