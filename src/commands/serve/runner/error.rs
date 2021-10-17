@@ -1,6 +1,6 @@
 use crate::connectors::Error as ConnectorError;
 use crate::models::{etablissement, unite_legale, update_metadata};
-use crate::update::error::Error as InternalUpdateError;
+use crate::update::error::Error as InternalUpdate;
 use custom_error::custom_error;
 use serde::Serialize;
 use std::convert::Infallible;
@@ -9,15 +9,15 @@ use warp::{http::StatusCode, Rejection, Reply};
 
 custom_error! { pub Error
     InvalidData = "Invalid data",
-    MissingApiKeyError = "[Admin] Missing API key in configuration",
-    ApiKeyError = "[Admin] Wrong API key",
-    MissingBaseUrlForAsyncError = "[Admin] No BASE_URL configured, needed for asynchronous updates",
+    MissingApiKey = "[Admin] Missing API key in configuration",
+    ApiKey = "[Admin] Wrong API key",
+    MissingBaseUrlForAsync = "[Admin] No BASE_URL configured, needed for asynchronous updates",
     LocalConnectionFailed{source: r2d2::Error} = "Unable to connect to local database ({source}).",
-    UpdateConnectorError {source: ConnectorError} = "[Update] Error while creating connector: {source}",
-    UpdateError {source: InternalUpdateError} = "[Update] {source}",
-    UniteLegaleError {source: unite_legale::error::Error} = "[UniteLegale] {source}",
-    EtablissementError {source: etablissement::error::Error} = "[Etablissement] {source}",
-    StatusError {source: update_metadata::error::Error} = "[Status] {source}",
+    UpdateConnector {source: ConnectorError} = "[Update] Error while creating connector: {source}",
+    Update {source: InternalUpdate} = "[Update] {source}",
+    UniteLegale {source: unite_legale::error::Error} = "[UniteLegale] {source}",
+    Etablissement {source: etablissement::error::Error} = "[Etablissement] {source}",
+    Status {source: update_metadata::error::Error} = "[Status] {source}",
 }
 
 impl warp::reject::Reject for Error {}
@@ -29,8 +29,8 @@ impl From<ConnectorError> for Rejection {
     }
 }
 
-impl From<InternalUpdateError> for Rejection {
-    fn from(e: InternalUpdateError) -> Self {
+impl From<InternalUpdate> for Rejection {
+    fn from(e: InternalUpdate) -> Self {
         let error: Error = e.into();
         error.into()
     }
@@ -72,21 +72,21 @@ pub async fn handle_rejection(err: Rejection) -> Result<impl Reply, Infallible> 
         (
             match e {
                 Error::InvalidData => StatusCode::BAD_REQUEST,
-                Error::MissingApiKeyError => StatusCode::UNAUTHORIZED,
-                Error::ApiKeyError => StatusCode::UNAUTHORIZED,
-                Error::MissingBaseUrlForAsyncError => StatusCode::BAD_REQUEST,
+                Error::MissingApiKey => StatusCode::UNAUTHORIZED,
+                Error::ApiKey => StatusCode::UNAUTHORIZED,
+                Error::MissingBaseUrlForAsync => StatusCode::BAD_REQUEST,
                 Error::LocalConnectionFailed { source: _ } => StatusCode::INTERNAL_SERVER_ERROR,
-                Error::UpdateConnectorError { source: _ } => StatusCode::INTERNAL_SERVER_ERROR,
-                Error::UpdateError { source: _ } => StatusCode::INTERNAL_SERVER_ERROR,
-                Error::UniteLegaleError { source } => match source {
+                Error::UpdateConnector { source: _ } => StatusCode::INTERNAL_SERVER_ERROR,
+                Error::Update { source: _ } => StatusCode::INTERNAL_SERVER_ERROR,
+                Error::UniteLegale { source } => match source {
                     unite_legale::error::Error::UniteLegaleNotFound => StatusCode::NOT_FOUND,
                     _ => StatusCode::INTERNAL_SERVER_ERROR,
                 },
-                Error::EtablissementError { source } => match source {
+                Error::Etablissement { source } => match source {
                     etablissement::error::Error::EtablissementNotFound => StatusCode::NOT_FOUND,
                     _ => StatusCode::INTERNAL_SERVER_ERROR,
                 },
-                Error::StatusError { source } => match source {
+                Error::Status { source } => match source {
                     update_metadata::error::Error::MetadataNotFound => StatusCode::NOT_FOUND,
                     _ => StatusCode::INTERNAL_SERVER_ERROR,
                 },

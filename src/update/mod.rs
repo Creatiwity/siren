@@ -1,4 +1,5 @@
 use crate::connectors::Connectors;
+use crate::models::group_metadata::common::GroupType;
 use crate::models::update_metadata;
 use crate::models::update_metadata::common::{
     Step, SyntheticGroupType, UpdateMetadata, UpdateSummary,
@@ -47,7 +48,7 @@ async fn execute_workflow(
     connectors: &mut Connectors,
 ) -> Result<UpdateMetadata, Error> {
     // Execute workflow
-    let mut summary = UpdateSummary::new();
+    let mut summary = UpdateSummary::default();
 
     summary.start(
         connectors,
@@ -76,7 +77,7 @@ async fn execute_workflow(
         handle.await??;
     }
 
-    Ok(update_metadata::current_update(&connectors)?)
+    Ok(update_metadata::current_update(connectors)?)
 }
 
 async fn execute_workflow_thread(
@@ -89,10 +90,12 @@ async fn execute_workflow_thread(
     debug!("Starting");
 
     for step in workflow.into_iter() {
+        let groups: Vec<GroupType> = synthetic_group_type.into();
+
         execute_step(
             step,
             &config,
-            &synthetic_group_type.into(),
+            groups.as_slice(),
             &mut connectors,
             &mut summary.step_delegate(step),
         )
@@ -100,12 +103,12 @@ async fn execute_workflow_thread(
         .or_else(|error| {
             error!("Errored: {}", error.to_string());
 
-            update_metadata::error_update(&mut connectors, error.to_string(), Utc::now())?;
+            update_metadata::error_update(connectors, error.to_string(), Utc::now())?;
             Err(error)
         })?;
     }
 
-    summary.finish(&mut connectors)?;
+    summary.finish(connectors)?;
 
     debug!("Finished");
 

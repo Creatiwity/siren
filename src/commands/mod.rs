@@ -48,15 +48,15 @@ pub async fn run(builders: ConnectorsBuilders) {
 
     let temp_folder = opts
         .temp_folder
-        .unwrap_or_else(|| env::var("TEMP_FOLDER").unwrap_or(String::from("./data/temp")));
+        .unwrap_or_else(|| env::var("TEMP_FOLDER").unwrap_or_else(|_| String::from("./data/temp")));
 
-    let file_folder = opts
-        .file_folder
-        .unwrap_or_else(|| env::var("FILE_FOLDER").unwrap_or(String::from("./data/files")));
+    let file_folder = opts.file_folder.unwrap_or_else(|| {
+        env::var("FILE_FOLDER").unwrap_or_else(|_| String::from("./data/files"))
+    });
 
     let db_folder = opts
         .db_folder
-        .unwrap_or_else(|| env::var("DB_FOLDER").unwrap_or(file_folder.clone()));
+        .unwrap_or_else(|| env::var("DB_FOLDER").unwrap_or_else(|_| file_folder.clone()));
 
     let folder_options = FolderOptions {
         temp: temp_folder,

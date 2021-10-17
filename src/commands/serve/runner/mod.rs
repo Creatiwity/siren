@@ -27,15 +27,15 @@ fn index() -> &'static str {
 async fn update(options: UpdateOptions, context: Context) -> Result<impl Reply, Rejection> {
     let api_key = match &context.api_key {
         Some(key) => key,
-        None => return Err(Error::MissingApiKeyError.into()),
+        None => return Err(Error::MissingApiKey.into()),
     };
 
     if &options.api_key != api_key {
-        return Err(Error::ApiKeyError.into());
+        return Err(Error::ApiKey.into());
     }
 
     if options.asynchronous && context.base_url == None {
-        return Err(Error::MissingBaseUrlForAsyncError.into());
+        return Err(Error::MissingBaseUrlForAsync.into());
     }
 
     let mut connectors = context.builders.create_with_insee().await?;
@@ -60,11 +60,11 @@ async fn update(options: UpdateOptions, context: Context) -> Result<impl Reply, 
 async fn status(query: StatusQueryString, context: Context) -> Result<impl Reply, Rejection> {
     let api_key = match &context.api_key {
         Some(key) => key,
-        None => return Err(Error::MissingApiKeyError.into()),
+        None => return Err(Error::MissingApiKey.into()),
     };
 
     if &query.api_key != api_key {
-        return Err(Error::ApiKeyError.into());
+        return Err(Error::ApiKey.into());
     }
 
     let connectors = context.builders.create();
@@ -77,7 +77,7 @@ async fn status(query: StatusQueryString, context: Context) -> Result<impl Reply
 fn reply_with_update_metadata(
     update_metadata: &UpdateMetadata,
     base_url: Option<String>,
-    api_key: &String,
+    api_key: &str,
 ) -> Result<impl Reply, Rejection> {
     let status_code = match update_metadata.status.as_str() {
         "launched" => StatusCode::ACCEPTED,
@@ -109,11 +109,11 @@ async fn set_status_to_error(
 ) -> Result<impl Reply, Rejection> {
     let api_key = match &context.api_key {
         Some(key) => key,
-        None => return Err(Error::MissingApiKeyError.into()),
+        None => return Err(Error::MissingApiKey.into()),
     };
 
     if &query.api_key != api_key {
-        return Err(Error::ApiKeyError.into());
+        return Err(Error::ApiKey.into());
     }
 
     let connectors = context.builders.create();

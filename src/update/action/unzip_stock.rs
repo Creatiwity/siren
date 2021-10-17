@@ -86,23 +86,21 @@ impl Action for UnzipAction {
 
         if let Some(p) = csv_path.parent() {
             if !p.exists() {
-                create_dir_all(&p)
-                    .map_err(|io_error| Error::FileFolderCreationError { io_error })?;
+                create_dir_all(&p).map_err(|io_error| Error::FileFolderCreation { io_error })?;
             }
         }
 
-        let zip_file =
-            File::open(&zip_path).map_err(|io_error| Error::ZipOpenError { io_error })?;
-        let mut archive = zip::ZipArchive::new(zip_file)
-            .map_err(|zip_error| Error::ZipDecodeError { zip_error })?;
+        let zip_file = File::open(&zip_path).map_err(|io_error| Error::ZipOpen { io_error })?;
+        let mut archive =
+            zip::ZipArchive::new(zip_file).map_err(|zip_error| Error::ZipDecode { zip_error })?;
 
         if archive.len() != 1 {
-            return Err(Error::ZipFormatError);
+            return Err(Error::ZipFormat);
         }
 
         let mut zipped_csv_file = archive
             .by_index(0)
-            .map_err(|zip_error| Error::ZipAccessFileError { zip_error })?;
+            .map_err(|zip_error| Error::ZipAccessFile { zip_error })?;
 
         debug!(
             "Unzipping file {:#?} extracted to \"{}\" ({} bytes)",
@@ -112,9 +110,9 @@ impl Action for UnzipAction {
         );
 
         let mut csv_file =
-            File::create(&csv_path).map_err(|io_error| Error::FileCSVCreationError { io_error })?;
+            File::create(&csv_path).map_err(|io_error| Error::FileCSVCreation { io_error })?;
         io::copy(&mut zipped_csv_file, &mut csv_file)
-            .map_err(|io_error| Error::FileCSVCopyError { io_error })?;
+            .map_err(|io_error| Error::FileCSVCopy { io_error })?;
 
         // Get and Set permissions
         #[cfg(unix)]
@@ -122,7 +120,7 @@ impl Action for UnzipAction {
             use std::os::unix::fs::PermissionsExt;
             if let Some(mode) = zipped_csv_file.unix_mode() {
                 set_permissions(&csv_path, Permissions::from_mode(mode))
-                    .map_err(|io_error| Error::FileCSVPermissionError { io_error })?;
+                    .map_err(|io_error| Error::FileCSVPermission { io_error })?;
             }
         }
 

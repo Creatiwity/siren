@@ -110,23 +110,16 @@ pub struct InseePeriodeEtablissement {
 
 impl From<&InseeEtablissement> for Option<Etablissement> {
     fn from(u: &InseeEtablissement) -> Self {
-        match u
-            .periodes_etablissement
+        u.periodes_etablissement
             .iter()
             .find(|p| p.date_fin.is_none())
-        {
-            Some(periode) => {
-                // Convert
-                Some(
-                    InseeEtablissementWithPeriode {
-                        content: u.content.clone(),
-                        periode: periode.clone(),
-                    }
-                    .into(),
-                )
-            }
-            None => None,
-        }
+            .map(|periode| {
+                InseeEtablissementWithPeriode {
+                    content: u.content.clone(),
+                    periode: periode.clone(),
+                }
+                .into()
+            })
     }
 }
 
@@ -197,5 +190,5 @@ where
     D: serde::Deserializer<'de>,
 {
     let opt = Option::deserialize(deserializer)?;
-    Ok(opt.unwrap_or(String::from("F")))
+    Ok(opt.unwrap_or_else(|| String::from("F")))
 }

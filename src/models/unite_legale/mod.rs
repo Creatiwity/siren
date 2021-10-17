@@ -13,7 +13,7 @@ use diesel::prelude::*;
 use diesel::sql_query;
 use error::Error;
 
-pub fn get(connection: &Connection, siren: &String) -> Result<UniteLegale, Error> {
+pub fn get(connection: &Connection, siren: &str) -> Result<UniteLegale, Error> {
     dsl::unite_legale
         .find(siren)
         .first::<UniteLegale>(connection)

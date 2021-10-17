@@ -38,13 +38,13 @@ impl Action for DownloadAction {
             .connect_timeout(Duration::from_secs(10))
             .timeout(Duration::from_secs(3600))
             .build()
-            .map_err(|req_error| Error::DownloadError { req_error })?;
+            .map_err(|req_error| Error::Download { req_error })?;
 
         let resp = client
             .get(&metadata.url)
             .send()
             .await
-            .map_err(|req_error| Error::DownloadError { req_error })?;
+            .map_err(|req_error| Error::Download { req_error })?;
 
         // Decode Last-Modified header
         let last_modified_str = resp
@@ -94,7 +94,7 @@ impl Action for DownloadAction {
 
         // Create temp path
         create_dir_all(self.temp_folder.clone())
-            .map_err(|io_error| Error::TempFolderCreationError { io_error })?;
+            .map_err(|io_error| Error::TempFolderCreation { io_error })?;
 
         // Get Zip path
         let mut zip_path = PathBuf::from(self.temp_folder.clone());
@@ -104,7 +104,7 @@ impl Action for DownloadAction {
         // Create an output file into which we will save current stock.
         let mut outfile = File::create(zip_path)
             .await
-            .map_err(|io_error| Error::FileCreationError { io_error })?;
+            .map_err(|io_error| Error::FileCreation { io_error })?;
 
         let mut stream = resp
             .bytes_stream() // Convert the body of the response into a futures::io::Stream.
@@ -115,7 +115,7 @@ impl Action for DownloadAction {
         // Invoke tokio::io::copy to actually perform the download.
         tokio::io::copy(&mut stream, &mut outfile)
             .await
-            .map_err(|io_error| Error::FileCopyError { io_error })?;
+            .map_err(|io_error| Error::FileCopy { io_error })?;
 
         debug!("Download of {:#?} finished", group_type);
 
