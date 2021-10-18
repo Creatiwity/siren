@@ -3,7 +3,7 @@ mod serve;
 mod update;
 
 use crate::connectors::ConnectorsBuilders;
-use clap::Clap;
+use clap::Parser;
 use common::FolderOptions;
 use serve::ServeFlags;
 use std::env;
@@ -11,7 +11,7 @@ use update::UpdateFlags;
 
 /// Sirene service used to update data in database
 /// and serve it through a HTTP REST API
-#[derive(Clap, Debug)]
+#[derive(Parser, Debug)]
 #[clap(version = "2.2.0", author = "Julien Blatecky")]
 struct Opts {
     /// Path to the temp folder, you can set in environment variable as TEMP_FOLDER
@@ -32,7 +32,7 @@ struct Opts {
     main_command: MainCommand,
 }
 
-#[derive(clap::Clap, Debug)]
+#[derive(clap::Parser, Debug)]
 enum MainCommand {
     /// Update data from CSV source files
     #[clap(name = "update")]

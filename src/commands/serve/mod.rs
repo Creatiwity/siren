@@ -30,7 +30,7 @@ pub struct ServeFlags {
     base_url: Option<String>,
 }
 
-#[derive(clap::ArgEnum, Debug)]
+#[derive(clap::ArgEnum, Clone, Debug)]
 enum CmdEnvironment {
     Development,
     Staging,
