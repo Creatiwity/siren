@@ -22,7 +22,7 @@ serde_json = "1.0"
 tokio = { version = "1.12", features = ["macros", "io-util", "fs", "rt-multi-thread", "time"] }
 tokio-util = { version = "0.6", features = ["compat"] }
 tracing = "0.1"
-tracing-subscriber = "0.2"
+tracing-subscriber = "0.3"
 warp = { version = "0.3", default-features = false }
 zip = "0.5"
 
