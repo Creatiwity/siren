@@ -2,7 +2,7 @@
 name = "sirene"
 version = "2.2.0"
 authors = ["Julien Blatecky <julien.blatecky@creatiwity.net>"]
-edition = "2018"
+edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -19,10 +19,10 @@ r2d2 = "0.8"
 reqwest = { version = "0.11", features = ["json", "stream"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-tokio = { version = "1.12", features = ["macros", "io-util", "fs", "rt-multi-thread", "time"] }
+tokio = { version = "1.14", features = ["macros", "io-util", "fs", "rt-multi-thread", "time"] }
 tokio-util = { version = "0.6", features = ["compat"] }
 tracing = "0.1"
-tracing-subscriber = "0.2"
+tracing-subscriber = "0.3"
 warp = { version = "0.3", default-features = false }
 zip = "0.5"
 
