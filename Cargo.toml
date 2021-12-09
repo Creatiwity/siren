@@ -9,7 +9,7 @@ edition = "2021"
 [dependencies]
 async-trait = "0.1"
 chrono = { version = "0.4", features = ["serde"] }
-clap = "3.0.0-beta"
+clap = "3.0.0-rc.0"
 custom_error = "1.9"
 diesel = { version = "1.4", features = ["postgres", "chrono", "r2d2", "serde_json", "64-column-tables"] }
 diesel_migrations = { version = "1.4", features = ["postgres"] }
