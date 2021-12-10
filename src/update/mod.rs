@@ -84,7 +84,7 @@ async fn execute_workflow_thread(
     workflow: Vec<Step>,
     synthetic_group_type: SyntheticGroupType,
     config: Config,
-    mut connectors: &mut Connectors,
+    connectors: &mut Connectors,
     mut summary: UpdateSummary,
 ) -> Result<(), Error> {
     debug!("Starting");
@@ -96,7 +96,7 @@ async fn execute_workflow_thread(
             step,
             &config,
             groups.as_slice(),
-            &mut connectors,
+            connectors,
             &mut summary.step_delegate(step),
         )
         .await

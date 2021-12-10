@@ -94,18 +94,13 @@ pub struct InseePeriodeEtablissement {
     date_debut: Option<NaiveDate>,
     #[serde(deserialize_with = "deserialize_etat_administratif")]
     etat_administratif_etablissement: String,
-    changement_etat_administratif_etablissement: bool,
     enseigne1_etablissement: Option<String>,
     enseigne2_etablissement: Option<String>,
     enseigne3_etablissement: Option<String>,
-    changement_enseigne_etablissement: bool,
     denomination_usuelle_etablissement: Option<String>,
-    changement_denomination_usuelle_etablissement: bool,
     activite_principale_etablissement: Option<String>,
     nomenclature_activite_principale_etablissement: Option<String>,
-    changement_activite_principale_etablissement: bool,
     caractere_employeur_etablissement: Option<String>,
-    changement_caractere_employeur_etablissement: bool,
 }
 
 impl From<&InseeEtablissement> for Option<Etablissement> {
