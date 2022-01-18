@@ -17,8 +17,8 @@ pub struct SummaryGroupDelegate<'a, 'b> {
     step_delegate: &'b mut SummaryStepDelegate<'a>,
 }
 
-impl UpdateSummary {
-    pub fn new() -> Self {
+impl Default for UpdateSummary {
+    fn default() -> Self {
         UpdateSummary {
             steps: vec![],
             updated: false,
@@ -26,8 +26,10 @@ impl UpdateSummary {
             finished_timestamp: None,
         }
     }
+}
 
-    pub fn step_delegate<'a>(&'a mut self, step: Step) -> SummaryStepDelegate<'a> {
+impl UpdateSummary {
+    pub fn step_delegate(&'_ mut self, step: Step) -> SummaryStepDelegate<'_> {
         let step_summary = UpdateStepSummary {
             step,
             updated: false,
@@ -61,7 +63,7 @@ impl UpdateSummary {
 
     pub fn finish(&mut self, connectors: &Connectors) -> Result<(), Error> {
         self.finished_timestamp = Some(Utc::now());
-        self.updated = self.steps.iter().find(|s| s.updated).is_some();
+        self.updated = self.steps.iter().any(|s| s.updated);
 
         update_metadata::finished_update(connectors, self.clone()).map(|_| Ok(()))?
     }
@@ -97,7 +99,7 @@ impl<'a> SummaryStepDelegate<'a> {
     pub fn finish(&mut self, connectors: &Connectors) -> Result<(), Error> {
         if let Some(step_summary) = self.summary.steps.first_mut() {
             step_summary.finished_timestamp = Some(Utc::now());
-            step_summary.updated = step_summary.groups.iter().find(|g| g.updated).is_some();
+            step_summary.updated = step_summary.groups.iter().any(|g| g.updated);
         }
 
         update_metadata::progress_update(connectors, self.summary.clone()).map(|_| Ok(()))?

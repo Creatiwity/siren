@@ -13,27 +13,21 @@ use diesel::prelude::*;
 use diesel::sql_query;
 use error::Error;
 
-pub fn get(connection: &Connection, siret: &String) -> Result<Etablissement, Error> {
+pub fn get(connection: &Connection, siret: &str) -> Result<Etablissement, Error> {
     dsl::etablissement
         .find(siret)
         .first::<Etablissement>(connection)
         .map_err(|error| error.into())
 }
 
-pub fn get_with_siren(
-    connection: &Connection,
-    siren: &String,
-) -> Result<Vec<Etablissement>, Error> {
+pub fn get_with_siren(connection: &Connection, siren: &str) -> Result<Vec<Etablissement>, Error> {
     dsl::etablissement
         .filter(dsl::siren.eq(siren))
         .load::<Etablissement>(connection)
         .map_err(|error| error.into())
 }
 
-pub fn get_siege_with_siren(
-    connection: &Connection,
-    siren: &String,
-) -> Result<Etablissement, Error> {
+pub fn get_siege_with_siren(connection: &Connection, siren: &str) -> Result<Etablissement, Error> {
     dsl::etablissement
         .filter(dsl::siren.eq(siren).and(dsl::etablissement_siege.eq(true)))
         .first::<Etablissement>(connection)

@@ -12,7 +12,6 @@ mod update;
 
 use connectors::ConnectorsBuilders;
 use dotenv::dotenv;
-use tracing_subscriber;
 
 #[tokio::main]
 async fn main() {

@@ -97,23 +97,16 @@ pub struct PeriodeInseeUniteLegale {
 
 impl From<&InseeUniteLegale> for Option<UniteLegale> {
     fn from(u: &InseeUniteLegale) -> Self {
-        match u
-            .periodes_unite_legale
+        u.periodes_unite_legale
             .iter()
             .find(|p| p.date_fin.is_none())
-        {
-            Some(periode) => {
-                // Convert
-                Some(
-                    InseeUniteLegaleWithPeriode {
-                        content: u.content.clone(),
-                        periode: periode.clone(),
-                    }
-                    .into(),
-                )
-            }
-            None => None,
-        }
+            .map(|periode| {
+                InseeUniteLegaleWithPeriode {
+                    content: u.content.clone(),
+                    periode: periode.clone(),
+                }
+                .into()
+            })
     }
 }
 
@@ -164,5 +157,5 @@ where
     D: serde::Deserializer<'de>,
 {
     let opt = Option::deserialize(deserializer)?;
-    Ok(opt.unwrap_or(String::from("C")))
+    Ok(opt.unwrap_or_else(|| String::from("C")))
 }

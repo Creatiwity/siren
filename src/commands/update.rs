@@ -5,7 +5,7 @@ use crate::models::update_metadata::error_update;
 use crate::update::{common::Config, error::Error, update, update_step};
 use chrono::Utc;
 
-#[derive(clap::Clap, Debug)]
+#[derive(clap::Parser, Debug)]
 pub struct UpdateFlags {
     /// Configure which part will be updated
     #[clap(arg_enum)]

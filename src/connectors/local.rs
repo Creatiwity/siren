@@ -48,7 +48,7 @@ impl ConnectorBuilder {
             pool: Pool::builder()
                 .max_size(pool_size)
                 .build(manager)
-                .expect(&format!("Error connecting to {}", database_url)),
+                .unwrap_or_else(|_| panic!("Error connecting to {}", database_url)),
         };
 
         let connection = builder

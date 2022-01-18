@@ -1,4 +1,4 @@
-use super::error::InseeUpdateError;
+use super::error::InseeUpdate;
 use super::types::{
     etablissement::InseeEtablissementResponse, unite_legale::InseeUniteLegaleResponse,
     InseeCountQueryParams, InseeCountResponse, InseeQueryParams, InseeResponse,
@@ -48,7 +48,7 @@ impl Connector {
     pub async fn get_total_unites_legales(
         &mut self,
         start_timestamp: NaiveDateTime,
-    ) -> Result<u32, InseeUpdateError> {
+    ) -> Result<u32, InseeUpdate> {
         self.wait_for_insee_limitation().await;
 
         get_total(&self.client, &UNITES_LEGALES_ENDPOINT, start_timestamp).await
@@ -57,7 +57,7 @@ impl Connector {
     pub async fn get_total_etablissements(
         &mut self,
         start_timestamp: NaiveDateTime,
-    ) -> Result<u32, InseeUpdateError> {
+    ) -> Result<u32, InseeUpdate> {
         self.wait_for_insee_limitation().await;
 
         get_total(&self.client, &ETABLISSEMENTS_ENDPOINT, start_timestamp).await
@@ -67,7 +67,7 @@ impl Connector {
         &mut self,
         start_timestamp: NaiveDateTime,
         cursor: String,
-    ) -> Result<(Option<String>, Vec<UniteLegale>), InseeUpdateError> {
+    ) -> Result<(Option<String>, Vec<UniteLegale>), InseeUpdate> {
         self.wait_for_insee_limitation().await;
 
         let (next_cursor, response) = get_daily_data::<InseeUniteLegaleResponse>(
@@ -95,7 +95,7 @@ impl Connector {
         &mut self,
         start_timestamp: NaiveDateTime,
         cursor: String,
-    ) -> Result<(Option<String>, Vec<Etablissement>), InseeUpdateError> {
+    ) -> Result<(Option<String>, Vec<Etablissement>), InseeUpdate> {
         self.wait_for_insee_limitation().await;
 
         let (next_cursor, response) = get_daily_data::<InseeEtablissementResponse>(
@@ -125,7 +125,7 @@ async fn get_daily_data<T: InseeResponse>(
     config: &EndpointConfig,
     start_timestamp: NaiveDateTime,
     cursor: String,
-) -> Result<(Option<String>, Option<T>), InseeUpdateError> {
+) -> Result<(Option<String>, Option<T>), InseeUpdate> {
     let url = format!("{}/{}", BASE_URL, config.route);
 
     let response = match client
@@ -144,7 +144,7 @@ async fn get_daily_data<T: InseeResponse>(
         .await?
         .error_for_status()
     {
-        Ok(response) => response.json::<T>().await.map_err(|error| error.into()),
+        Ok(response) => response.json::<T>().await.map_err(|error| error),
         Err(error) => {
             // Insee returns 404 for empty data
             if let Some(status) = error.status() {
@@ -171,7 +171,7 @@ async fn get_total(
     client: &reqwest::Client,
     config: &EndpointConfig,
     start_timestamp: NaiveDateTime,
-) -> Result<u32, InseeUpdateError> {
+) -> Result<u32, InseeUpdate> {
     let url = format!("{}/{}", BASE_URL, config.route);
 
     let response = client

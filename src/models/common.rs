@@ -1,4 +1,4 @@
-use crate::connectors::insee::error::InseeUpdateError;
+use crate::connectors::insee::error::InseeUpdate;
 use crate::connectors::Connectors;
 use async_trait::async_trait;
 use chrono::NaiveDateTime;
@@ -29,7 +29,7 @@ pub trait UpdatableModel: Sync + Send {
 
 custom_error! { pub Error
     LocalConnectionFailed{source: r2d2::Error} = "Unable to connect to local database ({source}).",
-    DatabaseError{source: diesel::result::Error} = "Unable to run some operations on updatable model ({source}).",
-    UpdateError {source: InseeUpdateError} = "{source}",
+    Database{source: diesel::result::Error} = "Unable to run some operations on updatable model ({source}).",
+    Update {source: InseeUpdate} = "{source}",
     MissingInseeConnector = "Missing required Insee connector",
 }

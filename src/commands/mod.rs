@@ -3,36 +3,35 @@ mod serve;
 mod update;
 
 use crate::connectors::ConnectorsBuilders;
-use clap::Clap;
+use clap::Parser;
 use common::FolderOptions;
 use serve::ServeFlags;
-use std::env;
 use update::UpdateFlags;
 
 /// Sirene service used to update data in database
 /// and serve it through a HTTP REST API
-#[derive(Clap, Debug)]
-#[clap(version = "2.2.0", author = "Julien Blatecky")]
+#[derive(Parser, Debug)]
+#[clap(version = "2.3.0", author = "Julien Blatecky")]
 struct Opts {
-    /// Path to the temp folder, you can set in environment variable as TEMP_FOLDER
-    #[clap(long = "temp-folder")]
-    temp_folder: Option<String>,
+    /// Path to the temp folder
+    #[clap(long = "temp-folder", env, default_value = "./data/temp")]
+    temp_folder: String,
 
-    /// Path to the file storage folder for this app, you can set in environment variable as FILE_FOLDER
-    #[clap(long = "file-folder")]
-    file_folder: Option<String>,
+    /// Path to the file storage folder for this app
+    #[clap(long = "file-folder", env, default_value = "./data/files")]
+    file_folder: String,
 
-    /// Path to the file storage folder for the database, you can set in environment variable as DB_FOLDER.
+    /// Path to the file storage folder for the database.
     /// Could be the same as FILE_FOLDER if this app and the database are on the same file system.
     /// Files copied by this app inside FILE_FOLDER must be visible by the database in DB_FOLDER
-    #[clap(long = "db-folder")]
-    db_folder: Option<String>,
+    #[clap(long = "db-folder", env, default_value = "./data/files")]
+    db_folder: String,
 
     #[clap(subcommand)]
     main_command: MainCommand,
 }
 
-#[derive(clap::Clap, Debug)]
+#[derive(clap::Parser, Debug)]
 enum MainCommand {
     /// Update data from CSV source files
     #[clap(name = "update")]
@@ -46,22 +45,10 @@ enum MainCommand {
 pub async fn run(builders: ConnectorsBuilders) {
     let opts = Opts::parse();
 
-    let temp_folder = opts
-        .temp_folder
-        .unwrap_or_else(|| env::var("TEMP_FOLDER").unwrap_or(String::from("./data/temp")));
-
-    let file_folder = opts
-        .file_folder
-        .unwrap_or_else(|| env::var("FILE_FOLDER").unwrap_or(String::from("./data/files")));
-
-    let db_folder = opts
-        .db_folder
-        .unwrap_or_else(|| env::var("DB_FOLDER").unwrap_or(file_folder.clone()));
-
     let folder_options = FolderOptions {
-        temp: temp_folder,
-        file: file_folder,
-        db: db_folder,
+        temp: opts.temp_folder,
+        file: opts.file_folder,
+        db: opts.db_folder,
     };
 
     match opts.main_command {

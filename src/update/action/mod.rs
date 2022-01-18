@@ -17,7 +17,7 @@ pub mod unzip_stock;
 pub async fn execute_step<'a>(
     step: Step,
     config: &Config,
-    groups: &Vec<GroupType>,
+    groups: &[GroupType],
     connectors: &mut Connectors,
     summary_delegate: &'a mut SummaryStepDelegate<'a>,
 ) -> Result<(), Error> {
