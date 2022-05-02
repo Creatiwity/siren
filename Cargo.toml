@@ -1,6 +1,6 @@
 [package]
 name = "sirene"
-version = "2.4.0"
+version = "2.4.1"
 authors = ["Julien Blatecky <julien.blatecky@creatiwity.net>"]
 edition = "2021"
 
