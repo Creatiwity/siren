@@ -31,5 +31,6 @@ activite_principale,
 nomenclature_activite_principale,
 nic_siege,
 economie_sociale_solidaire,
-caractere_employeur
+caractere_employeur,
+societe_mission
 "#;
