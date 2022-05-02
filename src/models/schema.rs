@@ -156,6 +156,7 @@ table! {
         nic_siege -> Nullable<Text>,
         economie_sociale_solidaire -> Nullable<Text>,
         caractere_employeur -> Nullable<Varchar>,
+        societe_mission -> Nullable<Varchar>,
     }
 }
 
@@ -194,6 +195,7 @@ table! {
         nic_siege -> Nullable<Text>,
         economie_sociale_solidaire -> Nullable<Text>,
         caractere_employeur -> Nullable<Varchar>,
+        societe_mission -> Nullable<Varchar>,
     }
 }
 

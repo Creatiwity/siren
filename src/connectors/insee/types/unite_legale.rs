@@ -93,6 +93,7 @@ pub struct PeriodeInseeUniteLegale {
     pub changement_economie_sociale_solidaire_unite_legale: bool,
     pub caractere_employeur_unite_legale: Option<String>,
     pub changement_caractere_employeur_unite_legale: bool,
+    pub societe_mission_unite_legale: Option<String>,
 }
 
 impl From<&InseeUniteLegale> for Option<UniteLegale> {
@@ -148,6 +149,7 @@ impl From<InseeUniteLegaleWithPeriode> for UniteLegale {
             nic_siege: u.periode.nic_siege_unite_legale,
             economie_sociale_solidaire: u.periode.economie_sociale_solidaire_unite_legale,
             caractere_employeur: u.periode.caractere_employeur_unite_legale,
+            societe_mission: u.periode.societe_mission_unite_legale,
         }
     }
 }
