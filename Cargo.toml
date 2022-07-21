@@ -9,7 +9,7 @@ edition = "2021"
 [dependencies]
 async-trait = "0.1"
 chrono = { version = "0.4", features = ["serde"] }
-clap = { version = "3.1", features = ["derive", "env"] }
+clap = { version = "3.2", features = ["derive", "env"] }
 custom_error = "1.9"
 diesel = { version = "1.4", features = ["postgres", "chrono", "r2d2", "serde_json", "64-column-tables"] }
 diesel_migrations = { version = "1.4", features = ["postgres"] }
@@ -19,7 +19,7 @@ r2d2 = "0.8"
 reqwest = { version = "0.11", features = ["json", "stream"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-tokio = { version = "1.18", features = ["macros", "io-util", "fs", "rt-multi-thread", "time"] }
+tokio = { version = "1.20", features = ["macros", "io-util", "fs", "rt-multi-thread", "time"] }
 tokio-util = { version = "0.7", features = ["compat"] }
 tracing = "0.1"
 tracing-subscriber = "0.3"
