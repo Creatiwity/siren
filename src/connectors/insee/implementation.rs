@@ -144,7 +144,7 @@ async fn get_daily_data<T: InseeResponse>(
         .await?
         .error_for_status()
     {
-        Ok(response) => response.json::<T>().await.map_err(|error| error),
+        Ok(response) => response.json::<T>().await,
         Err(error) => {
             // Insee returns 404 for empty data
             if let Some(status) = error.status() {
