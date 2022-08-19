@@ -1,3 +1,5 @@
+use diesel::prelude::*;
+
 table! {
     etablissement (siret) {
         siret -> Varchar,

@@ -13,21 +13,21 @@ use diesel::prelude::*;
 use diesel::sql_query;
 use error::Error;
 
-pub fn get(connection: &Connection, siret: &str) -> Result<Etablissement, Error> {
+pub fn get(connection: &mut Connection, siret: &str) -> Result<Etablissement, Error> {
     dsl::etablissement
         .find(siret)
         .first::<Etablissement>(connection)
         .map_err(|error| error.into())
 }
 
-pub fn get_with_siren(connection: &Connection, siren: &str) -> Result<Vec<Etablissement>, Error> {
+pub fn get_with_siren(connection: &mut Connection, siren: &str) -> Result<Vec<Etablissement>, Error> {
     dsl::etablissement
         .filter(dsl::siren.eq(siren))
         .load::<Etablissement>(connection)
         .map_err(|error| error.into())
 }
 
-pub fn get_siege_with_siren(connection: &Connection, siren: &str) -> Result<Etablissement, Error> {
+pub fn get_siege_with_siren(connection: &mut Connection, siren: &str) -> Result<Etablissement, Error> {
     dsl::etablissement
         .filter(dsl::siren.eq(siren).and(dsl::etablissement_siege.eq(true)))
         .first::<Etablissement>(connection)
@@ -39,20 +39,20 @@ pub struct EtablissementModel {}
 #[async_trait]
 impl UpdatableModel for EtablissementModel {
     fn count(&self, connectors: &Connectors) -> Result<i64, UpdatableError> {
-        let connection = connectors.local.pool.get()?;
+        let mut connection = connectors.local.pool.get()?;
         dsl::etablissement
             .select(diesel::dsl::count(dsl::siret))
-            .first::<i64>(&connection)
+            .first::<i64>(&mut connection)
             .map_err(|error| error.into())
     }
 
     fn count_staging(&self, connectors: &Connectors) -> Result<i64, UpdatableError> {
         use super::schema::etablissement_staging::dsl;
 
-        let connection = connectors.local.pool.get()?;
+        let mut connection = connectors.local.pool.get()?;
         dsl::etablissement_staging
             .select(diesel::dsl::count(dsl::siret))
-            .first::<i64>(&connection)
+            .first::<i64>(&mut connection)
             .map_err(|error| error.into())
     }
 
@@ -61,29 +61,29 @@ impl UpdatableModel for EtablissementModel {
         connectors: &Connectors,
         file_path: String,
     ) -> Result<bool, UpdatableError> {
-        let connection = connectors.local.pool.get()?;
-        sql_query("TRUNCATE etablissement_staging").execute(&connection)?;
+        let mut connection = connectors.local.pool.get()?;
+        sql_query("TRUNCATE etablissement_staging").execute(&mut connection)?;
         let query = format!(
             "COPY etablissement_staging({}) FROM '{}' DELIMITER ',' CSV HEADER",
             columns::COLUMNS,
             file_path
         );
         sql_query(query)
-            .execute(&connection)
+            .execute(&mut connection)
             .map(|count| count > 0)
             .map_err(|error| error.into())
     }
 
     fn swap(&self, connectors: &Connectors) -> Result<(), UpdatableError> {
-        let connection = connectors.local.pool.get()?;
-        connection.build_transaction().read_write().run(|| {
+        let mut connection = connectors.local.pool.get()?;
+        connection.build_transaction().read_write().run(|conn| {
             sql_query("ALTER TABLE etablissement RENAME TO etablissement_temp")
-                .execute(&connection)?;
+                .execute(conn)?;
             sql_query("ALTER TABLE etablissement_staging RENAME TO etablissement")
-                .execute(&connection)?;
+                .execute(conn)?;
             sql_query("ALTER TABLE etablissement_temp RENAME TO etablissement_staging")
-                .execute(&connection)?;
-            sql_query("TRUNCATE etablissement_staging").execute(&connection)?;
+                .execute(conn)?;
+            sql_query("TRUNCATE etablissement_staging").execute(conn)?;
             sql_query(
                 r#"
             UPDATE group_metadata
@@ -91,7 +91,7 @@ impl UpdatableModel for EtablissementModel {
             WHERE group_type = 'etablissements'
             "#,
             )
-            .execute(&connection)?;
+            .execute(conn)?;
             sql_query(
                 r#"
             UPDATE group_metadata
@@ -99,7 +99,7 @@ impl UpdatableModel for EtablissementModel {
             WHERE group_type = 'etablissements'
             "#,
             )
-            .execute(&connection)?;
+            .execute(conn)?;
 
             Ok(())
         })
@@ -123,12 +123,12 @@ impl UpdatableModel for EtablissementModel {
         &self,
         connectors: &Connectors,
     ) -> Result<Option<NaiveDateTime>, UpdatableError> {
-        let connection = connectors.local.pool.get()?;
+        let mut connection = connectors.local.pool.get()?;
         dsl::etablissement
             .select(dsl::date_dernier_traitement)
             .order(dsl::date_dernier_traitement.desc())
             .filter(dsl::date_dernier_traitement.is_not_null())
-            .first::<Option<NaiveDateTime>>(&connection)
+            .first::<Option<NaiveDateTime>>(&mut connection)
             .map_err(|error| error.into())
     }
 
@@ -147,7 +147,7 @@ impl UpdatableModel for EtablissementModel {
             .get_daily_etablissements(start_timestamp, cursor)
             .await?;
 
-        let connection = connectors.local.pool.get()?;
+        let mut connection = connectors.local.pool.get()?;
 
         let updated_count = diesel::insert_into(dsl::etablissement)
             .values(&etablissements)
@@ -204,7 +204,7 @@ impl UpdatableModel for EtablissementModel {
                     .eq(excluded(dsl::nomenclature_activite_principale)),
                 dsl::caractere_employeur.eq(excluded(dsl::caractere_employeur)),
             ))
-            .execute(&connection)?;
+            .execute(&mut connection)?;
 
         Ok((next_cursor, updated_count))
     }

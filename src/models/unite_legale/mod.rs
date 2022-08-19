@@ -13,7 +13,7 @@ use diesel::prelude::*;
 use diesel::sql_query;
 use error::Error;
 
-pub fn get(connection: &Connection, siren: &str) -> Result<UniteLegale, Error> {
+pub fn get(connection: &mut Connection, siren: &str) -> Result<UniteLegale, Error> {
     dsl::unite_legale
         .find(siren)
         .first::<UniteLegale>(connection)
@@ -25,20 +25,20 @@ pub struct UniteLegaleModel {}
 #[async_trait]
 impl UpdatableModel for UniteLegaleModel {
     fn count(&self, connectors: &Connectors) -> Result<i64, UpdatableError> {
-        let connection = connectors.local.pool.get()?;
+        let mut connection = connectors.local.pool.get()?;
         dsl::unite_legale
             .select(diesel::dsl::count(dsl::siren))
-            .first::<i64>(&connection)
+            .first::<i64>(&mut connection)
             .map_err(|error| error.into())
     }
 
     fn count_staging(&self, connectors: &Connectors) -> Result<i64, UpdatableError> {
         use super::schema::unite_legale_staging::dsl;
 
-        let connection = connectors.local.pool.get()?;
+        let mut connection = connectors.local.pool.get()?;
         dsl::unite_legale_staging
             .select(diesel::dsl::count(dsl::siren))
-            .first::<i64>(&connection)
+            .first::<i64>(&mut connection)
             .map_err(|error| error.into())
     }
 
@@ -47,29 +47,29 @@ impl UpdatableModel for UniteLegaleModel {
         connectors: &Connectors,
         file_path: String,
     ) -> Result<bool, UpdatableError> {
-        let connection = connectors.local.pool.get()?;
-        sql_query("TRUNCATE unite_legale_staging").execute(&connection)?;
+        let mut connection = connectors.local.pool.get()?;
+        sql_query("TRUNCATE unite_legale_staging").execute(&mut connection)?;
         let query = format!(
             "COPY unite_legale_staging({}) FROM '{}' DELIMITER ',' CSV HEADER",
             columns::COLUMNS,
             file_path
         );
         sql_query(query)
-            .execute(&connection)
+            .execute(&mut connection)
             .map(|count| count > 0)
             .map_err(|error| error.into())
     }
 
     fn swap(&self, connectors: &Connectors) -> Result<(), UpdatableError> {
-        let connection = connectors.local.pool.get()?;
-        connection.build_transaction().read_write().run(|| {
+        let mut connection = connectors.local.pool.get()?;
+        connection.build_transaction().read_write().run(|conn| {
             sql_query("ALTER TABLE unite_legale RENAME TO unite_legale_temp")
-                .execute(&connection)?;
+                .execute(conn)?;
             sql_query("ALTER TABLE unite_legale_staging RENAME TO unite_legale")
-                .execute(&connection)?;
+                .execute(conn)?;
             sql_query("ALTER TABLE unite_legale_temp RENAME TO unite_legale_staging")
-                .execute(&connection)?;
-            sql_query("TRUNCATE unite_legale_staging").execute(&connection)?;
+                .execute(conn)?;
+            sql_query("TRUNCATE unite_legale_staging").execute(conn)?;
             sql_query(
                 r#"
                 UPDATE group_metadata
@@ -77,7 +77,7 @@ impl UpdatableModel for UniteLegaleModel {
                 WHERE group_type = 'unites_legales'
                 "#,
             )
-            .execute(&connection)?;
+            .execute(conn)?;
             sql_query(
                 r#"
                 UPDATE group_metadata
@@ -85,7 +85,7 @@ impl UpdatableModel for UniteLegaleModel {
                 WHERE group_type = 'unites_legales'
                 "#,
             )
-            .execute(&connection)?;
+            .execute(conn)?;
 
             Ok(())
         })
@@ -109,12 +109,12 @@ impl UpdatableModel for UniteLegaleModel {
         &self,
         connectors: &Connectors,
     ) -> Result<Option<NaiveDateTime>, UpdatableError> {
-        let connection = connectors.local.pool.get()?;
+        let mut connection = connectors.local.pool.get()?;
         dsl::unite_legale
             .select(dsl::date_dernier_traitement)
             .order(dsl::date_dernier_traitement.desc())
             .filter(dsl::date_dernier_traitement.is_not_null())
-            .first::<Option<NaiveDateTime>>(&connection)
+            .first::<Option<NaiveDateTime>>(&mut connection)
             .map_err(|error| error.into())
     }
 
@@ -133,7 +133,7 @@ impl UpdatableModel for UniteLegaleModel {
             .get_daily_unites_legales(start_timestamp, cursor)
             .await?;
 
-        let connection = connectors.local.pool.get()?;
+        let mut connection = connectors.local.pool.get()?;
 
         let updated_count = diesel::insert_into(dsl::unite_legale)
             .values(&unites_legales)
@@ -174,7 +174,7 @@ impl UpdatableModel for UniteLegaleModel {
                 dsl::economie_sociale_solidaire.eq(excluded(dsl::economie_sociale_solidaire)),
                 dsl::caractere_employeur.eq(excluded(dsl::caractere_employeur)),
             ))
-            .execute(&connection)?;
+            .execute(&mut connection)?;
 
         Ok((next_cursor, updated_count))
     }
