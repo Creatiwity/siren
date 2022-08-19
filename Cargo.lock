@@ -1300,7 +1300,6 @@ dependencies = [
  "diesel_migrations",
  "dotenv",
  "futures",
- "openssl",
  "r2d2",
  "reqwest",
  "serde",

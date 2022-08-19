@@ -1,6 +1,4 @@
 #![recursion_limit = "256"]
-#[cfg(any(target_os = "unix", target_os = "linux"))]
-extern crate openssl; // Should be before diesel
 
 mod commands;
 mod connectors;
