@@ -8,7 +8,7 @@ pub struct FolderOptions {
     pub db: String,
 }
 
-#[derive(clap::ArgEnum, Debug, Deserialize, Clone, Copy)]
+#[derive(clap::ValueEnum, Debug, Deserialize, Clone, Copy)]
 pub enum CmdGroupType {
     UnitesLegales,
     Etablissements,

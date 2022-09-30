@@ -9,7 +9,7 @@ use tracing::info;
 #[derive(clap::Args, Debug)]
 pub struct ServeFlags {
     /// Configure log level
-    #[clap(arg_enum, long = "env", env = "SIRENE_ENV")]
+    #[clap(value_enum, long = "env", env = "SIRENE_ENV")]
     environment: CmdEnvironment,
 
     /// Listen this port
@@ -29,7 +29,7 @@ pub struct ServeFlags {
     base_url: Option<String>,
 }
 
-#[derive(clap::ArgEnum, Clone, Debug)]
+#[derive(clap::ValueEnum, Clone, Debug)]
 enum CmdEnvironment {
     Development,
     Staging,
