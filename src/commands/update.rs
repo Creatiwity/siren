@@ -8,7 +8,7 @@ use chrono::Utc;
 #[derive(clap::Parser, Debug)]
 pub struct UpdateFlags {
     /// Configure which part will be updated
-    #[clap(arg_enum)]
+    #[clap(value_enum)]
     group_type: CmdGroupType,
 
     /// Force update even if the source data where not updated

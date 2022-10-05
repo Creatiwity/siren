@@ -1,9 +1,4 @@
-#[cfg(any(target_os = "unix", target_os = "linux"))]
-extern crate openssl; // Should be before diesel
-#[macro_use]
-extern crate diesel;
-#[macro_use]
-extern crate diesel_migrations;
+#![recursion_limit = "256"]
 
 mod commands;
 mod connectors;

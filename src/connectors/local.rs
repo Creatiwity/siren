@@ -1,9 +1,9 @@
 use diesel::pg::PgConnection;
 use diesel::r2d2::{ConnectionManager, Pool};
-use diesel_migrations::embed_migrations;
+use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 use std::env;
 
-embed_migrations!("./migrations");
+pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("./migrations");
 
 pub type Connection = r2d2::PooledConnection<diesel::r2d2::ConnectionManager<diesel::PgConnection>>;
 
@@ -51,12 +51,12 @@ impl ConnectorBuilder {
                 .unwrap_or_else(|_| panic!("Error connecting to {}", database_url)),
         };
 
-        let connection = builder
+        let mut connection = builder
             .pool
             .get()
             .expect("Unable to connect for migrations");
-        embedded_migrations::run_with_output(&connection, &mut std::io::stdout())
-            .expect("Unable to run migrations");
+
+        connection.run_pending_migrations(MIGRATIONS).expect("Unable to run migrations");
 
         builder
     }

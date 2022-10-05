@@ -1,8 +1,10 @@
+use diesel::{prelude::*, FromSqlRow, AsExpression};
 use super::super::group_metadata::common::GroupType;
 use super::super::schema::update_metadata;
 use chrono::{DateTime, Utc};
+use diesel::backend::RawValue;
 use diesel::deserialize::{self, FromSql};
-use diesel::pg::Pg;
+use diesel::pg::{Pg, PgValue};
 use diesel::serialize::{self, IsNull, Output, ToSql};
 use diesel::sql_types::{Jsonb, Text};
 use serde::{Deserialize, Serialize};
@@ -24,7 +26,7 @@ pub struct UpdateMetadata {
 }
 
 #[derive(Insertable)]
-#[table_name = "update_metadata"]
+#[diesel(table_name = update_metadata)]
 pub struct LaunchUpdateMetadata {
     pub synthetic_group_type: SyntheticGroupType,
     pub force: bool,
@@ -33,8 +35,8 @@ pub struct LaunchUpdateMetadata {
 }
 
 #[derive(AsChangeset)]
-#[table_name = "update_metadata"]
-#[changeset_options(treat_none_as_null = "true")]
+#[diesel(table_name = update_metadata)]
+#[diesel(treat_none_as_null = true)]
 pub struct FinishedUpdateMetadata {
     pub status: UpdateStatus,
     pub summary: UpdateSummary,
@@ -42,24 +44,24 @@ pub struct FinishedUpdateMetadata {
 }
 
 #[derive(AsChangeset)]
-#[table_name = "update_metadata"]
-#[changeset_options(treat_none_as_null = "true")]
+#[diesel(table_name = update_metadata)]
+#[diesel(treat_none_as_null = true)]
 pub struct ErrorUpdateMetadata {
     pub status: UpdateStatus,
     pub error: String,
     pub finished_timestamp: DateTime<Utc>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, FromSqlRow, AsExpression)]
-#[sql_type = "Text"]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, FromSqlRow, AsExpression)]
+#[diesel(sql_type = Text)]
 pub enum SyntheticGroupType {
     UnitesLegales,
     Etablissements,
     All,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, FromSqlRow, AsExpression)]
-#[sql_type = "Text"]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, FromSqlRow, AsExpression)]
+#[diesel(sql_type = Text)]
 pub enum UpdateStatus {
     Launched,
     Finished,
@@ -98,7 +100,7 @@ pub struct UpdateStepSummary {
 }
 
 #[derive(FromSqlRow, AsExpression, Deserialize, Serialize, Clone, Debug)]
-#[sql_type = "Jsonb"]
+#[diesel(sql_type = Jsonb)]
 pub struct UpdateSummary {
     pub updated: bool,
     pub started_timestamp: DateTime<Utc>,
@@ -107,16 +109,16 @@ pub struct UpdateSummary {
 }
 
 impl FromSql<Jsonb, Pg> for UpdateSummary {
-    fn from_sql(bytes: Option<&[u8]>) -> deserialize::Result<Self> {
-        let value = <serde_json::Value as FromSql<Jsonb, Pg>>::from_sql(bytes)?;
-        Ok(serde_json::from_value(value)?)
+    fn from_sql(value: RawValue<Pg>) -> deserialize::Result<Self> {
+        serde_json::from_value(FromSql::<Jsonb, Pg>::from_sql(value)?).map_err(|e| e.into())
     }
 }
 
 impl ToSql<Jsonb, Pg> for UpdateSummary {
-    fn to_sql<W: Write>(&self, out: &mut Output<W, Pg>) -> serialize::Result {
-        let value = serde_json::to_value(self)?;
-        <serde_json::Value as ToSql<Jsonb, Pg>>::to_sql(&value, out)
+    fn to_sql<'b>(&'b self, out: &mut Output<'b, '_, Pg>) -> serialize::Result {
+        let json = serde_json::to_value(self).unwrap();
+
+        <serde_json::Value as ToSql<Jsonb, Pg>>::to_sql(&json, &mut out.reborrow())
     }
 }
 
@@ -133,7 +135,7 @@ impl From<SyntheticGroupType> for Vec<GroupType> {
 
 // SQL conversion
 impl ToSql<Text, Pg> for SyntheticGroupType {
-    fn to_sql<W: Write>(&self, out: &mut Output<W, Pg>) -> serialize::Result {
+    fn to_sql(&self, out: &mut Output<Pg>) -> serialize::Result {
         match *self {
             SyntheticGroupType::UnitesLegales => out.write_all(b"unites_legales")?,
             SyntheticGroupType::Etablissements => out.write_all(b"etablissements")?,
@@ -144,8 +146,8 @@ impl ToSql<Text, Pg> for SyntheticGroupType {
 }
 
 impl FromSql<Text, Pg> for SyntheticGroupType {
-    fn from_sql(bytes: Option<&[u8]>) -> deserialize::Result<Self> {
-        match not_none!(bytes) {
+    fn from_sql(bytes: PgValue<'_>) -> deserialize::Result<Self> {
+        match bytes.as_bytes() {
             b"unites_legales" => Ok(SyntheticGroupType::UnitesLegales),
             b"etablissements" => Ok(SyntheticGroupType::Etablissements),
             b"all" => Ok(SyntheticGroupType::All),
@@ -166,7 +168,7 @@ impl std::fmt::Display for SyntheticGroupType {
 
 // SQL conversion
 impl ToSql<Text, Pg> for UpdateStatus {
-    fn to_sql<W: Write>(&self, out: &mut Output<W, Pg>) -> serialize::Result {
+    fn to_sql(&self, out: &mut Output<Pg>) -> serialize::Result {
         match *self {
             UpdateStatus::Launched => out.write_all(b"launched")?,
             UpdateStatus::Finished => out.write_all(b"finished")?,
@@ -177,8 +179,8 @@ impl ToSql<Text, Pg> for UpdateStatus {
 }
 
 impl FromSql<Text, Pg> for UpdateStatus {
-    fn from_sql(bytes: Option<&[u8]>) -> deserialize::Result<Self> {
-        match not_none!(bytes) {
+    fn from_sql(bytes: PgValue<'_>) -> deserialize::Result<Self> {
+        match bytes.as_bytes() {
             b"launched" => Ok(UpdateStatus::Launched),
             b"finished" => Ok(UpdateStatus::Finished),
             b"error" => Ok(UpdateStatus::Error),

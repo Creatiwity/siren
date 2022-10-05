@@ -17,12 +17,12 @@ pub fn launch_update(
     force: bool,
     data_only: bool,
 ) -> Result<DateTime<Utc>, Error> {
-    let connection = connectors.local.pool.get()?;
+    let mut connection = connectors.local.pool.get()?;
 
     let launched_update_result = dsl::update_metadata
         .select(dsl::updated_at)
         .filter(dsl::status.eq(UpdateStatus::Launched))
-        .first::<DateTime<Utc>>(&connection);
+        .first::<DateTime<Utc>>(&mut connection);
 
     if let Ok(launched_updated_at) = launched_update_result {
         if Utc::now().signed_duration_since(launched_updated_at) <= Duration::hours(1) {
@@ -45,7 +45,7 @@ pub fn launch_update(
             data_only,
             launched_timestamp,
         })
-        .execute(&connection)
+        .execute(&mut connection)
     {
         Ok(count) => {
             if count > 0 {
@@ -59,17 +59,17 @@ pub fn launch_update(
 }
 
 pub fn progress_update(connectors: &Connectors, summary: UpdateSummary) -> Result<bool, Error> {
-    let connection = connectors.local.pool.get()?;
+    let mut connection = connectors.local.pool.get()?;
 
     diesel::update(dsl::update_metadata.filter(dsl::status.eq(UpdateStatus::Launched)))
         .set(dsl::summary.eq(summary))
-        .execute(&connection)
+        .execute(&mut connection)
         .map(|count| count > 0)
         .map_err(|error| error.into())
 }
 
 pub fn finished_update(connectors: &Connectors, summary: UpdateSummary) -> Result<bool, Error> {
-    let connection = connectors.local.pool.get()?;
+    let mut connection = connectors.local.pool.get()?;
     let finished_timestamp = summary.finished_timestamp;
 
     diesel::update(dsl::update_metadata.filter(dsl::status.eq(UpdateStatus::Launched)))
@@ -78,7 +78,7 @@ pub fn finished_update(connectors: &Connectors, summary: UpdateSummary) -> Resul
             summary,
             finished_timestamp,
         })
-        .execute(&connection)
+        .execute(&mut connection)
         .map(|count| count > 0)
         .map_err(|error| error.into())
 }
@@ -88,7 +88,7 @@ pub fn error_update(
     error: String,
     finished_timestamp: DateTime<Utc>,
 ) -> Result<bool, Error> {
-    let connection = connectors.local.pool.get()?;
+    let mut connection = connectors.local.pool.get()?;
 
     diesel::update(dsl::update_metadata.filter(dsl::status.eq(UpdateStatus::Launched)))
         .set(&ErrorUpdateMetadata {
@@ -96,16 +96,16 @@ pub fn error_update(
             error,
             finished_timestamp,
         })
-        .execute(&connection)
+        .execute(&mut connection)
         .map(|count| count > 0)
         .map_err(|error| error.into())
 }
 
 pub fn current_update(connectors: &Connectors) -> Result<UpdateMetadata, Error> {
-    let connection = connectors.local.pool.get()?;
+    let mut connection = connectors.local.pool.get()?;
 
     dsl::update_metadata
         .order(dsl::launched_timestamp.desc())
-        .first::<UpdateMetadata>(&connection)
+        .first::<UpdateMetadata>(&mut connection)
         .map_err(|error| error.into())
 }

@@ -11,7 +11,7 @@ use update::UpdateFlags;
 /// Sirene service used to update data in database
 /// and serve it through a HTTP REST API
 #[derive(Parser, Debug)]
-#[clap(version = "2.3.0", author = "Julien Blatecky")]
+#[clap(version = "2.6.0", author = "Julien Blatecky")]
 struct Opts {
     /// Path to the temp folder
     #[clap(long = "temp-folder", env, default_value = "./data/temp")]
