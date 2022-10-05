@@ -38,5 +38,6 @@ pub struct UniteLegale {
     pub nomenclature_activite_principale: Option<String>,
     pub nic_siege: Option<String>,
     pub economie_sociale_solidaire: Option<String>,
-    pub caractere_employeur: Option<String>
+    pub caractere_employeur: Option<String>,
+    pub societe_mission: Option<String>,
 }

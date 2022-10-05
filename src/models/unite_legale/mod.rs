@@ -173,6 +173,7 @@ impl UpdatableModel for UniteLegaleModel {
                 dsl::nic_siege.eq(excluded(dsl::nic_siege)),
                 dsl::economie_sociale_solidaire.eq(excluded(dsl::economie_sociale_solidaire)),
                 dsl::caractere_employeur.eq(excluded(dsl::caractere_employeur)),
+                dsl::societe_mission.eq(excluded(dsl::societe_mission)),
             ))
             .execute(&mut connection)?;
 
