@@ -11,8 +11,8 @@ async-trait = "0.1"
 chrono = { version = "0.4", features = ["serde"] }
 clap = { version = "4.0", features = ["derive", "env"] }
 custom_error = "1.9"
-diesel = { version = "2.0.0", features = ["postgres", "chrono", "r2d2", "serde_json", "64-column-tables"] }
-diesel_migrations = { version = "2.0.0", features = ["postgres"] }
+diesel = { version = "2.0", features = ["postgres", "chrono", "r2d2", "serde_json", "64-column-tables"] }
+diesel_migrations = { version = "2.0", features = ["postgres"] }
 dotenv = "0.15"
 futures = "0.3"
 r2d2 = "0.8"
