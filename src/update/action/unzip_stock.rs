@@ -86,7 +86,7 @@ impl Action for UnzipAction {
 
         if let Some(p) = csv_path.parent() {
             if !p.exists() {
-                create_dir_all(&p).map_err(|io_error| Error::FileFolderCreation { io_error })?;
+                create_dir_all(p).map_err(|io_error| Error::FileFolderCreation { io_error })?;
             }
         }
 
