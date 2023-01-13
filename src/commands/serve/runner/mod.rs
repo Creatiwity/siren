@@ -34,7 +34,7 @@ async fn update(options: UpdateOptions, context: Context) -> Result<impl Reply, 
         return Err(Error::ApiKey.into());
     }
 
-    if options.asynchronous && context.base_url == None {
+    if options.asynchronous && context.base_url.is_none() {
         return Err(Error::MissingBaseUrlForAsync.into());
     }
 
