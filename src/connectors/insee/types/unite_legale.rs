@@ -71,28 +71,18 @@ pub struct PeriodeInseeUniteLegale {
     #[serde(deserialize_with = "deserialize_etat_administratif")]
     pub etat_administratif_unite_legale: String,
 
-    pub changement_etat_administratif_unite_legale: bool,
     pub nom_unite_legale: Option<String>,
-    pub changement_nom_unite_legale: bool,
     pub nom_usage_unite_legale: Option<String>,
-    pub changement_nom_usage_unite_legale: bool,
     pub denomination_unite_legale: Option<String>,
-    pub changement_denomination_unite_legale: bool,
     pub denomination_usuelle1_unite_legale: Option<String>,
     pub denomination_usuelle2_unite_legale: Option<String>,
     pub denomination_usuelle3_unite_legale: Option<String>,
-    pub changement_denomination_usuelle_unite_legale: bool,
     pub categorie_juridique_unite_legale: Option<String>,
-    pub changement_categorie_juridique_unite_legale: bool,
     pub activite_principale_unite_legale: Option<String>,
     pub nomenclature_activite_principale_unite_legale: Option<String>,
-    pub changement_activite_principale_unite_legale: bool,
     pub nic_siege_unite_legale: Option<String>,
-    pub changement_nic_siege_unite_legale: bool,
     pub economie_sociale_solidaire_unite_legale: Option<String>,
-    pub changement_economie_sociale_solidaire_unite_legale: bool,
     pub caractere_employeur_unite_legale: Option<String>,
-    pub changement_caractere_employeur_unite_legale: bool,
     pub societe_mission_unite_legale: Option<String>,
 }
 
