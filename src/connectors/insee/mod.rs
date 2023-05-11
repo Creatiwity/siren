@@ -50,7 +50,7 @@ impl ConnectorBuilder {
             let mut headers = HeaderMap::new();
             headers.insert(
                 AUTHORIZATION,
-                HeaderValue::from_str(format!("Bearer {}", token).as_str())?,
+                HeaderValue::from_str(format!("Bearer {token}").as_str())?,
             );
             headers.insert(ACCEPT, HeaderValue::from_static("application/json"));
 
