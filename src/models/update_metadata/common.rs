@@ -1,12 +1,11 @@
-use diesel::{prelude::*, FromSqlRow, AsExpression};
 use super::super::group_metadata::common::GroupType;
 use super::super::schema::update_metadata;
 use chrono::{DateTime, Utc};
-use diesel::backend::RawValue;
 use diesel::deserialize::{self, FromSql};
 use diesel::pg::{Pg, PgValue};
 use diesel::serialize::{self, IsNull, Output, ToSql};
 use diesel::sql_types::{Jsonb, Text};
+use diesel::{prelude::*, AsExpression, FromSqlRow};
 use serde::{Deserialize, Serialize};
 use std::io::Write;
 
@@ -109,7 +108,7 @@ pub struct UpdateSummary {
 }
 
 impl FromSql<Jsonb, Pg> for UpdateSummary {
-    fn from_sql(value: RawValue<Pg>) -> deserialize::Result<Self> {
+    fn from_sql(value: PgValue) -> deserialize::Result<Self> {
         serde_json::from_value(FromSql::<Jsonb, Pg>::from_sql(value)?).map_err(|e| e.into())
     }
 }

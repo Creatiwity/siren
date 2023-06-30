@@ -1,12 +1,16 @@
-use diesel::prelude::*;
+// @generated automatically by Diesel CLI.
 
-table! {
+diesel::table! {
     etablissement (siret) {
+        #[max_length = 14]
         siret -> Varchar,
+        #[max_length = 9]
         siren -> Varchar,
         nic -> Text,
+        #[max_length = 1]
         statut_diffusion -> Varchar,
         date_creation -> Nullable<Date>,
+        #[max_length = 3]
         tranche_effectifs -> Nullable<Varchar>,
         annee_effectifs -> Nullable<Int4>,
         activite_principale_registre_metiers -> Nullable<Text>,
@@ -42,6 +46,7 @@ table! {
         code_pays_etranger_2 -> Nullable<Text>,
         libelle_pays_etranger_2 -> Nullable<Text>,
         date_debut -> Nullable<Date>,
+        #[max_length = 1]
         etat_administratif -> Varchar,
         enseigne_1 -> Nullable<Text>,
         enseigne_2 -> Nullable<Text>,
@@ -53,13 +58,17 @@ table! {
     }
 }
 
-table! {
+diesel::table! {
     etablissement_staging (siret) {
+        #[max_length = 14]
         siret -> Varchar,
+        #[max_length = 9]
         siren -> Varchar,
         nic -> Text,
+        #[max_length = 1]
         statut_diffusion -> Varchar,
         date_creation -> Nullable<Date>,
+        #[max_length = 3]
         tranche_effectifs -> Nullable<Varchar>,
         annee_effectifs -> Nullable<Int4>,
         activite_principale_registre_metiers -> Nullable<Text>,
@@ -95,6 +104,7 @@ table! {
         code_pays_etranger_2 -> Nullable<Text>,
         libelle_pays_etranger_2 -> Nullable<Text>,
         date_debut -> Nullable<Date>,
+        #[max_length = 1]
         etat_administratif -> Varchar,
         enseigne_1 -> Nullable<Text>,
         enseigne_2 -> Nullable<Text>,
@@ -106,7 +116,7 @@ table! {
     }
 }
 
-table! {
+diesel::table! {
     group_metadata (id) {
         id -> Int4,
         group_type -> Text,
@@ -123,13 +133,16 @@ table! {
     }
 }
 
-table! {
+diesel::table! {
     unite_legale (siren) {
+        #[max_length = 9]
         siren -> Varchar,
+        #[max_length = 1]
         statut_diffusion -> Varchar,
         unite_purgee -> Nullable<Text>,
         date_creation -> Nullable<Date>,
         sigle -> Nullable<Text>,
+        #[max_length = 4]
         sexe -> Nullable<Varchar>,
         prenom_1 -> Nullable<Text>,
         prenom_2 -> Nullable<Text>,
@@ -138,6 +151,7 @@ table! {
         prenom_usuel -> Nullable<Text>,
         pseudonyme -> Nullable<Text>,
         identifiant_association -> Nullable<Text>,
+        #[max_length = 3]
         tranche_effectifs -> Nullable<Varchar>,
         annee_effectifs -> Nullable<Int4>,
         date_dernier_traitement -> Nullable<Timestamp>,
@@ -145,6 +159,7 @@ table! {
         categorie_entreprise -> Nullable<Text>,
         annee_categorie_entreprise -> Nullable<Int4>,
         date_debut -> Nullable<Date>,
+        #[max_length = 1]
         etat_administratif -> Varchar,
         nom -> Nullable<Text>,
         nom_usage -> Nullable<Text>,
@@ -157,18 +172,23 @@ table! {
         nomenclature_activite_principale -> Nullable<Text>,
         nic_siege -> Nullable<Text>,
         economie_sociale_solidaire -> Nullable<Text>,
+        #[max_length = 1]
         caractere_employeur -> Nullable<Varchar>,
+        #[max_length = 1]
         societe_mission -> Nullable<Varchar>,
     }
 }
 
-table! {
+diesel::table! {
     unite_legale_staging (siren) {
+        #[max_length = 9]
         siren -> Varchar,
+        #[max_length = 1]
         statut_diffusion -> Varchar,
         unite_purgee -> Nullable<Text>,
         date_creation -> Nullable<Date>,
         sigle -> Nullable<Text>,
+        #[max_length = 4]
         sexe -> Nullable<Varchar>,
         prenom_1 -> Nullable<Text>,
         prenom_2 -> Nullable<Text>,
@@ -177,6 +197,7 @@ table! {
         prenom_usuel -> Nullable<Text>,
         pseudonyme -> Nullable<Text>,
         identifiant_association -> Nullable<Text>,
+        #[max_length = 3]
         tranche_effectifs -> Nullable<Varchar>,
         annee_effectifs -> Nullable<Int4>,
         date_dernier_traitement -> Nullable<Timestamp>,
@@ -184,6 +205,7 @@ table! {
         categorie_entreprise -> Nullable<Text>,
         annee_categorie_entreprise -> Nullable<Int4>,
         date_debut -> Nullable<Date>,
+        #[max_length = 1]
         etat_administratif -> Varchar,
         nom -> Nullable<Text>,
         nom_usage -> Nullable<Text>,
@@ -196,12 +218,14 @@ table! {
         nomenclature_activite_principale -> Nullable<Text>,
         nic_siege -> Nullable<Text>,
         economie_sociale_solidaire -> Nullable<Text>,
+        #[max_length = 1]
         caractere_employeur -> Nullable<Varchar>,
+        #[max_length = 1]
         societe_mission -> Nullable<Varchar>,
     }
 }
 
-table! {
+diesel::table! {
     update_metadata (id) {
         id -> Int4,
         synthetic_group_type -> Text,
@@ -217,7 +241,7 @@ table! {
     }
 }
 
-allow_tables_to_appear_in_same_query!(
+diesel::allow_tables_to_appear_in_same_query!(
     etablissement,
     etablissement_staging,
     group_metadata,
