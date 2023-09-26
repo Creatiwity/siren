@@ -33,7 +33,7 @@ impl Action for SyncInseeAction {
 
                 summary_delegate.start(
                     connectors,
-                    Some(DateTime::<Utc>::from_utc(timestamp, Utc)),
+                    Some(DateTime::<Utc>::from_naive_utc_and_offset(timestamp, Utc)),
                     planned_count,
                 )?;
 
