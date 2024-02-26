@@ -173,9 +173,9 @@ diesel::table! {
         nic_siege -> Nullable<Text>,
         economie_sociale_solidaire -> Nullable<Text>,
         #[max_length = 1]
-        caractere_employeur -> Nullable<Varchar>,
-        #[max_length = 1]
         societe_mission -> Nullable<Varchar>,
+        #[max_length = 1]
+        caractere_employeur -> Nullable<Varchar>,
     }
 }
 
@@ -219,9 +219,9 @@ diesel::table! {
         nic_siege -> Nullable<Text>,
         economie_sociale_solidaire -> Nullable<Text>,
         #[max_length = 1]
-        caractere_employeur -> Nullable<Varchar>,
-        #[max_length = 1]
         societe_mission -> Nullable<Varchar>,
+        #[max_length = 1]
+        caractere_employeur -> Nullable<Varchar>,
     }
 }
 
