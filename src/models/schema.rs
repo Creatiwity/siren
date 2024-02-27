@@ -55,6 +55,11 @@ diesel::table! {
         activite_principale -> Nullable<Text>,
         nomenclature_activite_principale -> Nullable<Text>,
         caractere_employeur -> Nullable<Text>,
+        dernier_numero_voie -> Nullable<Text>,
+        indice_repetition_dernier_numero_voie -> Nullable<Text>,
+        identifiant_adresse -> Nullable<Text>,
+        coordonnee_lambert_x -> Nullable<Text>,
+        coordonnee_lambert_y -> Nullable<Text>,
     }
 }
 
@@ -113,6 +118,11 @@ diesel::table! {
         activite_principale -> Nullable<Text>,
         nomenclature_activite_principale -> Nullable<Text>,
         caractere_employeur -> Nullable<Text>,
+        dernier_numero_voie -> Nullable<Text>,
+        indice_repetition_dernier_numero_voie -> Nullable<Text>,
+        identifiant_adresse -> Nullable<Text>,
+        coordonnee_lambert_x -> Nullable<Text>,
+        coordonnee_lambert_y -> Nullable<Text>,
     }
 }
 
