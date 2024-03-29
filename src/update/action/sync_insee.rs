@@ -86,5 +86,7 @@ impl Action for SyncInseeAction {
 }
 
 fn get_minimum_timestamp_for_request(timestamp: NaiveDateTime) -> NaiveDateTime {
-    timestamp.max(Utc::now().naive_local() - Duration::days(31))
+    timestamp
+        .max(Utc::now().naive_local() - Duration::days(31))
+        .max(NaiveDateTime::parse_from_str("2024-03-23 00:00:01", "%Y-%m-%d %H:%M:%S").unwrap())
 }
