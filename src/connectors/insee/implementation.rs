@@ -10,7 +10,7 @@ use chrono::NaiveDateTime;
 
 const MAX_CALL: u8 = 20;
 const MAX_DURATION: std::time::Duration = std::time::Duration::from_secs(60);
-const BASE_URL: &str = "https://api.insee.fr/entreprises/sirene/V3";
+const BASE_URL: &str = "https://api.insee.fr/entreprises/sirene/V3.11";
 pub const INITIAL_CURSOR: &str = "*";
 
 struct EndpointConfig {

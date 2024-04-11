@@ -1,6 +1,6 @@
-use diesel::prelude::*;
 use super::super::schema::etablissement;
 use chrono::{NaiveDate, NaiveDateTime};
+use diesel::prelude::*;
 use serde::Serialize;
 
 #[derive(Insertable, Queryable, Serialize, Clone, Debug)]
@@ -54,4 +54,9 @@ pub struct Etablissement {
     pub activite_principale: Option<String>,
     pub nomenclature_activite_principale: Option<String>,
     pub caractere_employeur: Option<String>,
+    pub dernier_numero_voie: Option<String>,
+    pub indice_repetition_dernier_numero_voie: Option<String>,
+    pub identifiant_adresse: Option<String>,
+    pub coordonnee_lambert_x: Option<String>,
+    pub coordonnee_lambert_y: Option<String>,
 }

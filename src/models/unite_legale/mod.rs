@@ -63,10 +63,8 @@ impl UpdatableModel for UniteLegaleModel {
     fn swap(&self, connectors: &Connectors) -> Result<(), UpdatableError> {
         let mut connection = connectors.local.pool.get()?;
         connection.build_transaction().read_write().run(|conn| {
-            sql_query("ALTER TABLE unite_legale RENAME TO unite_legale_temp")
-                .execute(conn)?;
-            sql_query("ALTER TABLE unite_legale_staging RENAME TO unite_legale")
-                .execute(conn)?;
+            sql_query("ALTER TABLE unite_legale RENAME TO unite_legale_temp").execute(conn)?;
+            sql_query("ALTER TABLE unite_legale_staging RENAME TO unite_legale").execute(conn)?;
             sql_query("ALTER TABLE unite_legale_temp RENAME TO unite_legale_staging")
                 .execute(conn)?;
             sql_query("TRUNCATE unite_legale_staging").execute(conn)?;
@@ -172,8 +170,8 @@ impl UpdatableModel for UniteLegaleModel {
                     .eq(excluded(dsl::nomenclature_activite_principale)),
                 dsl::nic_siege.eq(excluded(dsl::nic_siege)),
                 dsl::economie_sociale_solidaire.eq(excluded(dsl::economie_sociale_solidaire)),
-                dsl::caractere_employeur.eq(excluded(dsl::caractere_employeur)),
                 dsl::societe_mission.eq(excluded(dsl::societe_mission)),
+                dsl::caractere_employeur.eq(excluded(dsl::caractere_employeur)),
             ))
             .execute(&mut connection)?;
 

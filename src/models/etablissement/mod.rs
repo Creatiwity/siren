@@ -20,14 +20,20 @@ pub fn get(connection: &mut Connection, siret: &str) -> Result<Etablissement, Er
         .map_err(|error| error.into())
 }
 
-pub fn get_with_siren(connection: &mut Connection, siren: &str) -> Result<Vec<Etablissement>, Error> {
+pub fn get_with_siren(
+    connection: &mut Connection,
+    siren: &str,
+) -> Result<Vec<Etablissement>, Error> {
     dsl::etablissement
         .filter(dsl::siren.eq(siren))
         .load::<Etablissement>(connection)
         .map_err(|error| error.into())
 }
 
-pub fn get_siege_with_siren(connection: &mut Connection, siren: &str) -> Result<Etablissement, Error> {
+pub fn get_siege_with_siren(
+    connection: &mut Connection,
+    siren: &str,
+) -> Result<Etablissement, Error> {
     dsl::etablissement
         .filter(dsl::siren.eq(siren).and(dsl::etablissement_siege.eq(true)))
         .first::<Etablissement>(connection)
@@ -77,10 +83,8 @@ impl UpdatableModel for EtablissementModel {
     fn swap(&self, connectors: &Connectors) -> Result<(), UpdatableError> {
         let mut connection = connectors.local.pool.get()?;
         connection.build_transaction().read_write().run(|conn| {
-            sql_query("ALTER TABLE etablissement RENAME TO etablissement_temp")
-                .execute(conn)?;
-            sql_query("ALTER TABLE etablissement_staging RENAME TO etablissement")
-                .execute(conn)?;
+            sql_query("ALTER TABLE etablissement RENAME TO etablissement_temp").execute(conn)?;
+            sql_query("ALTER TABLE etablissement_staging RENAME TO etablissement").execute(conn)?;
             sql_query("ALTER TABLE etablissement_temp RENAME TO etablissement_staging")
                 .execute(conn)?;
             sql_query("TRUNCATE etablissement_staging").execute(conn)?;
@@ -203,6 +207,12 @@ impl UpdatableModel for EtablissementModel {
                 dsl::nomenclature_activite_principale
                     .eq(excluded(dsl::nomenclature_activite_principale)),
                 dsl::caractere_employeur.eq(excluded(dsl::caractere_employeur)),
+                dsl::dernier_numero_voie.eq(excluded(dsl::dernier_numero_voie)),
+                dsl::indice_repetition_dernier_numero_voie
+                    .eq(excluded(dsl::indice_repetition_dernier_numero_voie)),
+                dsl::identifiant_adresse.eq(excluded(dsl::identifiant_adresse)),
+                dsl::coordonnee_lambert_x.eq(excluded(dsl::coordonnee_lambert_x)),
+                dsl::coordonnee_lambert_y.eq(excluded(dsl::coordonnee_lambert_y)),
             ))
             .execute(&mut connection)?;
 

@@ -37,6 +37,8 @@ impl Action for SyncInseeAction {
                     planned_count,
                 )?;
 
+                debug!("Syncing {} {:#?}...", planned_count, group_type);
+
                 while let Some(cursor) = current_cursor {
                     let (next_cursor, inserted_count) = model
                         .update_daily_data(connectors, timestamp, cursor)
