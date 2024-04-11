@@ -33,9 +33,11 @@ impl Action for SyncInseeAction {
 
                 summary_delegate.start(
                     connectors,
-                    Some(DateTime::<Utc>::from_utc(timestamp, Utc)),
+                    Some(DateTime::<Utc>::from_naive_utc_and_offset(timestamp, Utc)),
                     planned_count,
                 )?;
+
+                debug!("Syncing {} {:#?}...", planned_count, group_type);
 
                 while let Some(cursor) = current_cursor {
                     let (next_cursor, inserted_count) = model

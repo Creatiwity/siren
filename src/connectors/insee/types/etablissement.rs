@@ -32,7 +32,6 @@ pub struct InseeEtablissementInner {
     pub etablissement_siege: bool,
     pub nombre_periodes_etablissement: Option<i32>,
     pub adresse_etablissement: InseeAdresseEtablissement,
-    pub adresse2_etablissement: InseeAdresse2Etablissement,
 }
 
 #[derive(Deserialize, Debug)]
@@ -55,6 +54,8 @@ pub struct InseeAdresseEtablissement {
     pub complement_adresse_etablissement: Option<String>,
     pub numero_voie_etablissement: Option<String>,
     pub indice_repetition_etablissement: Option<String>,
+    pub dernier_numero_voie_etablissement: Option<String>,
+    pub indice_repetition_dernier_numero_voie_etablissement: Option<String>,
     pub type_voie_etablissement: Option<String>,
     pub libelle_voie_etablissement: Option<String>,
     pub code_postal_etablissement: Option<String>,
@@ -66,25 +67,9 @@ pub struct InseeAdresseEtablissement {
     pub libelle_cedex_etablissement: Option<String>,
     pub code_pays_etranger_etablissement: Option<String>,
     pub libelle_pays_etranger_etablissement: Option<String>,
-}
-
-#[derive(Deserialize, Debug, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct InseeAdresse2Etablissement {
-    complement_adresse2_etablissement: Option<String>,
-    numero_voie2_etablissement: Option<String>,
-    indice_repetition2_etablissement: Option<String>,
-    type_voie2_etablissement: Option<String>,
-    libelle_voie2_etablissement: Option<String>,
-    code_postal2_etablissement: Option<String>,
-    libelle_commune2_etablissement: Option<String>,
-    libelle_commune_etranger2_etablissement: Option<String>,
-    distribution_speciale2_etablissement: Option<String>,
-    code_commune2_etablissement: Option<String>,
-    code_cedex2_etablissement: Option<String>,
-    libelle_cedex2_etablissement: Option<String>,
-    code_pays_etranger2_etablissement: Option<String>,
-    libelle_pays_etranger2_etablissement: Option<String>,
+    pub identifiant_adresse_etablissement: Option<String>,
+    pub coordonnee_lambert_abscisse_etablissement: Option<String>,
+    pub coordonnee_lambert_ordonnee_etablissement: Option<String>,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -121,7 +106,6 @@ impl From<&InseeEtablissement> for Option<Etablissement> {
 impl From<InseeEtablissementWithPeriode> for Etablissement {
     fn from(e: InseeEtablissementWithPeriode) -> Self {
         let adresse = e.content.adresse_etablissement;
-        let adresse2 = e.content.adresse2_etablissement;
 
         Etablissement {
             siret: e.content.siret,
@@ -151,20 +135,26 @@ impl From<InseeEtablissementWithPeriode> for Etablissement {
             libelle_cedex: adresse.libelle_cedex_etablissement,
             code_pays_etranger: adresse.code_pays_etranger_etablissement,
             libelle_pays_etranger: adresse.libelle_pays_etranger_etablissement,
-            complement_adresse2: adresse2.complement_adresse2_etablissement,
-            numero_voie_2: adresse2.numero_voie2_etablissement,
-            indice_repetition_2: adresse2.indice_repetition2_etablissement,
-            type_voie_2: adresse2.type_voie2_etablissement,
-            libelle_voie_2: adresse2.libelle_voie2_etablissement,
-            code_postal_2: adresse2.code_postal2_etablissement,
-            libelle_commune_2: adresse2.libelle_commune2_etablissement,
-            libelle_commune_etranger_2: adresse2.libelle_commune_etranger2_etablissement,
-            distribution_speciale_2: adresse2.distribution_speciale2_etablissement,
-            code_commune_2: adresse2.code_commune2_etablissement,
-            code_cedex_2: adresse2.code_cedex2_etablissement,
-            libelle_cedex_2: adresse2.libelle_cedex2_etablissement,
-            code_pays_etranger_2: adresse2.code_pays_etranger2_etablissement,
-            libelle_pays_etranger_2: adresse2.libelle_pays_etranger2_etablissement,
+            dernier_numero_voie: adresse.dernier_numero_voie_etablissement,
+            identifiant_adresse: adresse.identifiant_adresse_etablissement,
+            indice_repetition_dernier_numero_voie: adresse
+                .indice_repetition_dernier_numero_voie_etablissement,
+            coordonnee_lambert_x: adresse.coordonnee_lambert_abscisse_etablissement,
+            coordonnee_lambert_y: adresse.coordonnee_lambert_ordonnee_etablissement,
+            complement_adresse2: None,
+            numero_voie_2: None,
+            indice_repetition_2: None,
+            type_voie_2: None,
+            libelle_voie_2: None,
+            code_postal_2: None,
+            libelle_commune_2: None,
+            libelle_commune_etranger_2: None,
+            distribution_speciale_2: None,
+            code_commune_2: None,
+            code_cedex_2: None,
+            libelle_cedex_2: None,
+            code_pays_etranger_2: None,
+            libelle_pays_etranger_2: None,
             date_debut: e.periode.date_debut,
             etat_administratif: e.periode.etat_administratif_etablissement,
             enseigne_1: e.periode.enseigne1_etablissement,

@@ -55,6 +55,11 @@ diesel::table! {
         activite_principale -> Nullable<Text>,
         nomenclature_activite_principale -> Nullable<Text>,
         caractere_employeur -> Nullable<Text>,
+        dernier_numero_voie -> Nullable<Text>,
+        indice_repetition_dernier_numero_voie -> Nullable<Text>,
+        identifiant_adresse -> Nullable<Text>,
+        coordonnee_lambert_x -> Nullable<Text>,
+        coordonnee_lambert_y -> Nullable<Text>,
     }
 }
 
@@ -113,6 +118,11 @@ diesel::table! {
         activite_principale -> Nullable<Text>,
         nomenclature_activite_principale -> Nullable<Text>,
         caractere_employeur -> Nullable<Text>,
+        dernier_numero_voie -> Nullable<Text>,
+        indice_repetition_dernier_numero_voie -> Nullable<Text>,
+        identifiant_adresse -> Nullable<Text>,
+        coordonnee_lambert_x -> Nullable<Text>,
+        coordonnee_lambert_y -> Nullable<Text>,
     }
 }
 
@@ -173,9 +183,9 @@ diesel::table! {
         nic_siege -> Nullable<Text>,
         economie_sociale_solidaire -> Nullable<Text>,
         #[max_length = 1]
-        caractere_employeur -> Nullable<Varchar>,
-        #[max_length = 1]
         societe_mission -> Nullable<Varchar>,
+        #[max_length = 1]
+        caractere_employeur -> Nullable<Varchar>,
     }
 }
 
@@ -219,9 +229,9 @@ diesel::table! {
         nic_siege -> Nullable<Text>,
         economie_sociale_solidaire -> Nullable<Text>,
         #[max_length = 1]
-        caractere_employeur -> Nullable<Varchar>,
-        #[max_length = 1]
         societe_mission -> Nullable<Varchar>,
+        #[max_length = 1]
+        caractere_employeur -> Nullable<Varchar>,
     }
 }
 
