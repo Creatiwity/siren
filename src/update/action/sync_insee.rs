@@ -37,6 +37,8 @@ impl Action for SyncInseeAction {
                     planned_count,
                 )?;
 
+                debug!("Syncing {} {:#?}...", planned_count, group_type);
+
                 while let Some(cursor) = current_cursor {
                     let (next_cursor, inserted_count) = model
                         .update_daily_data(connectors, timestamp, cursor)
@@ -86,7 +88,5 @@ impl Action for SyncInseeAction {
 }
 
 fn get_minimum_timestamp_for_request(timestamp: NaiveDateTime) -> NaiveDateTime {
-    timestamp
-        .max(Utc::now().naive_local() - Duration::days(31))
-        .max(NaiveDateTime::parse_from_str("2024-03-23 00:00:01", "%Y-%m-%d %H:%M:%S").unwrap())
+    timestamp.max(Utc::now().naive_local() - Duration::days(31))
 }
