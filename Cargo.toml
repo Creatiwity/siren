@@ -22,10 +22,10 @@ diesel_migrations = { version = "2.1", features = ["postgres"] }
 dotenv = "0.15"
 futures = "0.3"
 r2d2 = "0.8"
-reqwest = { version = "0.11", features = ["json", "stream"] }
+reqwest = { version = "0.12", features = ["json", "stream"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-tokio = { version = "1.36", features = [
+tokio = { version = "1.37", features = [
     "macros",
     "io-util",
     "fs",
