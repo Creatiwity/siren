@@ -91,7 +91,7 @@ impl Action for UnzipInsertAction {
             staging_file_timestamp,
         )?;
 
-        debug!("Unzip of {:#?} finished", group_type);
+        debug!("Unzip and insert of {:#?} finished", group_type);
 
         summary_delegate.finish(connectors, String::from("inserted"), 1, true)?;
 

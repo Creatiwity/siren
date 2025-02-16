@@ -1,9 +1,10 @@
 use std::fs::File;
-use std::io::Write;
+use std::io::{Read, Seek, Write};
 use std::path::Path;
 
 use crate::connectors::insee::error::InseeUpdate;
 use crate::connectors::Connectors;
+use crate::update::utils::remote_file::RemoteFile;
 use async_trait::async_trait;
 use chrono::NaiveDateTime;
 use custom_error::custom_error;
@@ -18,6 +19,11 @@ pub trait UpdatableModel: Sync + Send {
         &self,
         connectors: &Connectors,
         file_path: &Path,
+    ) -> Result<bool, Error>;
+    fn insert_remote_file_in_staging(
+        &self,
+        connectors: &Connectors,
+        remote_file: RemoteFile,
     ) -> Result<bool, Error>;
     fn swap(&self, connectors: &Connectors) -> Result<(), Error>;
     async fn get_total_count(
@@ -44,6 +50,14 @@ pub fn copy_zipped_csv(
     let zip_file = File::open(file_path).map_err(|io_error| {
         diesel::result::Error::DeserializationError(Box::new(Error::ZipOpen { io_error }))
     })?;
+
+    copy_file_zipped_csv(zip_file, write)
+}
+
+pub fn copy_file_zipped_csv(
+    zip_file: impl Read + Seek,
+    write: &mut dyn Write,
+) -> Result<(), diesel::result::Error> {
     let mut archive = zip::ZipArchive::new(zip_file).map_err(|zip_error| {
         diesel::result::Error::DeserializationError(Box::new(Error::ZipDecode { zip_error }))
     })?;

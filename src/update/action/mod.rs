@@ -14,6 +14,7 @@ pub mod swap;
 pub mod sync_insee;
 pub mod unzip_insert_stock;
 pub mod unzip_stock;
+pub mod update_stock;
 
 pub async fn execute_step<'a>(
     step: Step,
@@ -58,6 +59,9 @@ fn build_action(config: &Config, step: Step) -> Box<dyn Action> {
         }),
         Step::UnzipInsertData => Box::new(unzip_insert_stock::UnzipInsertAction {
             temp_folder: config.temp_folder.clone(),
+            force: config.force,
+        }),
+        Step::UpdateData => Box::new(update_stock::UpdateAction {
             force: config.force,
         }),
         Step::SwapData => Box::new(swap::SwapAction {

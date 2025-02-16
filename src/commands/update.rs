@@ -41,6 +41,10 @@ enum UpdateSubCommand {
     #[clap(name = "unzip-insert-data")]
     UnzipInsertData,
 
+    /// Download, unzip and load CSV file in database in loader-table
+    #[clap(name = "update-data")]
+    UpdateData,
+
     /// Swap loader-table to production
     #[clap(name = "swap-data")]
     SwapData,
@@ -82,6 +86,7 @@ pub async fn run(flags: UpdateFlags, folder_options: FolderOptions, builders: Co
                 UpdateSubCommand::UnzipFile => Step::UnzipFile,
                 UpdateSubCommand::InsertData => Step::InsertData,
                 UpdateSubCommand::UnzipInsertData => Step::UnzipInsertData,
+                UpdateSubCommand::UpdateData => Step::UpdateData,
                 UpdateSubCommand::SwapData => Step::SwapData,
                 UpdateSubCommand::CleanFile => Step::CleanFile,
                 UpdateSubCommand::SyncInsee => Step::SyncInsee,

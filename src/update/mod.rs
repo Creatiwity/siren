@@ -15,6 +15,7 @@ pub mod action;
 pub mod common;
 pub mod error;
 pub mod summary;
+pub mod utils;
 
 pub async fn update(
     synthetic_group_type: SyntheticGroupType,
@@ -22,13 +23,7 @@ pub async fn update(
     connectors: &mut Connectors,
 ) -> Result<UpdateMetadata, Error> {
     // Build and execute workflow
-    execute_workflow(
-        build_workflow(&config),
-        synthetic_group_type,
-        config,
-        connectors,
-    )
-    .await
+    execute_workflow(build_workflow(), synthetic_group_type, config, connectors).await
 }
 
 pub async fn update_step(
@@ -115,22 +110,6 @@ async fn execute_workflow_thread(
     Ok(())
 }
 
-fn build_workflow(config: &Config) -> Vec<Step> {
-    let mut workflow: Vec<Step> = vec![];
-
-    if !config.data_only {
-        workflow.push(Step::DownloadFile);
-    }
-
-    workflow.push(Step::UnzipInsertData);
-    workflow.push(Step::SwapData);
-
-    if !config.data_only {
-        workflow.push(Step::CleanFile);
-    }
-
-    // If INSEE, download and insert daily modifications
-    workflow.push(Step::SyncInsee);
-
-    workflow
+fn build_workflow() -> Vec<Step> {
+    vec![Step::UpdateData, Step::SwapData, Step::SyncInsee]
 }
