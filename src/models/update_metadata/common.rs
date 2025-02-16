@@ -29,7 +29,6 @@ pub struct UpdateMetadata {
 pub struct LaunchUpdateMetadata {
     pub synthetic_group_type: SyntheticGroupType,
     pub force: bool,
-    pub data_only: bool,
     pub launched_timestamp: DateTime<Utc>,
 }
 
@@ -81,13 +80,8 @@ pub struct UpdateGroupSummary {
 
 #[derive(Deserialize, Serialize, Clone, Copy, Debug)]
 pub enum Step {
-    DownloadFile,
-    UnzipFile,
-    InsertData,
-    UnzipInsertData,
     UpdateData,
     SwapData,
-    CleanFile,
     SyncInsee,
 }
 

@@ -57,12 +57,6 @@ spec:
               value: {{ .Values.sireneEnv }}
             - name: "BASE_URL"
               value: {{ .Values.baseUrl }}
-            - name: "TEMP_FOLDER"
-              value: "/app/data/temp"
-            - name: "FILES_FOLDER"
-              value: "/app/data/files"
-            - name: "DB_FOLDER"
-              value: "/app/data/files"
           livenessProbe:
             httpGet:
               path: /

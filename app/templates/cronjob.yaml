@@ -10,10 +10,6 @@ spec:
     spec:
       template:
         spec:
-          volumes:
-            - name: files-volume
-              persistentVolumeClaim:
-                claimName: siren-app-files
           restartPolicy: OnFailure
           containers:
             - name: "{{ include "app.fullname" . }}-job-updater"
@@ -21,9 +17,6 @@ spec:
                 {{- toYaml .Values.securityContext | nindent 16 }}
               image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
               imagePullPolicy: {{ .Values.image.pullPolicy }}
-              volumeMounts:
-                - mountPath: "/app/data"
-                  name: files-volume
               env:
                 - name: "DATABASE_HOST"
                   value: {{ include "app.postgresql.fullname" . }}
@@ -46,12 +39,6 @@ spec:
                   value: {{ .Values.sireneEnv }}
                 - name: "INSEE_CREDENTIALS"
                   value: {{ .Values.inseeCredentials }}
-                - name: "TEMP_FOLDER"
-                  value: "/app/data/temp"
-                - name: "FILES_FOLDER"
-                  value: "/app/data/files"
-                - name: "DB_FOLDER"
-                  value: "/app/data/files"
               command:
                 - /bin/sh
                 - -c

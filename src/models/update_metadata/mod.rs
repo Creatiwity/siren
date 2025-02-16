@@ -15,7 +15,6 @@ pub fn launch_update(
     connectors: &Connectors,
     synthetic_group_type: SyntheticGroupType,
     force: bool,
-    data_only: bool,
 ) -> Result<DateTime<Utc>, Error> {
     let mut connection = connectors.local.pool.get()?;
 
@@ -42,7 +41,6 @@ pub fn launch_update(
         .values(&LaunchUpdateMetadata {
             synthetic_group_type,
             force,
-            data_only,
             launched_timestamp,
         })
         .execute(&mut connection)

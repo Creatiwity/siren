@@ -1,4 +1,3 @@
-use super::super::super::common::FolderOptions;
 use crate::connectors::ConnectorsBuilders;
 use crate::models::etablissement::common::Etablissement;
 use crate::models::unite_legale::common::UniteLegale;
@@ -9,7 +8,6 @@ use serde::{Deserialize, Serialize};
 pub struct Context {
     pub builders: ConnectorsBuilders,
     pub api_key: Option<String>,
-    pub folder_options: FolderOptions,
     pub base_url: Option<String>,
 }
 

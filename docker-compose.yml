@@ -16,11 +16,6 @@ services:
       - RUST_LOG=${RUST_LOG}
       - API_KEY=${API_KEY}
       - SIRENE_ENV=${SIRENE_ENV}
-      - DATABASE_URL=${DATABASE_URL}
-      - TEMP_FOLDER=/app/data/temp
-      - FILES_FOLDER=/app/data/files
-    volumes:
-      - ./docker/data/:/app/data/
     depends_on:
       - db
     networks:
@@ -37,7 +32,6 @@ services:
       - PGUSER=${DOCKER_USER}
     volumes:
       - ./docker/postgres:/var/lib/postgresql/data
-      - ./docker/data/:/app/data/:ro
       - /etc/passwd:/etc/passwd:ro
     networks:
       - siren_network

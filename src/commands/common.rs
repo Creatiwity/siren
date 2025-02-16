@@ -1,13 +1,6 @@
 use crate::models::update_metadata::common::SyntheticGroupType;
 use serde::Deserialize;
 
-#[derive(Clone)]
-pub struct FolderOptions {
-    pub temp: String,
-    pub file: String,
-    pub db: String,
-}
-
 #[derive(clap::ValueEnum, Debug, Deserialize, Clone, Copy)]
 pub enum CmdGroupType {
     UnitesLegales,

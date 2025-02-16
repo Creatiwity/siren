@@ -45,12 +45,7 @@ async fn execute_workflow(
     // Execute workflow
     let mut summary = UpdateSummary::default();
 
-    summary.start(
-        connectors,
-        synthetic_group_type,
-        config.force,
-        config.data_only,
-    )?;
+    summary.start(connectors, synthetic_group_type, config.force)?;
 
     let asynchronous = config.asynchronous;
     let mut thread_connectors = connectors.clone();
