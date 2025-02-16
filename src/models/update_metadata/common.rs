@@ -84,6 +84,7 @@ pub enum Step {
     DownloadFile,
     UnzipFile,
     InsertData,
+    UnzipInsertData,
     SwapData,
     CleanFile,
     SyncInsee,

@@ -120,11 +120,9 @@ fn build_workflow(config: &Config) -> Vec<Step> {
 
     if !config.data_only {
         workflow.push(Step::DownloadFile);
-        // If INSEE && newly downloaded file, get update date from INSEE and update
-        workflow.push(Step::UnzipFile);
     }
 
-    workflow.push(Step::InsertData);
+    workflow.push(Step::UnzipInsertData);
     workflow.push(Step::SwapData);
 
     if !config.data_only {

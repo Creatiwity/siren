@@ -2,13 +2,16 @@ mod columns;
 pub mod common;
 pub mod error;
 
-use super::common::{Error as UpdatableError, UpdatableModel};
+use std::path::Path;
+
+use super::common::{copy_zipped_csv, Error as UpdatableError, UpdatableModel};
 use super::schema::etablissement::dsl;
 use crate::connectors::{local::Connection, Connectors};
 use async_trait::async_trait;
 use chrono::NaiveDateTime;
 use common::Etablissement;
 use diesel::pg::upsert::excluded;
+use diesel::pg::{CopyFormat, CopyHeader};
 use diesel::prelude::*;
 use diesel::sql_query;
 use error::Error;
@@ -75,6 +78,27 @@ impl UpdatableModel for EtablissementModel {
             file_path
         );
         sql_query(query)
+            .execute(&mut connection)
+            .map(|count| count > 0)
+            .map_err(|error| error.into())
+    }
+
+    fn insert_zip_in_staging(
+        &self,
+        connectors: &Connectors,
+        file_path: &Path,
+    ) -> Result<bool, UpdatableError> {
+        use super::schema::etablissement_staging::*;
+
+        let mut connection = connectors.local.pool.get()?;
+
+        sql_query("TRUNCATE etablissement_staging").execute(&mut connection)?;
+
+        diesel::copy_from(table)
+            .from_raw_data(table, |write| copy_zipped_csv(file_path, write))
+            .with_delimiter(',')
+            .with_format(CopyFormat::Csv)
+            .with_header(CopyHeader::Set(true))
             .execute(&mut connection)
             .map(|count| count > 0)
             .map_err(|error| error.into())

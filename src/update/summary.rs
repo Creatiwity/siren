@@ -106,7 +106,7 @@ impl<'a> SummaryStepDelegate<'a> {
     }
 }
 
-impl<'a, 'b> SummaryGroupDelegate<'a, 'b> {
+impl SummaryGroupDelegate<'_, '_> {
     fn get_current_mut(&mut self) -> Option<&mut UpdateGroupSummary> {
         match self.step_delegate.summary.steps.first_mut() {
             Some(step_summary) => step_summary.groups.first_mut(),
