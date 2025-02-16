@@ -1,6 +1,4 @@
-use std::fs::File;
 use std::io::{Read, Seek, Write};
-use std::path::Path;
 
 use crate::connectors::insee::error::InseeUpdate;
 use crate::connectors::Connectors;
@@ -14,12 +12,6 @@ use tracing::debug;
 pub trait UpdatableModel: Sync + Send {
     fn count(&self, connectors: &Connectors) -> Result<i64, Error>;
     fn count_staging(&self, connectors: &Connectors) -> Result<i64, Error>;
-    fn insert_in_staging(&self, connectors: &Connectors, file_path: String) -> Result<bool, Error>;
-    fn insert_zip_in_staging(
-        &self,
-        connectors: &Connectors,
-        file_path: &Path,
-    ) -> Result<bool, Error>;
     fn insert_remote_file_in_staging(
         &self,
         connectors: &Connectors,
@@ -43,18 +35,7 @@ pub trait UpdatableModel: Sync + Send {
     ) -> Result<(Option<String>, usize), Error>;
 }
 
-pub fn copy_zipped_csv(
-    file_path: &Path,
-    write: &mut dyn Write,
-) -> Result<(), diesel::result::Error> {
-    let zip_file = File::open(file_path).map_err(|io_error| {
-        diesel::result::Error::DeserializationError(Box::new(Error::ZipOpen { io_error }))
-    })?;
-
-    copy_file_zipped_csv(zip_file, write)
-}
-
-pub fn copy_file_zipped_csv(
+pub fn copy_remote_zipped_csv(
     zip_file: impl Read + Seek,
     write: &mut dyn Write,
 ) -> Result<(), diesel::result::Error> {

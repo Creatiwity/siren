@@ -1,12 +1,7 @@
-mod columns;
 pub mod common;
 pub mod error;
 
-use std::path::Path;
-
-use super::common::{
-    copy_file_zipped_csv, copy_zipped_csv, Error as UpdatableError, UpdatableModel,
-};
+use super::common::{copy_remote_zipped_csv, Error as UpdatableError, UpdatableModel};
 use super::schema::etablissement::dsl;
 use crate::connectors::{local::Connection, Connectors};
 use crate::update::utils::remote_file::RemoteFile;
@@ -68,45 +63,6 @@ impl UpdatableModel for EtablissementModel {
             .map_err(|error| error.into())
     }
 
-    fn insert_in_staging(
-        &self,
-        connectors: &Connectors,
-        file_path: String,
-    ) -> Result<bool, UpdatableError> {
-        let mut connection = connectors.local.pool.get()?;
-        sql_query("TRUNCATE etablissement_staging").execute(&mut connection)?;
-        let query = format!(
-            "COPY etablissement_staging({}) FROM '{}' DELIMITER ',' CSV HEADER",
-            columns::COLUMNS,
-            file_path
-        );
-        sql_query(query)
-            .execute(&mut connection)
-            .map(|count| count > 0)
-            .map_err(|error| error.into())
-    }
-
-    fn insert_zip_in_staging(
-        &self,
-        connectors: &Connectors,
-        file_path: &Path,
-    ) -> Result<bool, UpdatableError> {
-        use super::schema::etablissement_staging::*;
-
-        let mut connection = connectors.local.pool.get()?;
-
-        sql_query("TRUNCATE etablissement_staging").execute(&mut connection)?;
-
-        diesel::copy_from(table)
-            .from_raw_data(table, |write| copy_zipped_csv(file_path, write))
-            .with_delimiter(',')
-            .with_format(CopyFormat::Csv)
-            .with_header(CopyHeader::Set(true))
-            .execute(&mut connection)
-            .map(|count| count > 0)
-            .map_err(|error| error.into())
-    }
-
     fn insert_remote_file_in_staging(
         &self,
         connectors: &Connectors,
@@ -120,7 +76,7 @@ impl UpdatableModel for EtablissementModel {
 
         diesel::copy_from(table)
             .from_raw_data(table, |write| {
-                copy_file_zipped_csv(remote_file.to_reader(), write)
+                copy_remote_zipped_csv(remote_file.to_reader(), write)
             })
             .with_delimiter(',')
             .with_format(CopyFormat::Csv)
