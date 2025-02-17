@@ -6,9 +6,9 @@ use serde::Serialize;
 #[derive(Insertable, Queryable, Serialize, Clone, Debug)]
 #[diesel(table_name = etablissement)]
 pub struct Etablissement {
-    pub siret: String,
     pub siren: String,
     pub nic: String,
+    pub siret: String,
     pub statut_diffusion: String,
     pub date_creation: Option<NaiveDate>,
     pub tranche_effectifs: Option<String>,
@@ -20,6 +20,8 @@ pub struct Etablissement {
     pub complement_adresse: Option<String>,
     pub numero_voie: Option<String>,
     pub indice_repetition: Option<String>,
+    pub dernier_numero_voie: Option<String>,
+    pub indice_repetition_dernier_numero_voie: Option<String>,
     pub type_voie: Option<String>,
     pub libelle_voie: Option<String>,
     pub code_postal: Option<String>,
@@ -31,6 +33,9 @@ pub struct Etablissement {
     pub libelle_cedex: Option<String>,
     pub code_pays_etranger: Option<String>,
     pub libelle_pays_etranger: Option<String>,
+    pub identifiant_adresse: Option<String>,
+    pub coordonnee_lambert_x: Option<String>,
+    pub coordonnee_lambert_y: Option<String>,
     pub complement_adresse2: Option<String>,
     pub numero_voie_2: Option<String>,
     pub indice_repetition_2: Option<String>,
@@ -54,9 +59,4 @@ pub struct Etablissement {
     pub activite_principale: Option<String>,
     pub nomenclature_activite_principale: Option<String>,
     pub caractere_employeur: Option<String>,
-    pub dernier_numero_voie: Option<String>,
-    pub indice_repetition_dernier_numero_voie: Option<String>,
-    pub identifiant_adresse: Option<String>,
-    pub coordonnee_lambert_x: Option<String>,
-    pub coordonnee_lambert_y: Option<String>,
 }

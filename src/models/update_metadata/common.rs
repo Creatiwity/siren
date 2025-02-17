@@ -14,7 +14,6 @@ pub struct UpdateMetadata {
     pub id: i32,
     pub synthetic_group_type: SyntheticGroupType,
     pub force: bool,
-    pub data_only: bool,
     pub status: String,
     pub summary: Option<UpdateSummary>,
     pub error: Option<String>,
