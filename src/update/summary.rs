@@ -51,14 +51,11 @@ impl UpdateSummary {
         connectors: &Connectors,
         synthetic_group: SyntheticGroupType,
         force: bool,
-        data_only: bool,
     ) -> Result<(), Error> {
-        update_metadata::launch_update(connectors, synthetic_group, force, data_only).map(
-            |date| {
-                self.started_timestamp = date;
-                Ok(())
-            },
-        )?
+        update_metadata::launch_update(connectors, synthetic_group, force).map(|date| {
+            self.started_timestamp = date;
+            Ok(())
+        })?
     }
 
     pub fn finish(&mut self, connectors: &Connectors) -> Result<(), Error> {
@@ -106,7 +103,7 @@ impl<'a> SummaryStepDelegate<'a> {
     }
 }
 
-impl<'a, 'b> SummaryGroupDelegate<'a, 'b> {
+impl SummaryGroupDelegate<'_, '_> {
     fn get_current_mut(&mut self) -> Option<&mut UpdateGroupSummary> {
         match self.step_delegate.summary.steps.first_mut() {
             Some(step_summary) => step_summary.groups.first_mut(),

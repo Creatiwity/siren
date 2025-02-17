@@ -1,6 +1,5 @@
 mod runner;
 
-use super::common::FolderOptions;
 use crate::connectors::ConnectorsBuilders;
 use runner::common::Context;
 use std::net::ToSocketAddrs;
@@ -36,7 +35,7 @@ enum CmdEnvironment {
     Production,
 }
 
-pub async fn run(flags: ServeFlags, folder_options: FolderOptions, builders: ConnectorsBuilders) {
+pub async fn run(flags: ServeFlags, builders: ConnectorsBuilders) {
     let addr = format!("{}:{}", flags.host, flags.port)
         .to_socket_addrs()
         .expect("Unable to resolve domain")
@@ -50,7 +49,6 @@ pub async fn run(flags: ServeFlags, folder_options: FolderOptions, builders: Con
         Context {
             builders,
             api_key: flags.api_key,
-            folder_options,
             base_url: flags.base_url,
         },
     )

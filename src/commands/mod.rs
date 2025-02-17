@@ -4,7 +4,6 @@ mod update;
 
 use crate::connectors::ConnectorsBuilders;
 use clap::Parser;
-use common::FolderOptions;
 use serve::ServeFlags;
 use update::UpdateFlags;
 
@@ -13,20 +12,6 @@ use update::UpdateFlags;
 #[derive(Parser, Debug)]
 #[clap(version = "2.6.1", author = "Julien Blatecky")]
 struct Opts {
-    /// Path to the temp folder
-    #[clap(long = "temp-folder", env, default_value = "./data/temp")]
-    temp_folder: String,
-
-    /// Path to the file storage folder for this app
-    #[clap(long = "file-folder", env, default_value = "./data/files")]
-    file_folder: String,
-
-    /// Path to the file storage folder for the database.
-    /// Could be the same as FILE_FOLDER if this app and the database are on the same file system.
-    /// Files copied by this app inside FILE_FOLDER must be visible by the database in DB_FOLDER
-    #[clap(long = "db-folder", env, default_value = "./data/files")]
-    db_folder: String,
-
     #[clap(subcommand)]
     main_command: MainCommand,
 }
@@ -45,16 +30,8 @@ enum MainCommand {
 pub async fn run(builders: ConnectorsBuilders) {
     let opts = Opts::parse();
 
-    let folder_options = FolderOptions {
-        temp: opts.temp_folder,
-        file: opts.file_folder,
-        db: opts.db_folder,
-    };
-
     match opts.main_command {
-        MainCommand::Update(update_flags) => {
-            update::run(update_flags, folder_options, builders).await
-        }
-        MainCommand::Serve(serve_flags) => serve::run(serve_flags, folder_options, builders).await,
+        MainCommand::Update(update_flags) => update::run(update_flags, builders).await,
+        MainCommand::Serve(serve_flags) => serve::run(serve_flags, builders).await,
     }
 }

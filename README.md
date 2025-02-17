@@ -38,107 +38,75 @@ BASE_URL=[Your base URL, needed to update asynchronously]
 API_KEY=[Any randomized string, needed to use the HTTP admin endpoint]
 DATABASE_URL=postgresql://[USER]:[PASSWORD]@[PG_HOST]:[PG_PORT]/[PG_DATABASE]
 DATABASE_POOL_SIZE=100
-INSEE_CREDENTIALS=[Base64(consumer-key:consumer-secret)]
+INSEE_CREDENTIALS=[API_KEY]
 ```
 
 **How to generate INSEE_CREDENTIALS**
 
 This variable is only needed if you want to have the daily updates.
 
-1. Go to https://api.insee.fr/catalogue/
+1. Go to https://portail-api.insee.fr/catalog/all
 2. Create an account or sign in
 3. Create an application on this portal
-4. Subscribe this application to the _Sirene - V3_ API
-5. Generate a key pair in the application details
-6. Copy the key from the `curl` example and paste it in `.env`: `Authorization: Basic [INSEE_CREDENTIALS]`
+4. Subscribe this application to API SIRENE (Sirene 4 - v3.11)
+5. Generate a key in the application details
+6. Copy the key paste it in `.env` instead of `[API_KEY]`
 
 ### CLI
 
 **> sirene --help**
 
 ```
-sirene 2.0.0
-Julien Blatecky
 Sirene service used to update data in database and serve it through a HTTP REST API
 
-USAGE:
-    sirene [OPTIONS] <SUBCOMMAND>
+Usage: sirene <COMMAND>
 
-FLAGS:
-    -h, --help       Prints help information
-    -V, --version    Prints version information
+Commands:
+  update  Update data from CSV source files
+  serve   Serve data from database to /unites_legales/<siren> and /etablissements/<siret>
+  help    Print this message or the help of the given subcommand(s)
 
-OPTIONS:
-        --db-folder <db-folder>        Path to the file storage folder for the database, you can set
-                                       in environment variable as DB_FOLDER. Could be the same as
-                                       FILE_FOLDER if this app and the database are on the same file
-                                       system. Files copied by this app inside FILE_FOLDER must be
-                                       visible by the database in DB_FOLDER
-        --file-folder <file-folder>    Path to the file storage folder for this app, you can set in
-                                       environment variable as FILE_FOLDER
-        --temp-folder <temp-folder>    Path to the temp folder, you can set in environment variable
-                                       as TEMP_FOLDER
-
-SUBCOMMANDS:
-    help      Prints this message or the help of the given subcommand(s)
-    serve     Serve data from database to /unites_legales/<siren> and /etablissements/<siret>
-    update    Update data from CSV source files
+Options:
+  -h, --help     Print help
+  -V, --version  Print version
 ```
 
 **> sirene serve --help**
 
 ```
-sirene-serve
 Serve data from database to /unites_legales/<siren> and /etablissements/<siret>
 
-USAGE:
-    sirene serve [OPTIONS]
+Usage: sirene serve [OPTIONS] --env <ENVIRONMENT> --port <PORT> --host <HOST>
 
-FLAGS:
-        --help       Prints help information
-    -V, --version    Prints version information
-
-OPTIONS:
-    -k, --api-key <api-key>      API key needed to allow maintenance operation from HTTP, you can
-                                 set in environment variable as API_KEY
-    -b, --base-url <base-url>    Base URL needed to configure asynchronous polling for updates, you
-                                 can set in environment variable as BASE_URL
-        --env <environment>      Configure log level, you can set in environment variable as
-                                 SIRENE_ENV [possible values: development, staging, production]
-    -h, --host <host>            Listen this host, you can set in environment variable as HOST
-    -p, --port <port>            Listen this port, you can set in environment variable as PORT
+Options:
+      --env <ENVIRONMENT>    Configure log level [env: SIRENE_ENV=development] [possible values: development, staging, production]
+      --port <PORT>          Listen this port [env: PORT=3000]
+      --host <HOST>          Listen this host [env: HOST=localhost]
+      --api-key <API_KEY>    API key needed to allow maintenance operation from HTTP [env: API_KEY=]
+      --base-url <BASE_URL>  Base URL needed to configure asynchronous polling for updates [env: BASE_URL=http://localhost:3000]
+  -h, --help                 Print help
 ```
 
 **> sirene update --help**
 
 ```
-sirene-update
 Update data from CSV source files
 
-USAGE:
-    sirene update [FLAGS] <group-type> [SUBCOMMAND]
+Usage: sirene update [OPTIONS] <GROUP_TYPE> [COMMAND]
 
-ARGS:
-    <group-type>    Configure which part will be updated [possible values: unites-legales,
-                    etablissements, all]
+Commands:
+  update-data   Download, unzip and load CSV file in database in loader-table
+  swap-data     Swap loader-table to production
+  sync-insee    Synchronise daily data from INSEE since the last modification
+  finish-error  Set a staled update process to error, use only if the process is really stopped
+  help          Print this message or the help of the given subcommand(s)
 
-FLAGS:
-        --data-only    Use an existing CSV file already present in FILE_FOLDER and does not delete
-                       it
-        --force        Force update even if the source data where not updated
-    -h, --help         Prints help information
-    -V, --version      Prints version information
+Arguments:
+  <GROUP_TYPE>  Configure which part will be updated [possible values: unites-legales, etablissements, all]
 
-SUBCOMMANDS:
-    clean-file       Clean files from FILE_FOLDER
-    download-file    Download file in TEMP_FOLDER
-    finish-error     Set a staled update process to error, use only if the process is really
-                     stopped
-    help             Prints this message or the help of the given subcommand(s)
-    insert-data      Load CSV file in database in loader-table from DB_FOLDER
-    swap-data        Swap loader-table to production
-    sync-insee       Synchronise daily data from INSEE since the last modification
-    unzip-file       Unzip file from TEMP_FOLDER, and move it to the FILE_FOLDER
+Options:
+      --force  Force update even if the source data where not updated
+  -h, --help   Print help
 ```
 
 ### HTTP API
