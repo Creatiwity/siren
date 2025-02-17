@@ -2,6 +2,7 @@ use crate::connectors::ConnectorsBuilders;
 use crate::models::etablissement::common::Etablissement;
 use crate::models::unite_legale::common::UniteLegale;
 use crate::models::update_metadata::common::SyntheticGroupType;
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone)]
@@ -27,6 +28,12 @@ pub struct StatusQueryString {
 #[derive(Serialize)]
 pub struct UniteLegaleResponse {
     pub unite_legale: UniteLegaleInnerResponse,
+}
+
+#[derive(Serialize)]
+pub struct MetadataResponse {
+    pub launched_timestamp: Option<DateTime<Utc>>,
+    pub finished_timestamp: Option<DateTime<Utc>>,
 }
 
 #[derive(Serialize)]

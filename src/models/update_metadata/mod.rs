@@ -107,3 +107,14 @@ pub fn current_update(connectors: &Connectors) -> Result<UpdateMetadata, Error> 
         .first::<UpdateMetadata>(&mut connection)
         .map_err(|error| error.into())
 }
+
+pub fn last_success_update(connectors: &Connectors) -> Result<Option<UpdateMetadata>, Error> {
+    let mut connection = connectors.local.pool.get()?;
+
+    dsl::update_metadata
+        .order(dsl::launched_timestamp.desc())
+        .filter(dsl::status.eq(UpdateStatus::Finished))
+        .first::<UpdateMetadata>(&mut connection)
+        .optional()
+        .map_err(|error| error.into())
+}

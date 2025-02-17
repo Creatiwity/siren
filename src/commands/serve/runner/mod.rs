@@ -7,9 +7,9 @@ use crate::models::update_metadata::common::UpdateMetadata;
 use crate::update::{common::Config as DataConfig, update as update_data};
 use chrono::Utc;
 use common::{
-    Context, EtablissementInnerResponse, EtablissementResponse, StatusQueryString,
-    UniteLegaleEtablissementInnerResponse, UniteLegaleInnerResponse, UniteLegaleResponse,
-    UpdateOptions,
+    Context, EtablissementInnerResponse, EtablissementResponse, MetadataResponse,
+    StatusQueryString, UniteLegaleEtablissementInnerResponse, UniteLegaleInnerResponse,
+    UniteLegaleResponse, UpdateOptions,
 };
 use error::Error;
 use std::convert::Infallible;
@@ -20,8 +20,26 @@ use warp::{
     Filter, Rejection, Reply,
 };
 
-fn index() -> &'static str {
-    "SIRENE API v3"
+async fn index(context: Context) -> Result<impl Reply, Rejection> {
+    let connectors = context.builders.create();
+
+    let update_metadata = models::update_metadata::last_success_update(&connectors)?;
+
+    let reply = match update_metadata {
+        Some(metadata) => MetadataResponse {
+            launched_timestamp: Some(metadata.launched_timestamp),
+            finished_timestamp: metadata.finished_timestamp,
+        },
+        None => MetadataResponse {
+            launched_timestamp: None,
+            finished_timestamp: None,
+        },
+    };
+
+    Ok(warp::reply::with_status(
+        warp::reply::json(&reply),
+        StatusCode::OK,
+    ))
 }
 
 async fn update(options: UpdateOptions, context: Context) -> Result<impl Reply, Rejection> {
@@ -186,8 +204,10 @@ pub async fn run(addr: SocketAddr, context: Context) {
 
     let v3_route = warp::path!("v3" / ..);
 
-    // GET /v3 -> "SIRENE API v3"
-    let v3_index = warp::path::end().map(index);
+    // GET /v3 -> Status
+    let v3_index = warp::path::end()
+        .and(with_context(context.clone()))
+        .and_then(index);
     info!("Mount GET /v3");
 
     // GET /unites_legales/<siren>
