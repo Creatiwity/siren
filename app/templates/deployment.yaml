@@ -39,18 +39,15 @@ spec:
               protocol: TCP
           env:
             - name: "DATABASE_HOST"
-              value: {{ include "app.postgresql.fullname" . }}
+              value: {{ .Values.pgHost }}
             - name: "DATABASE_PORT"
-              value: "{{ .Values.postgresql.service.port }}"
+              value: "{{ .Values.pgPort }}"
             - name: "DATABASE_NAME"
-              value: {{ .Values.postgresql.postgresqlDatabase }}
+              value: {{ .Values.pgDatabase }}
             - name: "DATABASE_USER"
-              value: {{ .Values.postgresql.postgresqlUsername }}
+              value: {{ .Values.pgUsername }}
             - name: "DATABASE_PASSWORD"
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "app.postgresql.fullname" . }}
-                  key: "postgresql-password"
+              value: {{ .Values.pgPassword }}
             - name: "RUST_LOG"
               value: {{ .Values.rustLog }}
             - name: "SIRENE_ENV"
@@ -59,11 +56,11 @@ spec:
               value: {{ .Values.baseUrl }}
           livenessProbe:
             httpGet:
-              path: /
+              path: /v3
               port: http
           readinessProbe:
             httpGet:
-              path: /
+              path: /v3
               port: http
           resources:
             {{- toYaml .Values.resources | nindent 12 }}

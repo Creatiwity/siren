@@ -15,8 +15,13 @@ nameOverride: ""
 fullnameOverride: ""
 
 # Options
-rustLog: "sirene=debug"
+rustLog: "sirene=info"
 sireneEnv: "production"
+pgHost:
+pgPort:
+pgDatabase:
+pgUsername:
+pgPassword:
 apiKey:
 baseUrl:
 inseeCredentials:
@@ -64,7 +69,7 @@ ingress:
   #      - siren-api.local
 
 postgresql:
-  enabled: true
+  enabled: false
   postgresqlUsername: postgres
   postgresqlDatabase: siren
   service:
