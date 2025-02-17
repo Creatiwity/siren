@@ -38,19 +38,19 @@ BASE_URL=[Your base URL, needed to update asynchronously]
 API_KEY=[Any randomized string, needed to use the HTTP admin endpoint]
 DATABASE_URL=postgresql://[USER]:[PASSWORD]@[PG_HOST]:[PG_PORT]/[PG_DATABASE]
 DATABASE_POOL_SIZE=100
-INSEE_CREDENTIALS=[Base64(consumer-key:consumer-secret)]
+INSEE_CREDENTIALS=[API_KEY]
 ```
 
 **How to generate INSEE_CREDENTIALS**
 
 This variable is only needed if you want to have the daily updates.
 
-1. Go to https://api.insee.fr/catalogue/
+1. Go to https://portail-api.insee.fr/catalogue/
 2. Create an account or sign in
 3. Create an application on this portal
 4. Subscribe this application to the _Sirene - V3_ API
-5. Generate a key pair in the application details
-6. Copy the key from the `curl` example and paste it in `.env`: `Authorization: Basic [INSEE_CREDENTIALS]`
+5. Generate a key in the application details
+6. Copy the key paste it in `.env` instead of `[API_KEY]`
 
 ### CLI
 

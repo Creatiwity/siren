@@ -41,7 +41,6 @@ enum UpdateSubCommand {
 pub async fn run(flags: UpdateFlags, builders: ConnectorsBuilders) {
     let mut connectors = builders
         .create_with_insee()
-        .await
         .expect("Unable to create INSEE connector");
     let synthetic_group_type: SyntheticGroupType = flags.group_type.into();
 

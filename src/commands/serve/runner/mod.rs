@@ -38,7 +38,7 @@ async fn update(options: UpdateOptions, context: Context) -> Result<impl Reply, 
         return Err(Error::MissingBaseUrlForAsync.into());
     }
 
-    let mut connectors = context.builders.create_with_insee().await?;
+    let mut connectors = context.builders.create_with_insee()?;
 
     let update_metadata = update_data(
         options.group_type,
