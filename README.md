@@ -45,7 +45,7 @@ INSEE_CREDENTIALS=[API_KEY]
 
 This variable is only needed if you want to have the daily updates.
 
-1. Go to https://portail-api.insee.fr/catalogue/
+1. Go to https://portail-api.insee.fr/catalog/all
 2. Create an account or sign in
 3. Create an application on this portal
 4. Subscribe this application to the _Sirene - V3_ API
