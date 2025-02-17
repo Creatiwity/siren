@@ -2,11 +2,11 @@
 
 diesel::table! {
     etablissement (siret) {
-        #[max_length = 14]
-        siret -> Varchar,
         #[max_length = 9]
         siren -> Varchar,
         nic -> Text,
+        #[max_length = 14]
+        siret -> Varchar,
         #[max_length = 1]
         statut_diffusion -> Varchar,
         date_creation -> Nullable<Date>,
@@ -20,6 +20,8 @@ diesel::table! {
         complement_adresse -> Nullable<Text>,
         numero_voie -> Nullable<Text>,
         indice_repetition -> Nullable<Text>,
+        dernier_numero_voie -> Nullable<Text>,
+        indice_repetition_dernier_numero_voie -> Nullable<Text>,
         type_voie -> Nullable<Text>,
         libelle_voie -> Nullable<Text>,
         code_postal -> Nullable<Text>,
@@ -31,6 +33,9 @@ diesel::table! {
         libelle_cedex -> Nullable<Text>,
         code_pays_etranger -> Nullable<Text>,
         libelle_pays_etranger -> Nullable<Text>,
+        identifiant_adresse -> Nullable<Text>,
+        coordonnee_lambert_x -> Nullable<Text>,
+        coordonnee_lambert_y -> Nullable<Text>,
         complement_adresse2 -> Nullable<Text>,
         numero_voie_2 -> Nullable<Text>,
         indice_repetition_2 -> Nullable<Text>,
@@ -55,21 +60,16 @@ diesel::table! {
         activite_principale -> Nullable<Text>,
         nomenclature_activite_principale -> Nullable<Text>,
         caractere_employeur -> Nullable<Text>,
-        dernier_numero_voie -> Nullable<Text>,
-        indice_repetition_dernier_numero_voie -> Nullable<Text>,
-        identifiant_adresse -> Nullable<Text>,
-        coordonnee_lambert_x -> Nullable<Text>,
-        coordonnee_lambert_y -> Nullable<Text>,
     }
 }
 
 diesel::table! {
     etablissement_staging (siret) {
-        #[max_length = 14]
-        siret -> Varchar,
         #[max_length = 9]
         siren -> Varchar,
         nic -> Text,
+        #[max_length = 14]
+        siret -> Varchar,
         #[max_length = 1]
         statut_diffusion -> Varchar,
         date_creation -> Nullable<Date>,
@@ -83,6 +83,8 @@ diesel::table! {
         complement_adresse -> Nullable<Text>,
         numero_voie -> Nullable<Text>,
         indice_repetition -> Nullable<Text>,
+        dernier_numero_voie -> Nullable<Text>,
+        indice_repetition_dernier_numero_voie -> Nullable<Text>,
         type_voie -> Nullable<Text>,
         libelle_voie -> Nullable<Text>,
         code_postal -> Nullable<Text>,
@@ -94,6 +96,9 @@ diesel::table! {
         libelle_cedex -> Nullable<Text>,
         code_pays_etranger -> Nullable<Text>,
         libelle_pays_etranger -> Nullable<Text>,
+        identifiant_adresse -> Nullable<Text>,
+        coordonnee_lambert_x -> Nullable<Text>,
+        coordonnee_lambert_y -> Nullable<Text>,
         complement_adresse2 -> Nullable<Text>,
         numero_voie_2 -> Nullable<Text>,
         indice_repetition_2 -> Nullable<Text>,
@@ -118,11 +123,6 @@ diesel::table! {
         activite_principale -> Nullable<Text>,
         nomenclature_activite_principale -> Nullable<Text>,
         caractere_employeur -> Nullable<Text>,
-        dernier_numero_voie -> Nullable<Text>,
-        indice_repetition_dernier_numero_voie -> Nullable<Text>,
-        identifiant_adresse -> Nullable<Text>,
-        coordonnee_lambert_x -> Nullable<Text>,
-        coordonnee_lambert_y -> Nullable<Text>,
     }
 }
 
@@ -240,7 +240,6 @@ diesel::table! {
         id -> Int4,
         synthetic_group_type -> Text,
         force -> Bool,
-        data_only -> Bool,
         status -> Text,
         summary -> Nullable<Jsonb>,
         error -> Nullable<Text>,

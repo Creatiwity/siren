@@ -1,4 +1,3 @@
-use diesel::{prelude::*, FromSqlRow, AsExpression};
 use super::super::common::UpdatableModel;
 use super::super::etablissement::EtablissementModel;
 use super::super::schema::group_metadata;
@@ -8,10 +7,12 @@ use diesel::deserialize::{self, FromSql};
 use diesel::pg::{Pg, PgValue};
 use diesel::serialize::{self, IsNull, Output, ToSql};
 use diesel::sql_types::Text;
+use diesel::{prelude::*, AsExpression, FromSqlRow};
 use serde::{Deserialize, Serialize};
 use std::io::Write;
 
 #[derive(Queryable)]
+#[allow(dead_code)]
 pub struct Metadata {
     pub id: i32,
     pub group_type: GroupType,

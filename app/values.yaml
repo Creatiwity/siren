@@ -15,8 +15,13 @@ nameOverride: ""
 fullnameOverride: ""
 
 # Options
-rustLog: "sirene=debug"
+rustLog: "sirene=info"
 sireneEnv: "production"
+pgHost:
+pgPort:
+pgDatabase:
+pgUsername:
+pgPassword:
 apiKey:
 baseUrl:
 inseeCredentials:
@@ -64,19 +69,11 @@ ingress:
   #      - siren-api.local
 
 postgresql:
-  enabled: true
+  enabled: false
   postgresqlUsername: postgres
   postgresqlDatabase: siren
   service:
     port: 5432
-  primary:
-    extraVolumes:
-      - name: files-volume
-        persistentVolumeClaim:
-          claimName: siren-app-files
-    extraVolumeMounts:
-      - mountPath: "/app/data"
-        name: files-volume
   persistence:
     accessModes:
       - ReadWriteMany

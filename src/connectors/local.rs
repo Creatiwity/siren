@@ -29,7 +29,9 @@ impl ConnectorBuilder {
                     env::var("DATABASE_USER").ok(),
                     env::var("DATABASE_PASSWORD").ok(),
                 ) {
-                    Some(format!("postgresql://{user}:{password}@{host}:{port}/{database}"))
+                    Some(format!(
+                        "postgresql://{user}:{password}@{host}:{port}/{database}"
+                    ))
                 } else {
                     None
                 }
@@ -45,7 +47,7 @@ impl ConnectorBuilder {
             pool: Pool::builder()
                 .max_size(pool_size)
                 .build(manager)
-                .unwrap_or_else(|_| panic!("Error connecting to {database_url}")),
+                .unwrap_or_else(|error| panic!("Error connecting to {database_url} ({error})")),
         };
 
         let mut connection = builder
@@ -53,7 +55,9 @@ impl ConnectorBuilder {
             .get()
             .expect("Unable to connect for migrations");
 
-        connection.run_pending_migrations(MIGRATIONS).expect("Unable to run migrations");
+        connection
+            .run_pending_migrations(MIGRATIONS)
+            .expect("Unable to run migrations");
 
         builder
     }
