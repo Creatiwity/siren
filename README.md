@@ -48,7 +48,7 @@ This variable is only needed if you want to have the daily updates.
 1. Go to https://portail-api.insee.fr/catalog/all
 2. Create an account or sign in
 3. Create an application on this portal
-4. Subscribe this application to the _Sirene - V3_ API
+4. Subscribe this application to API SIRENE (Sirene 4 - v3.11)
 5. Generate a key in the application details
 6. Copy the key paste it in `.env` instead of `[API_KEY]`
 
