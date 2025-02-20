@@ -12,13 +12,24 @@ use common::{
     UniteLegaleResponse, UpdateOptions,
 };
 use error::Error;
+use serde::Serialize;
 use std::convert::Infallible;
 use std::net::SocketAddr;
 use tracing::info;
 use warp::{
-    http::{header, Method, StatusCode},
     Filter, Rejection, Reply,
+    http::{Method, StatusCode, header},
 };
+
+impl From<UpdateMetadata> for StatusCode {
+    fn from(metadata: UpdateMetadata) -> Self {
+        match metadata.status.as_str() {
+            "launched" => StatusCode::ACCEPTED,
+            "error" => StatusCode::INTERNAL_SERVER_ERROR,
+            _ => StatusCode::OK,
+        }
+    }
+}
 
 async fn index(context: Context) -> Result<impl Reply, Rejection> {
     let connectors = context.builders.create();
@@ -68,7 +79,7 @@ async fn update(options: UpdateOptions, context: Context) -> Result<impl Reply, 
     )
     .await?;
 
-    reply_with_update_metadata(&update_metadata, context.base_url, api_key)
+    reply_with_update_metadata(update_metadata, context.base_url, api_key)
 }
 
 async fn status(query: StatusQueryString, context: Context) -> Result<impl Reply, Rejection> {
@@ -85,20 +96,14 @@ async fn status(query: StatusQueryString, context: Context) -> Result<impl Reply
 
     let update_metadata = models::update_metadata::current_update(&connectors)?;
 
-    reply_with_update_metadata(&update_metadata, context.base_url, api_key)
+    reply_with_update_metadata(update_metadata, context.base_url, api_key)
 }
 
-fn reply_with_update_metadata(
-    update_metadata: &UpdateMetadata,
+fn reply_with_update_metadata<T: Serialize + Into<StatusCode>>(
+    update_metadata: T,
     base_url: Option<String>,
     api_key: &str,
-) -> Result<impl Reply, Rejection> {
-    let status_code = match update_metadata.status.as_str() {
-        "launched" => StatusCode::ACCEPTED,
-        "error" => StatusCode::INTERNAL_SERVER_ERROR,
-        _ => StatusCode::OK,
-    };
-
+) -> Result<impl Reply + use<T>, Rejection> {
     Ok(warp::reply::with_status(
         warp::reply::with_header(
             warp::reply::with_header(
@@ -113,7 +118,7 @@ fn reply_with_update_metadata(
             "Retry-After",
             "10",
         ),
-        status_code,
+        update_metadata.into(),
     ))
 }
 
