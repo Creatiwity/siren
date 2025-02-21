@@ -50,11 +50,6 @@ app.kubernetes.io/name: {{ include "app.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
-{{- define "app.postgresql.fullname" -}}
-{{- $name := default "postgresql" .Values.postgresql.nameOverride -}}
-{{- printf "%s-%s" .Release.Name $name | trunc 63 | trimSuffix "-" -}}
-{{- end -}}
-
 {{/*
 Create the name of the service account to use
 */}}

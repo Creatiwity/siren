@@ -4,7 +4,7 @@ mod types;
 pub mod error;
 
 use error::InseeTokenError;
-use reqwest::header::{HeaderMap, HeaderValue, ACCEPT};
+use reqwest::header::{ACCEPT, HeaderMap, HeaderValue};
 use std::env;
 use std::time::{Duration, Instant};
 
@@ -17,7 +17,7 @@ pub struct Connector {
     started_at: Instant,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ConnectorBuilder {
     pub credentials: String,
 }

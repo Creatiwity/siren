@@ -7,7 +7,7 @@ custom_error! { pub Error
     InseeError { source: insee::error::InseeTokenError } = "{source}",
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ConnectorsBuilders {
     local: local::ConnectorBuilder,
     insee: Option<insee::ConnectorBuilder>,
