@@ -2,7 +2,7 @@
 name = "sirene"
 version = "4.0.1"
 authors = ["Julien Blatecky <julien.blatecky@creatiwity.net>"]
-edition = "2024"
+edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
