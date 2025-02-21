@@ -15,7 +15,7 @@ use error::Error;
 use serde::Serialize;
 use std::convert::Infallible;
 use std::net::SocketAddr;
-use tracing::info;
+use tracing::{Level, info, instrument, span};
 use warp::{
     Filter, Rejection, Reply,
     http::{Method, StatusCode, header},
@@ -146,7 +146,11 @@ async fn set_status_to_error(
     Ok(warp::reply())
 }
 
+#[instrument(level = "trace")]
 async fn unites_legales(siren: String, context: Context) -> Result<impl Reply, Rejection> {
+    let span = span!(Level::TRACE, "GET /unites_legales");
+    let _enter = span.enter();
+
     if siren.len() != 9 {
         return Err(Error::InvalidData.into());
     }
@@ -172,7 +176,11 @@ async fn unites_legales(siren: String, context: Context) -> Result<impl Reply, R
     }))
 }
 
+#[instrument(level = "trace")]
 async fn etablissements(siret: String, context: Context) -> Result<impl Reply, Rejection> {
+    let span = span!(Level::TRACE, "GET /etablissements");
+    let _enter = span.enter();
+
     if siret.len() != 14 {
         return Err(Error::InvalidData.into());
     }
@@ -271,6 +279,7 @@ pub async fn run(addr: SocketAddr, context: Context) {
         ))
         .or(admin_update_route.and(status_route.or(update_route).or(status_error_route)))
         .recover(error::handle_rejection)
+        .with(warp::trace::request())
         .with(cors);
 
     warp::serve(routes).run(addr).await;

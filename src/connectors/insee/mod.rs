@@ -17,7 +17,7 @@ pub struct Connector {
     started_at: Instant,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ConnectorBuilder {
     pub credentials: String,
 }

@@ -5,7 +5,7 @@ use crate::models::update_metadata::common::SyntheticGroupType;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Context {
     pub builders: ConnectorsBuilders,
     pub api_key: Option<String>,
