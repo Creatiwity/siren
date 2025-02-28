@@ -1,6 +1,9 @@
 // @generated automatically by Diesel CLI.
 
 diesel::table! {
+    use diesel::sql_types::*;
+    use postgis_diesel::sql_types::*;
+
     etablissement (siret) {
         #[max_length = 9]
         siren -> Varchar,
@@ -60,10 +63,15 @@ diesel::table! {
         activite_principale -> Nullable<Text>,
         nomenclature_activite_principale -> Nullable<Text>,
         caractere_employeur -> Nullable<Text>,
+        search_denomination -> Nullable<Text>,
+        position -> Nullable<Geography>,
     }
 }
 
 diesel::table! {
+    use diesel::sql_types::*;
+    use postgis_diesel::sql_types::*;
+
     etablissement_staging (siret) {
         #[max_length = 9]
         siren -> Varchar,
@@ -123,10 +131,15 @@ diesel::table! {
         activite_principale -> Nullable<Text>,
         nomenclature_activite_principale -> Nullable<Text>,
         caractere_employeur -> Nullable<Text>,
+        search_denomination -> Nullable<Text>,
+        position -> Nullable<Geography>,
     }
 }
 
 diesel::table! {
+    use diesel::sql_types::*;
+    use postgis_diesel::sql_types::*;
+
     group_metadata (id) {
         id -> Int4,
         group_type -> Text,
@@ -144,6 +157,9 @@ diesel::table! {
 }
 
 diesel::table! {
+    use diesel::sql_types::*;
+    use postgis_diesel::sql_types::*;
+
     unite_legale (siren) {
         #[max_length = 9]
         siren -> Varchar,
@@ -186,10 +202,14 @@ diesel::table! {
         societe_mission -> Nullable<Varchar>,
         #[max_length = 1]
         caractere_employeur -> Nullable<Varchar>,
+        search_denomination -> Nullable<Text>,
     }
 }
 
 diesel::table! {
+    use diesel::sql_types::*;
+    use postgis_diesel::sql_types::*;
+
     unite_legale_staging (siren) {
         #[max_length = 9]
         siren -> Varchar,
@@ -232,10 +252,14 @@ diesel::table! {
         societe_mission -> Nullable<Varchar>,
         #[max_length = 1]
         caractere_employeur -> Nullable<Varchar>,
+        search_denomination -> Nullable<Text>,
     }
 }
 
 diesel::table! {
+    use diesel::sql_types::*;
+    use postgis_diesel::sql_types::*;
+
     update_metadata (id) {
         id -> Int4,
         synthetic_group_type -> Text,

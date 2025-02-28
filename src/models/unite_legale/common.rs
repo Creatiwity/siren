@@ -40,4 +40,5 @@ pub struct UniteLegale {
     pub economie_sociale_solidaire: Option<String>,
     pub societe_mission: Option<String>,
     pub caractere_employeur: Option<String>,
+    pub search_denomination: Option<String>,
 }

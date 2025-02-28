@@ -1401,6 +1401,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "postgis_diesel"
+version = "2.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0af8d70eef8908e7248d05f2ba1da5e81a9674e3b0b01efb75736780052b7d3f"
+dependencies = [
+ "byteorder",
+ "diesel",
+ "serde",
+]
+
+[[package]]
 name = "powerfmt"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1771,6 +1782,7 @@ dependencies = [
  "diesel_migrations",
  "dotenv",
  "futures",
+ "postgis_diesel",
  "r2d2",
  "reqwest",
  "serde",

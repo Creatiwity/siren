@@ -139,6 +139,7 @@ impl From<InseeUniteLegaleWithPeriode> for UniteLegale {
             economie_sociale_solidaire: u.periode.economie_sociale_solidaire_unite_legale,
             societe_mission: u.periode.societe_mission_unite_legale,
             caractere_employeur: None,
+            search_denomination: None,
         }
     }
 }

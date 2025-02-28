@@ -166,6 +166,8 @@ impl From<InseeEtablissementWithPeriode> for Etablissement {
                 .periode
                 .nomenclature_activite_principale_etablissement,
             caractere_employeur: e.periode.caractere_employeur_etablissement,
+            search_denomination: None,
+            position: None,
         }
     }
 }
