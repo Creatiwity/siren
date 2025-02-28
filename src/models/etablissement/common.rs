@@ -1,10 +1,71 @@
 use super::super::schema::etablissement;
 use chrono::{NaiveDate, NaiveDateTime};
 use diesel::prelude::*;
+use postgis_diesel::types::Point;
 use serde::Serialize;
 use utoipa::ToSchema;
 
-#[derive(Insertable, Queryable, ToSchema, Serialize, Clone, Debug)]
+#[derive(Insertable, Serialize, Clone, Debug)]
+#[diesel(table_name = etablissement)]
+pub struct EtablissementInsertable {
+    pub siren: String,
+    pub nic: String,
+    pub siret: String,
+    pub statut_diffusion: String,
+    pub date_creation: Option<NaiveDate>,
+    pub tranche_effectifs: Option<String>,
+    pub annee_effectifs: Option<i32>,
+    pub activite_principale_registre_metiers: Option<String>,
+    pub date_dernier_traitement: Option<NaiveDateTime>,
+    pub etablissement_siege: bool,
+    pub nombre_periodes: Option<i32>,
+    pub complement_adresse: Option<String>,
+    pub numero_voie: Option<String>,
+    pub indice_repetition: Option<String>,
+    pub dernier_numero_voie: Option<String>,
+    pub indice_repetition_dernier_numero_voie: Option<String>,
+    pub type_voie: Option<String>,
+    pub libelle_voie: Option<String>,
+    pub code_postal: Option<String>,
+    pub libelle_commune: Option<String>,
+    pub libelle_commune_etranger: Option<String>,
+    pub distribution_speciale: Option<String>,
+    pub code_commune: Option<String>,
+    pub code_cedex: Option<String>,
+    pub libelle_cedex: Option<String>,
+    pub code_pays_etranger: Option<String>,
+    pub libelle_pays_etranger: Option<String>,
+    pub identifiant_adresse: Option<String>,
+    pub coordonnee_lambert_x: Option<String>,
+    pub coordonnee_lambert_y: Option<String>,
+    pub complement_adresse2: Option<String>,
+    pub numero_voie_2: Option<String>,
+    pub indice_repetition_2: Option<String>,
+    pub type_voie_2: Option<String>,
+    pub libelle_voie_2: Option<String>,
+    pub code_postal_2: Option<String>,
+    pub libelle_commune_2: Option<String>,
+    pub libelle_commune_etranger_2: Option<String>,
+    pub distribution_speciale_2: Option<String>,
+    pub code_commune_2: Option<String>,
+    pub code_cedex_2: Option<String>,
+    pub libelle_cedex_2: Option<String>,
+    pub code_pays_etranger_2: Option<String>,
+    pub libelle_pays_etranger_2: Option<String>,
+    pub date_debut: Option<NaiveDate>,
+    pub etat_administratif: String,
+    pub enseigne_1: Option<String>,
+    pub enseigne_2: Option<String>,
+    pub enseigne_3: Option<String>,
+    pub denomination_usuelle: Option<String>,
+    pub activite_principale: Option<String>,
+    pub nomenclature_activite_principale: Option<String>,
+    pub caractere_employeur: Option<String>,
+    pub search_denomination: Option<String>,
+    pub position: Option<Point>,
+}
+
+#[derive(Insertable, Queryable, Selectable, ToSchema, Serialize, Clone, Debug)]
 #[diesel(table_name = etablissement)]
 pub struct Etablissement {
     pub siren: String,
@@ -61,4 +122,6 @@ pub struct Etablissement {
     pub nomenclature_activite_principale: Option<String>,
     pub caractere_employeur: Option<String>,
     pub activite_principale_naf25: Option<String>,
+    pub search_denomination: Option<String>,
+    pub position: Option<Point>,
 }

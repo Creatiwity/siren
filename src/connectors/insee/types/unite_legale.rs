@@ -141,6 +141,7 @@ impl From<InseeUniteLegaleWithPeriode> for UniteLegale {
             societe_mission: u.periode.societe_mission_unite_legale,
             caractere_employeur: u.periode.caractere_employeur_unite_legale,
             activite_principale_naf25: None,
+            search_denomination: None,
         }
     }
 }

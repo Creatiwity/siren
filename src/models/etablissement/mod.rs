@@ -68,16 +68,71 @@ impl UpdatableModel for EtablissementModel {
         connectors: &Connectors,
         remote_file: RemoteFile,
     ) -> Result<bool, UpdatableError> {
-        use super::schema::etablissement_staging::*;
+        use super::schema::etablissement_staging::dsl;
 
         let mut connection = connectors.local.pool.get()?;
 
         sql_query("TRUNCATE etablissement_staging").execute(&mut connection)?;
 
-        diesel::copy_from(table)
-            .from_raw_data(table, |write| {
-                copy_remote_zipped_csv(remote_file.to_reader(), write)
-            })
+        diesel::copy_from(dsl::etablissement_staging)
+            .from_raw_data(
+                (
+                    dsl::siren,
+                    dsl::nic,
+                    dsl::siret,
+                    dsl::statut_diffusion,
+                    dsl::date_creation,
+                    dsl::tranche_effectifs,
+                    dsl::annee_effectifs,
+                    dsl::activite_principale_registre_metiers,
+                    dsl::date_dernier_traitement,
+                    dsl::etablissement_siege,
+                    dsl::nombre_periodes,
+                    dsl::complement_adresse,
+                    // dsl::numero_voie,
+                    // dsl::indice_repetition,
+                    // dsl::dernier_numero_voie,
+                    // dsl::indice_repetition_dernier_numero_voie,
+                    // dsl::type_voie,
+                    // dsl::libelle_voie,
+                    // dsl::code_postal,
+                    // dsl::libelle_commune,
+                    // dsl::libelle_commune_etranger,
+                    // dsl::distribution_speciale,
+                    // dsl::code_commune,
+                    // dsl::code_cedex,
+                    // dsl::libelle_cedex,
+                    // dsl::code_pays_etranger,
+                    // dsl::libelle_pays_etranger,
+                    // dsl::identifiant_adresse,
+                    // dsl::coordonnee_lambert_x,
+                    // dsl::coordonnee_lambert_y,
+                    // dsl::complement_adresse2,
+                    // dsl::numero_voie_2,
+                    // dsl::indice_repetition_2,
+                    // dsl::type_voie_2,
+                    // dsl::libelle_voie_2,
+                    // dsl::code_postal_2,
+                    // dsl::libelle_commune_2,
+                    // dsl::libelle_commune_etranger_2,
+                    // dsl::distribution_speciale_2,
+                    // dsl::code_commune_2,
+                    // dsl::code_cedex_2,
+                    // dsl::libelle_cedex_2,
+                    // dsl::code_pays_etranger_2,
+                    // dsl::libelle_pays_etranger_2,
+                    // dsl::date_debut,
+                    // dsl::etat_administratif,
+                    // dsl::enseigne_1,
+                    // dsl::enseigne_2,
+                    // dsl::enseigne_3,
+                    // dsl::denomination_usuelle,
+                    // dsl::activite_principale,
+                    // dsl::nomenclature_activite_principale,
+                    // dsl::caractere_employeur,
+                ),
+                |write| copy_remote_zipped_csv(remote_file.to_reader(), write),
+            )
             .with_delimiter(',')
             .with_format(CopyFormat::Csv)
             .with_header(CopyHeader::Set(true))
