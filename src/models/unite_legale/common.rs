@@ -42,4 +42,5 @@ pub struct UniteLegale {
     pub societe_mission: Option<String>,
     pub caractere_employeur: Option<String>,
     pub activite_principale_naf25: Option<String>,
+    pub search_denomination: Option<String>,
 }
