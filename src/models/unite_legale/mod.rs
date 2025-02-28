@@ -1,9 +1,9 @@
 pub mod common;
 pub mod error;
 
-use super::common::{Error as UpdatableError, UpdatableModel, copy_remote_zipped_csv};
+use super::common::{copy_remote_zipped_csv, Error as UpdatableError, UpdatableModel};
 use super::schema::unite_legale::dsl;
-use crate::connectors::{Connectors, local::Connection};
+use crate::connectors::{local::Connection, Connectors};
 use crate::update::utils::remote_file::RemoteFile;
 use async_trait::async_trait;
 use chrono::NaiveDateTime;

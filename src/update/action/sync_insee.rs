@@ -1,7 +1,7 @@
 use super::super::error::Error;
 use super::super::summary::SummaryGroupDelegate;
 use super::common::Action;
-use crate::connectors::{Connectors, insee::INITIAL_CURSOR};
+use crate::connectors::{insee::INITIAL_CURSOR, Connectors};
 use crate::models::group_metadata;
 use crate::models::group_metadata::common::GroupType;
 use async_trait::async_trait;

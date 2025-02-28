@@ -1,9 +1,9 @@
-use super::Connector;
 use super::error::InseeUpdate;
 use super::types::{
-    InseeCountQueryParams, InseeCountResponse, InseeQueryParams, InseeResponse,
     etablissement::InseeEtablissementResponse, unite_legale::InseeUniteLegaleResponse,
+    InseeCountQueryParams, InseeCountResponse, InseeQueryParams, InseeResponse,
 };
+use super::Connector;
 use crate::models::etablissement::common::Etablissement;
 use crate::models::unite_legale::common::UniteLegale;
 use chrono::NaiveDateTime;

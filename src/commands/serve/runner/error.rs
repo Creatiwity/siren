@@ -5,7 +5,7 @@ use custom_error::custom_error;
 use serde::Serialize;
 use std::convert::Infallible;
 use tracing::{debug, error, warn};
-use warp::{Rejection, Reply, http::StatusCode};
+use warp::{http::StatusCode, Rejection, Reply};
 
 custom_error! { pub Error
     InvalidData = "Invalid data",

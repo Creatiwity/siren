@@ -1,7 +1,7 @@
 pub mod etablissement;
 pub mod unite_legale;
 
-use serde::{Deserialize, Serialize, de::DeserializeOwned};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::fmt::Display;
 use std::str::FromStr;
 use tracing::error;
