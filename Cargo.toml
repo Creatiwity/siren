@@ -21,7 +21,7 @@ diesel = { version = "2.3", features = [
 diesel_migrations = { version = "2.3", features = ["postgres"] }
 dotenv = "0.15"
 futures = "0.3"
-postgis_diesel = { version = "2.4", features = ["serde"] }
+postgis_diesel = { version = "3.0", features = ["serde"] }
 r2d2 = "0.8"
 reqwest = { version = "0.12", features = ["json", "stream"] }
 serde = { version = "1.0", features = ["derive"] }
