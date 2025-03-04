@@ -2009,9 +2009,9 @@ checksum = "7edddbd0b52d732b21ad9a5fab5c704c14cd949e5e9a1ec5929a24fded1b904c"
 
 [[package]]
 name = "postgis_diesel"
-version = "2.5.0"
+version = "3.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "09bc7d86772169b99940c675e298975abf9ad042eafa98d22112baf541264581"
+checksum = "436e1a10fb43ba8d366b70d0daf6dbff621808dfecfa46d85198f17d3bd2611f"
 dependencies = [
  "byteorder",
  "diesel",

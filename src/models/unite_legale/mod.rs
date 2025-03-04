@@ -48,16 +48,52 @@ impl UpdatableModel for UniteLegaleModel {
         connectors: &Connectors,
         remote_file: RemoteFile,
     ) -> Result<bool, UpdatableError> {
-        use super::schema::unite_legale_staging::*;
+        use super::schema::unite_legale_staging::dsl;
 
         let mut connection = connectors.local.pool.get()?;
 
         sql_query("TRUNCATE unite_legale_staging").execute(&mut connection)?;
 
-        diesel::copy_from(table)
-            .from_raw_data(table, |write| {
-                copy_remote_zipped_csv(remote_file.to_reader(), write)
-            })
+        diesel::copy_from(dsl::unite_legale_staging)
+            .from_raw_data(
+                (
+                    dsl::siren,
+                    dsl::statut_diffusion,
+                    dsl::unite_purgee,
+                    dsl::date_creation,
+                    dsl::sigle,
+                    dsl::sexe,
+                    dsl::prenom_1,
+                    dsl::prenom_2,
+                    dsl::prenom_3,
+                    dsl::prenom_4,
+                    dsl::prenom_usuel,
+                    dsl::pseudonyme,
+                    dsl::identifiant_association,
+                    dsl::tranche_effectifs,
+                    dsl::annee_effectifs,
+                    dsl::date_dernier_traitement,
+                    dsl::nombre_periodes,
+                    dsl::categorie_entreprise,
+                    dsl::annee_categorie_entreprise,
+                    dsl::date_debut,
+                    dsl::etat_administratif,
+                    dsl::nom,
+                    dsl::nom_usage,
+                    dsl::denomination,
+                    dsl::denomination_usuelle_1,
+                    dsl::denomination_usuelle_2,
+                    dsl::denomination_usuelle_3,
+                    dsl::categorie_juridique,
+                    dsl::activite_principale,
+                    dsl::nomenclature_activite_principale,
+                    dsl::nic_siege,
+                    dsl::economie_sociale_solidaire,
+                    dsl::societe_mission,
+                    dsl::caractere_employeur,
+                ),
+                |write| copy_remote_zipped_csv(remote_file.to_reader(), write),
+            )
             .with_delimiter(',')
             .with_format(CopyFormat::Csv)
             .with_header(CopyHeader::Set(true))
