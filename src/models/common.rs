@@ -1,7 +1,7 @@
 use std::io::{Read, Seek, Write};
 
-use crate::connectors::insee::error::InseeUpdate;
 use crate::connectors::Connectors;
+use crate::connectors::insee::error::InseeUpdate;
 use crate::update::utils::remote_file::RemoteFile;
 use async_trait::async_trait;
 use chrono::NaiveDateTime;

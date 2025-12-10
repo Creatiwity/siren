@@ -15,10 +15,10 @@ use error::Error;
 use serde::Serialize;
 use std::convert::Infallible;
 use std::net::SocketAddr;
-use tracing::{info, instrument, span, Level};
+use tracing::{Level, info, instrument, span};
 use warp::{
-    http::{header, Method, StatusCode},
     Filter, Rejection, Reply,
+    http::{Method, StatusCode, header},
 };
 
 impl From<UpdateMetadata> for StatusCode {

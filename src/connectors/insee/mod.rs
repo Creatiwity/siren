@@ -4,7 +4,7 @@ mod types;
 pub mod error;
 
 use error::InseeTokenError;
-use reqwest::header::{HeaderMap, HeaderValue, ACCEPT};
+use reqwest::header::{ACCEPT, HeaderMap, HeaderValue};
 use std::env;
 use std::time::{Duration, Instant};
 

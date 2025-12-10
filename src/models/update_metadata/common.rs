@@ -5,7 +5,7 @@ use diesel::deserialize::{self, FromSql};
 use diesel::pg::{Pg, PgValue};
 use diesel::serialize::{self, IsNull, Output, ToSql};
 use diesel::sql_types::{Jsonb, Text};
-use diesel::{prelude::*, AsExpression, FromSqlRow};
+use diesel::{AsExpression, FromSqlRow, prelude::*};
 use serde::{Deserialize, Serialize};
 use std::io::Write;
 
