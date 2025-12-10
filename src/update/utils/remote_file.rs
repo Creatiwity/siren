@@ -138,12 +138,9 @@ impl Read for RemoteFileReader {
                 )
                 .send()
                 .await
-                .map_err(|req_error| std::io::Error::new(std::io::ErrorKind::Other, req_error))?;
+                .map_err(std::io::Error::other)?;
 
-            let bytes = resp
-                .bytes()
-                .await
-                .map_err(|req_error| std::io::Error::new(std::io::ErrorKind::Other, req_error))?;
+            let bytes = resp.bytes().await.map_err(std::io::Error::other)?;
 
             self.chunk = bytes.to_vec();
             self.chunk_offset = self.position;

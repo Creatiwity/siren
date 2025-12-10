@@ -147,10 +147,10 @@ async fn get_daily_data<T: InseeResponse>(
         Ok(response) => response.json::<T>().await,
         Err(error) => {
             // Insee returns 404 for empty data
-            if let Some(status) = error.status() {
-                if status == reqwest::StatusCode::NOT_FOUND {
-                    return Ok((None, None));
-                }
+            if let Some(status) = error.status()
+                && status == reqwest::StatusCode::NOT_FOUND
+            {
+                return Ok((None, None));
             }
 
             Err(error)

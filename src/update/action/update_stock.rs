@@ -27,35 +27,38 @@ impl Action for UpdateAction {
         let remote_file = RemoteFile::new(metadata.url.clone()).await?;
         let last_modified = remote_file.last_modified;
 
+        debug!(
+            "Will verify dates before importing, last imported metadata {:?}, last modified {}",
+            metadata.last_imported_timestamp, last_modified
+        );
+
         if !self.force {
-            if let Some(last_imported_timestamp) = metadata.last_imported_timestamp {
-                if last_modified.le(&last_imported_timestamp) {
-                    debug!("{:#?} already imported", group_type);
+            if let Some(last_imported_timestamp) = metadata.last_imported_timestamp
+                && last_modified.le(&last_imported_timestamp)
+            {
+                debug!("{:#?} already imported", group_type);
 
-                    summary_delegate.finish(
-                        connectors,
-                        String::from("already imported"),
-                        0,
-                        false,
-                    )?;
+                summary_delegate.finish(connectors, String::from("already imported"), 0, false)?;
 
-                    return Ok(());
-                }
+                return Ok(());
             }
 
-            if let Some(staging_imported_timestamp) = metadata.staging_imported_timestamp {
-                if last_modified.le(&staging_imported_timestamp) {
-                    debug!("{:#?} already download, unzippped and inserted", group_type);
+            if let Some(staging_imported_timestamp) = metadata.staging_imported_timestamp
+                && last_modified.le(&staging_imported_timestamp)
+            {
+                debug!(
+                    "{:#?} already downloaded, unzippped and inserted",
+                    group_type
+                );
 
-                    summary_delegate.finish(
-                        connectors,
-                        String::from("already download, unzippped and inserted"),
-                        0,
-                        false,
-                    )?;
+                summary_delegate.finish(
+                    connectors,
+                    String::from("already downloaded, unzippped and inserted"),
+                    0,
+                    false,
+                )?;
 
-                    return Ok(());
-                }
+                return Ok(());
             }
         }
 
