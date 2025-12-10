@@ -5,6 +5,12 @@ on: [push]
 jobs:
   build:
     runs-on: ubuntu-latest
+    container: ghcr.io/blackdex/rust-musl:x86_64-musl-stable
+
+    outputs:
+      version: ${{ steps.prep.outputs.version }}
+      tags: ${{ steps.prep.outputs.tags }}
+      created: ${{ steps.prep.outputs.created }}
 
     steps:
       - name: Checkout repository
@@ -12,6 +18,7 @@ jobs:
 
       - name: Prepare tags
         id: prep
+        shell: bash
         run: |
           DOCKER_IMAGE=creatiwity/siren
           VERSION=noop
@@ -39,32 +46,53 @@ jobs:
           echo "tags=${TAGS}" >> $GITHUB_OUTPUT
           echo "created=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> $GITHUB_OUTPUT
 
-      - name: Caching MUSL
-        uses: actions/cache@v4
+      - uses: actions/cache@v4
         with:
           path: |
-            ~/.cargo/registry
-          key: ${{ runner.os }}-cargo-musl-${{ hashFiles('**/Cargo.lock') }}
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Build for MUSL
         run: |
-          mkdir -p ~/.cargo/{git,registry}
-          mkdir -p $GITHUB_WORKSPACE/target
-          docker pull clux/muslrust:stable
-          docker run \
-            -v ~/.cargo/registry:/root/.cargo/registry \
-            -v $GITHUB_WORKSPACE:/volume \
-            --rm -t clux/muslrust:stable \
-            sh -c "/volume/build-musl.sh"
+          cargo build --release
+          cp ./target/x86_64-unknown-linux-musl/release/sirene ./dist
+          strip ./dist/sirene
 
       - name: Archive production artifact
         uses: actions/upload-artifact@v4
         with:
           name: sirene
-          path: dist/sirene
+          path: ./dist/sirene
+
+      - name: Archive production artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Dockerfile
+          path: ./dist/Dockerfile
+
+  push:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request'
+
+    steps:
+      - name: Download production artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: sirene
+          path: ./dist
+
+      - name: Download production artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: Dockerfile
+          path: ./dist
 
       - name: Caching Docker layers
-        if: github.event_name != 'pull_request'
         uses: actions/cache@v4
         with:
           path: /tmp/.buildx-cache
@@ -73,30 +101,26 @@ jobs:
             ${{ runner.os }}-buildx-
 
       - name: Set up QEMU
-        if: github.event_name != 'pull_request'
         uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
-        if: github.event_name != 'pull_request'
         uses: docker/setup-buildx-action@v3
         with:
           driver-opts: image=moby/buildkit:master
 
       - name: Login to DockerHub
-        if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Docker build and push
-        if: github.event_name != 'pull_request'
         uses: docker/build-push-action@v6
         with:
           context: ./dist
           file: ./dist/Dockerfile
           push: true
-          tags: ${{ steps.prep.outputs.tags }}
+          tags: ${{ needs.build.outputs.tags }}
           cache-from: type=local,src=/tmp/.buildx-cache
           cache-to: type=local,dest=/tmp/.buildx-cache
 
