@@ -104,13 +104,6 @@ impl RemoteFile {
 
 impl Read for RemoteFileReader {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-        // Fill buf with data from position to position + buf.len()
-        debug!(
-            "Reading from {} to {}",
-            self.position,
-            self.position + buf.len() as u64
-        );
-
         if self.chunk_offset <= self.position
             && self.position + buf.len() as u64 <= self.chunk_offset + self.chunk.len() as u64
         {
