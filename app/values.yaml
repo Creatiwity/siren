@@ -25,6 +25,7 @@ pgPassword:
 apiKey:
 baseUrl:
 inseeCredentials:
+sentryDsn:
 
 serviceAccount:
   # Specifies whether a service account should be created

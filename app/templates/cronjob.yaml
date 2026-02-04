@@ -34,4 +34,6 @@ spec:
                   value: {{ .Values.sireneEnv }}
                 - name: "INSEE_CREDENTIALS"
                   value: {{ .Values.inseeCredentials }}
+                - name: "SENTRY_DSN"
+                  value: {{ .Values.sentryDsn }}
               args: ["update", "all"]
