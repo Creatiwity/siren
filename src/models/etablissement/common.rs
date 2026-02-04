@@ -59,4 +59,5 @@ pub struct Etablissement {
     pub activite_principale: Option<String>,
     pub nomenclature_activite_principale: Option<String>,
     pub caractere_employeur: Option<String>,
+    pub activite_principale_naf25: Option<String>,
 }
