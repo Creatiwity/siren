@@ -80,6 +80,9 @@ pub async fn run(flags: UpdateFlags, builders: ConnectorsBuilders) {
             "{}",
             serde_json::to_string_pretty(&summary).expect("Unable to stringify summary")
         ),
-        Err(error) => error.exit(),
+        Err(error) => {
+            sentry::capture_error(&error);
+            error.exit()
+        }
     }
 }

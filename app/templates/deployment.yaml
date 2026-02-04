@@ -54,6 +54,8 @@ spec:
               value: {{ .Values.sireneEnv }}
             - name: "BASE_URL"
               value: {{ .Values.baseUrl }}
+            - name: "SENTRY_DSN"
+              value: {{ .Values.sentryDsn }}
           livenessProbe:
             httpGet:
               path: /v3
