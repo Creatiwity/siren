@@ -60,6 +60,7 @@ diesel::table! {
         activite_principale -> Nullable<Text>,
         nomenclature_activite_principale -> Nullable<Text>,
         caractere_employeur -> Nullable<Text>,
+        activite_principale_naf25 -> Nullable<Text>,
     }
 }
 
@@ -123,6 +124,7 @@ diesel::table! {
         activite_principale -> Nullable<Text>,
         nomenclature_activite_principale -> Nullable<Text>,
         caractere_employeur -> Nullable<Text>,
+        activite_principale_naf25 -> Nullable<Text>,
     }
 }
 
@@ -186,6 +188,7 @@ diesel::table! {
         societe_mission -> Nullable<Varchar>,
         #[max_length = 1]
         caractere_employeur -> Nullable<Varchar>,
+        activite_principale_naf25 -> Nullable<Text>,
     }
 }
 
@@ -232,6 +235,7 @@ diesel::table! {
         societe_mission -> Nullable<Varchar>,
         #[max_length = 1]
         caractere_employeur -> Nullable<Varchar>,
+        activite_principale_naf25 -> Nullable<Text>,
     }
 }
 
