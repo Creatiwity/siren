@@ -9,7 +9,7 @@ use diesel::{AsExpression, FromSqlRow, prelude::*};
 use serde::{Deserialize, Serialize};
 use std::io::Write;
 
-#[derive(Queryable, Serialize)]
+#[derive(Queryable, Serialize, Clone)]
 pub struct UpdateMetadata {
     pub id: i32,
     pub synthetic_group_type: SyntheticGroupType,

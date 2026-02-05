@@ -5,6 +5,14 @@ pub mod common;
 use crate::models;
 use crate::models::update_metadata::common::UpdateMetadata;
 use crate::update::{common::Config as DataConfig, update as update_data};
+use axum::{
+    Json, Router,
+    body::Body,
+    extract::{Path, Query, State},
+    http::{Method, StatusCode, header},
+    response::{IntoResponse, Response},
+    routing::{get, post},
+};
 use chrono::Utc;
 use common::{
     Context, EtablissementInnerResponse, EtablissementResponse, MetadataResponse,
@@ -12,14 +20,11 @@ use common::{
     UniteLegaleResponse, UpdateOptions,
 };
 use error::Error;
+use sentry::integrations::tower::NewSentryLayer;
 use serde::Serialize;
-use std::convert::Infallible;
 use std::net::SocketAddr;
+use std::sync::Arc;
 use tracing::{Level, info, instrument, span};
-use warp::{
-    Filter, Rejection, Reply,
-    http::{Method, StatusCode, header},
-};
 
 impl From<UpdateMetadata> for StatusCode {
     fn from(metadata: UpdateMetadata) -> Self {
@@ -31,7 +36,11 @@ impl From<UpdateMetadata> for StatusCode {
     }
 }
 
-async fn index(context: Context) -> Result<impl Reply, Rejection> {
+async fn health_check() -> &'static str {
+    "OK"
+}
+
+async fn index(State(context): State<Arc<Context>>) -> Result<Json<MetadataResponse>, Error> {
     let connectors = context.builders.create();
 
     let update_metadata = models::update_metadata::last_success_update(&connectors)?;
@@ -47,24 +56,24 @@ async fn index(context: Context) -> Result<impl Reply, Rejection> {
         },
     };
 
-    Ok(warp::reply::with_status(
-        warp::reply::json(&reply),
-        StatusCode::OK,
-    ))
+    Ok(Json(reply))
 }
 
-async fn update(options: UpdateOptions, context: Context) -> Result<impl Reply, Rejection> {
+async fn update(
+    State(context): State<Arc<Context>>,
+    Json(options): Json<UpdateOptions>,
+) -> Result<Response, Error> {
     let api_key = match &context.api_key {
         Some(key) => key,
-        None => return Err(Error::MissingApiKey.into()),
+        None => return Err(Error::MissingApiKey),
     };
 
     if &options.api_key != api_key {
-        return Err(Error::ApiKey.into());
+        return Err(Error::ApiKey);
     }
 
     if options.asynchronous && context.base_url.is_none() {
-        return Err(Error::MissingBaseUrlForAsync.into());
+        return Err(Error::MissingBaseUrlForAsync);
     }
 
     let mut connectors = context.builders.create_with_insee()?;
@@ -79,60 +88,64 @@ async fn update(options: UpdateOptions, context: Context) -> Result<impl Reply, 
     )
     .await?;
 
-    reply_with_update_metadata(update_metadata, context.base_url, api_key)
+    reply_with_update_metadata(update_metadata, context.base_url.clone(), api_key)
 }
 
-async fn status(query: StatusQueryString, context: Context) -> Result<impl Reply, Rejection> {
+async fn status(
+    State(context): State<Arc<Context>>,
+    Query(query): Query<StatusQueryString>,
+) -> Result<Response, Error> {
     let api_key = match &context.api_key {
         Some(key) => key,
-        None => return Err(Error::MissingApiKey.into()),
+        None => return Err(Error::MissingApiKey),
     };
 
     if &query.api_key != api_key {
-        return Err(Error::ApiKey.into());
+        return Err(Error::ApiKey);
     }
 
     let connectors = context.builders.create();
 
     let update_metadata = models::update_metadata::current_update(&connectors)?;
 
-    reply_with_update_metadata(update_metadata, context.base_url, api_key)
+    reply_with_update_metadata(update_metadata, context.base_url.clone(), api_key)
 }
 
-fn reply_with_update_metadata<T: Serialize + Into<StatusCode>>(
+fn reply_with_update_metadata<T: Serialize + Clone + Into<StatusCode>>(
     update_metadata: T,
     base_url: Option<String>,
     api_key: &str,
-) -> Result<impl Reply + use<T>, Rejection> {
-    Ok(warp::reply::with_status(
-        warp::reply::with_header(
-            warp::reply::with_header(
-                warp::reply::json(&update_metadata),
-                "Location",
-                format!(
-                    "{}/admin/update/status?api_key={}",
-                    base_url.unwrap_or_default(),
-                    api_key
-                ),
-            ),
-            "Retry-After",
-            "10",
-        ),
-        update_metadata.into(),
-    ))
+) -> Result<Response, Error> {
+    let status_code = update_metadata.clone().into();
+    let mut response = Json(update_metadata).into_response();
+    *response.status_mut() = status_code;
+
+    if let Some(base_url) = base_url {
+        response.headers_mut().insert(
+            "Location",
+            format!("{}/admin/update/status?api_key={}", base_url, api_key)
+                .parse()
+                .unwrap(),
+        );
+        response
+            .headers_mut()
+            .insert("Retry-After", "10".parse().unwrap());
+    }
+
+    Ok(response)
 }
 
 async fn set_status_to_error(
-    query: StatusQueryString,
-    context: Context,
-) -> Result<impl Reply, Rejection> {
+    State(context): State<Arc<Context>>,
+    Json(query): Json<StatusQueryString>,
+) -> Result<Response, Error> {
     let api_key = match &context.api_key {
         Some(key) => key,
-        None => return Err(Error::MissingApiKey.into()),
+        None => return Err(Error::MissingApiKey),
     };
 
     if &query.api_key != api_key {
-        return Err(Error::ApiKey.into());
+        return Err(Error::ApiKey);
     }
 
     let connectors = context.builders.create();
@@ -143,16 +156,19 @@ async fn set_status_to_error(
         Utc::now(),
     )?;
 
-    Ok(warp::reply())
+    Ok(Response::new(Body::empty()))
 }
 
 #[instrument(level = "trace")]
-async fn unites_legales(siren: String, context: Context) -> Result<impl Reply, Rejection> {
+async fn unites_legales(
+    State(context): State<Arc<Context>>,
+    Path(siren): Path<String>,
+) -> Result<Json<UniteLegaleResponse>, Error> {
     let span = span!(Level::TRACE, "GET /unites_legales");
     let _enter = span.enter();
 
     if siren.len() != 9 {
-        return Err(Error::InvalidData.into());
+        return Err(Error::InvalidData);
     }
 
     let connectors = context.builders.create();
@@ -167,7 +183,7 @@ async fn unites_legales(siren: String, context: Context) -> Result<impl Reply, R
     let etablissement_siege =
         models::etablissement::get_siege_with_siren(&mut connection, &unite_legale.siren)?;
 
-    Ok(warp::reply::json(&UniteLegaleResponse {
+    Ok(Json(UniteLegaleResponse {
         unite_legale: UniteLegaleInnerResponse {
             unite_legale,
             etablissements,
@@ -177,12 +193,15 @@ async fn unites_legales(siren: String, context: Context) -> Result<impl Reply, R
 }
 
 #[instrument(level = "trace")]
-async fn etablissements(siret: String, context: Context) -> Result<impl Reply, Rejection> {
+async fn etablissements(
+    State(context): State<Arc<Context>>,
+    Path(siret): Path<String>,
+) -> Result<Json<EtablissementResponse>, Error> {
     let span = span!(Level::TRACE, "GET /etablissements");
     let _enter = span.enter();
 
     if siret.len() != 14 {
-        return Err(Error::InvalidData.into());
+        return Err(Error::InvalidData);
     }
 
     let connectors = context.builders.create();
@@ -197,7 +216,7 @@ async fn etablissements(siret: String, context: Context) -> Result<impl Reply, R
     let etablissement_siege =
         models::etablissement::get_siege_with_siren(&mut connection, &etablissement.siren)?;
 
-    Ok(warp::reply::json(&EtablissementResponse {
+    Ok(Json(EtablissementResponse {
         etablissement: EtablissementInnerResponse {
             etablissement,
             unite_legale: UniteLegaleEtablissementInnerResponse {
@@ -209,82 +228,38 @@ async fn etablissements(siret: String, context: Context) -> Result<impl Reply, R
 }
 
 pub async fn run(addr: SocketAddr, context: Context) {
-    // GET / -> OK
-    let health_route = warp::get()
-        .and(warp::path::end())
-        .map(|| warp::reply::with_status("OK", warp::http::StatusCode::OK));
+    let shared_context = Arc::new(context);
+
+    let app = Router::new()
+        .route("/", get(health_check))
+        .route("/v3", get(index))
+        .route("/v3/unites_legales/{siren}", get(unites_legales))
+        .route("/v3/etablissements/{siret}", get(etablissements))
+        .route("/admin/update", post(update))
+        .route("/admin/update/status", get(status))
+        .route("/admin/update/status/error", post(set_status_to_error))
+        .layer(
+            tower_http::cors::CorsLayer::new()
+                .allow_methods([Method::GET, Method::POST])
+                .allow_headers([header::CONTENT_TYPE])
+                .allow_origin(tower_http::cors::Any),
+        )
+        .layer(tower_http::trace::TraceLayer::new_for_http())
+        .layer(NewSentryLayer::new_from_top())
+        .with_state(shared_context);
+
     info!("Mount GET /");
-
-    let v3_route = warp::path!("v3" / ..);
-
-    // GET /v3 -> Status
-    let v3_index = warp::path::end()
-        .and(with_context(context.clone()))
-        .and_then(index);
     info!("Mount GET /v3");
-
-    // GET /unites_legales/<siren>
-    let v3_unites_legales_route = warp::get()
-        .and(warp::path!("unites_legales" / String))
-        .and(with_context(context.clone()))
-        .and_then(unites_legales);
     info!("Mount GET /v3/unites_legales/<siren>");
-
-    // GET /etablissements/<siret>
-    let v3_etablissement_route = warp::get()
-        .and(warp::path!("etablissements" / String))
-        .and(with_context(context.clone()))
-        .and_then(etablissements);
     info!("Mount GET /v3/etablissements/<siret>");
-
-    let admin_update_route = warp::path!("admin" / "update" / ..);
-
-    // POST /admin/update {json}
-    let update_route = warp::post()
-        .and(warp::path::end())
-        .and(warp::body::content_length_limit(1024 * 32))
-        .and(warp::body::json::<UpdateOptions>())
-        .and(with_context(context.clone()))
-        .and_then(update);
     info!("Mount POST /admin/update {{json}}");
-
-    // GET /admin/update/status?api_key=""
-    let status_route = warp::get()
-        .and(warp::path!("status"))
-        .and(warp::query::<StatusQueryString>())
-        .and(with_context(context.clone()))
-        .and_then(status);
     info!("Mount GET /admin/update/status?api_key=");
-
-    // POST /admin/update/status/error { api_key }
-    let status_error_route = warp::post()
-        .and(warp::path!("status" / "error"))
-        .and(warp::body::content_length_limit(1024 * 32))
-        .and(warp::body::json::<StatusQueryString>())
-        .and(with_context(context))
-        .and_then(set_status_to_error);
     info!("Mount POST /admin/update/status/error {{api_key}}");
 
-    // Cors
-    let cors = warp::cors()
-        .allow_methods(&[Method::GET, Method::POST])
-        .allow_headers(vec![header::CONTENT_TYPE])
-        .allow_any_origin();
-
-    let routes = health_route
-        .or(v3_route.and(
-            v3_unites_legales_route
-                .or(v3_etablissement_route)
-                .or(v3_index),
-        ))
-        .or(admin_update_route.and(status_route.or(update_route).or(status_error_route)))
-        .recover(error::handle_rejection)
-        .with(warp::trace::request())
-        .with(cors);
-
-    warp::serve(routes).run(addr).await;
-}
-
-fn with_context(context: Context) -> impl Filter<Extract = (Context,), Error = Infallible> + Clone {
-    warp::any().map(move || context.clone())
+    axum::serve(
+        tokio::net::TcpListener::bind(&addr).await.unwrap(),
+        app.into_make_service(),
+    )
+    .await
+    .unwrap();
 }
