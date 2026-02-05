@@ -2,8 +2,9 @@ use super::super::schema::etablissement;
 use chrono::{NaiveDate, NaiveDateTime};
 use diesel::prelude::*;
 use serde::Serialize;
+use utoipa::ToSchema;
 
-#[derive(Insertable, Queryable, Serialize, Clone, Debug)]
+#[derive(Insertable, Queryable, ToSchema, Serialize, Clone, Debug)]
 #[diesel(table_name = etablissement)]
 pub struct Etablissement {
     pub siren: String,

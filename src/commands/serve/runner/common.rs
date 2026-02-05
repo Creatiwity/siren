@@ -4,6 +4,10 @@ use crate::models::unite_legale::common::UniteLegale;
 use crate::models::update_metadata::common::SyntheticGroupType;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
+
+pub const ADMIN_TAG: &str = "admin";
+pub const PUBLIC_TAG: &str = "public";
 
 #[derive(Clone, Debug)]
 pub struct Context {
@@ -12,7 +16,7 @@ pub struct Context {
     pub base_url: Option<String>,
 }
 
-#[derive(Deserialize)]
+#[derive(ToSchema, Deserialize)]
 pub struct UpdateOptions {
     pub api_key: String,
     pub group_type: SyntheticGroupType,
@@ -20,23 +24,23 @@ pub struct UpdateOptions {
     pub asynchronous: bool,
 }
 
-#[derive(Deserialize)]
+#[derive(ToSchema, Deserialize)]
 pub struct StatusQueryString {
     pub api_key: String,
 }
 
-#[derive(Serialize)]
+#[derive(ToSchema, Serialize)]
 pub struct UniteLegaleResponse {
     pub unite_legale: UniteLegaleInnerResponse,
 }
 
-#[derive(Serialize)]
+#[derive(ToSchema, Serialize)]
 pub struct MetadataResponse {
     pub launched_timestamp: Option<DateTime<Utc>>,
     pub finished_timestamp: Option<DateTime<Utc>>,
 }
 
-#[derive(Serialize)]
+#[derive(ToSchema, Serialize)]
 pub struct UniteLegaleInnerResponse {
     #[serde(flatten)]
     pub unite_legale: UniteLegale,
@@ -44,19 +48,19 @@ pub struct UniteLegaleInnerResponse {
     pub etablissement_siege: Etablissement,
 }
 
-#[derive(Serialize)]
+#[derive(ToSchema, Serialize)]
 pub struct EtablissementResponse {
     pub etablissement: EtablissementInnerResponse,
 }
 
-#[derive(Serialize)]
+#[derive(ToSchema, Serialize)]
 pub struct EtablissementInnerResponse {
     #[serde(flatten)]
     pub etablissement: Etablissement,
     pub unite_legale: UniteLegaleEtablissementInnerResponse,
 }
 
-#[derive(Serialize)]
+#[derive(ToSchema, Serialize)]
 pub struct UniteLegaleEtablissementInnerResponse {
     #[serde(flatten)]
     pub unite_legale: UniteLegale,
