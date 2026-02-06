@@ -130,6 +130,7 @@ impl UpdatableModel for EtablissementModel {
                     dsl::activite_principale,
                     dsl::nomenclature_activite_principale,
                     dsl::caractere_employeur,
+                    dsl::activite_principale_naf25,
                 ),
                 |write| copy_remote_zipped_csv(remote_file.to_reader(), write),
             )
