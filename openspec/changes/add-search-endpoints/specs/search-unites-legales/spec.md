@@ -58,22 +58,37 @@ The system SHALL allow filtering legal units by exact field values via query par
 
 ### Requirement: Sort unite legale search results
 
-The system SHALL allow sorting search results via a `sort` query parameter.
+The system SHALL allow sorting search results via a `sort` query parameter using the format `<field>` or `<field>:<direction>` where direction is `asc` or `desc`. When direction is omitted, sensible defaults apply per field.
 
 #### Scenario: Sort by relevance
 
 - **WHEN** a GET request is made to `/v3/unites_legales?q=creati&sort=relevance`
 - **THEN** results are sorted by BM25 text relevance score descending (most relevant first)
 
+#### Scenario: Sort by relevance ascending
+
+- **WHEN** a GET request is made to `/v3/unites_legales?q=creati&sort=relevance:asc`
+- **THEN** results are sorted by BM25 text relevance score ascending (least relevant first)
+
 #### Scenario: Sort by date_creation
 
 - **WHEN** a GET request is made to `/v3/unites_legales?sort=date_creation`
 - **THEN** results are sorted by `date_creation` descending (newest first)
 
+#### Scenario: Sort by date_creation ascending
+
+- **WHEN** a GET request is made to `/v3/unites_legales?sort=date_creation:asc`
+- **THEN** results are sorted by `date_creation` ascending (oldest first)
+
 #### Scenario: Sort by date_debut
 
 - **WHEN** a GET request is made to `/v3/unites_legales?sort=date_debut`
 - **THEN** results are sorted by `date_debut` descending (newest first)
+
+#### Scenario: Sort by date_debut ascending
+
+- **WHEN** a GET request is made to `/v3/unites_legales?sort=date_debut:asc`
+- **THEN** results are sorted by `date_debut` ascending (oldest first)
 
 #### Scenario: Default sort with text search
 
@@ -121,9 +136,10 @@ The system SHALL return search results in a structured response with metadata.
 #### Scenario: Successful search response
 
 - **WHEN** a search query returns results
-- **THEN** the response body contains an `unites_legales` array with each item containing at minimum: `siren`, `etat_administratif`, `date_creation`, `search_denomination`, `activite_principale`, `categorie_juridique`, `categorie_entreprise`
+- **THEN** the response body contains an `unites_legales` array with each item containing at minimum: `siren`, `etat_administratif`, `date_creation`, `denomination`, `denomination_usuelle_1`, `denomination_usuelle_2`, `denomination_usuelle_3`, `activite_principale`, `categorie_juridique`, `categorie_entreprise`
 - **AND** the response includes `total` with the total count of matching results
 - **AND** the response includes `limit` and `offset` reflecting the applied pagination
+- **AND** the response includes `sort` and `direction` reflecting the resolved sort field and direction
 
 #### Scenario: Empty search results
 

@@ -1,9 +1,10 @@
 use super::super::schema::etablissement;
 use chrono::{NaiveDate, NaiveDateTime};
 use diesel::prelude::*;
+use diesel::sql_types::{BigInt, Bool, Float4, Float8, Nullable, Text, VarChar};
 use postgis_diesel::types::Point;
-use serde::Serialize;
-use utoipa::ToSchema;
+use serde::{Deserialize, Serialize};
+use utoipa::{IntoParams, ToSchema};
 
 #[derive(Insertable, Serialize, Clone, Debug)]
 #[diesel(table_name = etablissement)]
@@ -123,5 +124,118 @@ pub struct Etablissement {
     pub caractere_employeur: Option<String>,
     pub activite_principale_naf25: Option<String>,
     pub search_denomination: Option<String>,
+    #[schema(value_type = Option<Object>)]
     pub position: Option<Point>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum EtablissementSortField {
+    DateCreation,
+    DateDebut,
+    Distance,
+    Relevance,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum SortDirection {
+    Asc,
+    Desc,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, ToSchema)]
+pub enum EtatAdministratif {
+    A,
+    F,
+}
+
+#[derive(Debug, Deserialize, IntoParams)]
+pub struct EtablissementSearchParams {
+    pub q: Option<String>,
+    pub etat_administratif: Option<EtatAdministratif>,
+    pub code_postal: Option<String>,
+    pub siren: Option<String>,
+    pub code_commune: Option<String>,
+    pub activite_principale: Option<String>,
+    pub etablissement_siege: Option<bool>,
+    pub lat: Option<f64>,
+    pub lng: Option<f64>,
+    pub radius: Option<f64>,
+    pub sort: Option<EtablissementSortField>,
+    pub direction: Option<SortDirection>,
+    pub limit: Option<i64>,
+    pub offset: Option<i64>,
+}
+
+#[derive(Debug, QueryableByName, Serialize, ToSchema)]
+pub struct EtablissementSearchResult {
+    #[diesel(sql_type = VarChar)]
+    pub siret: String,
+    #[diesel(sql_type = VarChar)]
+    pub siren: String,
+    #[diesel(sql_type = VarChar)]
+    pub etat_administratif: String,
+    #[diesel(sql_type = Nullable<diesel::sql_types::Date>)]
+    pub date_creation: Option<NaiveDate>,
+    #[diesel(sql_type = Nullable<Text>)]
+    pub denomination_usuelle: Option<String>,
+    #[diesel(sql_type = Nullable<Text>)]
+    pub enseigne_1: Option<String>,
+    #[diesel(sql_type = Nullable<Text>)]
+    pub enseigne_2: Option<String>,
+    #[diesel(sql_type = Nullable<Text>)]
+    pub enseigne_3: Option<String>,
+    #[diesel(sql_type = Nullable<Text>)]
+    pub code_postal: Option<String>,
+    #[diesel(sql_type = Nullable<Text>)]
+    pub libelle_commune: Option<String>,
+    #[diesel(sql_type = Nullable<Text>)]
+    pub activite_principale: Option<String>,
+    #[diesel(sql_type = Bool)]
+    pub etablissement_siege: bool,
+    #[diesel(sql_type = Nullable<Float8>)]
+    pub meter_distance: Option<f64>,
+    #[diesel(sql_type = Nullable<Float4>)]
+    pub score: Option<f32>,
+    #[diesel(sql_type = BigInt)]
+    pub total: i64,
+}
+
+pub struct EtablissementSearchOutput {
+    pub results: Vec<EtablissementSearchResult>,
+    pub limit: i64,
+    pub offset: i64,
+    pub sort: EtablissementSortField,
+    pub direction: SortDirection,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct EtablissementSearchResponse {
+    pub etablissements: Vec<EtablissementSearchResultResponse>,
+    pub total: i64,
+    pub limit: i64,
+    pub offset: i64,
+    pub sort: EtablissementSortField,
+    pub direction: SortDirection,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct EtablissementSearchResultResponse {
+    pub siret: String,
+    pub siren: String,
+    pub etat_administratif: String,
+    pub date_creation: Option<NaiveDate>,
+    pub denomination_usuelle: Option<String>,
+    pub enseigne_1: Option<String>,
+    pub enseigne_2: Option<String>,
+    pub enseigne_3: Option<String>,
+    pub code_postal: Option<String>,
+    pub libelle_commune: Option<String>,
+    pub activite_principale: Option<String>,
+    pub etablissement_siege: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub meter_distance: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub score: Option<f32>,
 }

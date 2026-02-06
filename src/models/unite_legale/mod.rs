@@ -7,11 +7,15 @@ use crate::connectors::{Connectors, local::Connection};
 use crate::update::utils::remote_file::RemoteFile;
 use async_trait::async_trait;
 use chrono::NaiveDateTime;
-use common::UniteLegale;
+use common::{
+    SortDirection, UniteLegale, UniteLegaleSearchOutput, UniteLegaleSearchParams,
+    UniteLegaleSearchResult, UniteLegaleSortField,
+};
 use diesel::pg::upsert::excluded;
 use diesel::pg::{CopyFormat, CopyHeader};
 use diesel::prelude::*;
 use diesel::sql_query;
+use diesel::sql_types::{Date, Text};
 use error::Error;
 
 pub fn get(connection: &mut Connection, siren: &str) -> Result<UniteLegale, Error> {
@@ -19,6 +23,171 @@ pub fn get(connection: &mut Connection, siren: &str) -> Result<UniteLegale, Erro
         .find(siren)
         .first::<UniteLegale>(connection)
         .map_err(|error| error.into())
+}
+
+pub fn search(
+    connection: &mut Connection,
+    params: &UniteLegaleSearchParams,
+) -> Result<UniteLegaleSearchOutput, Error> {
+    let has_q = params.q.is_some();
+
+    let limit = params.limit.unwrap_or(20).clamp(1, 100);
+    let offset = params.offset.unwrap_or(0).clamp(0, 100_000_000);
+
+    // Build SELECT columns
+    let mut select_columns = vec![
+        "u.siren".to_string(),
+        "u.etat_administratif".to_string(),
+        "u.date_creation".to_string(),
+        "u.denomination".to_string(),
+        "u.denomination_usuelle_1".to_string(),
+        "u.denomination_usuelle_2".to_string(),
+        "u.denomination_usuelle_3".to_string(),
+        "u.activite_principale".to_string(),
+        "u.categorie_juridique".to_string(),
+        "u.categorie_entreprise".to_string(),
+    ];
+
+    if has_q {
+        select_columns.push("paradedb.score(u.ctid) AS score".to_string());
+    } else {
+        select_columns.push("NULL::real AS score".to_string());
+    }
+
+    // COUNT(*) OVER() is added by the outer CTE query, not here
+
+    // Build WHERE conditions
+    let mut conditions: Vec<String> = Vec::new();
+    let mut param_index = 1u32;
+
+    // Text search
+    if has_q {
+        conditions.push(format!("u.search_denomination ||| ${param_index}"));
+        param_index += 1;
+    }
+
+    // Field filters
+    let mut field_param_indices: Vec<(String, u32)> = Vec::new();
+
+    if let Some(ref _v) = params.etat_administratif {
+        conditions.push(format!("u.etat_administratif = ${param_index}"));
+        field_param_indices.push(("etat_administratif".to_string(), param_index));
+        param_index += 1;
+    }
+    if let Some(ref _v) = params.activite_principale {
+        conditions.push(format!("u.activite_principale = ${param_index}"));
+        field_param_indices.push(("activite_principale".to_string(), param_index));
+        param_index += 1;
+    }
+    if let Some(ref _v) = params.categorie_juridique {
+        conditions.push(format!("u.categorie_juridique = ${param_index}"));
+        field_param_indices.push(("categorie_juridique".to_string(), param_index));
+        param_index += 1;
+    }
+    if let Some(ref _v) = params.categorie_entreprise {
+        conditions.push(format!("u.categorie_entreprise = ${param_index}"));
+        field_param_indices.push(("categorie_entreprise".to_string(), param_index));
+        param_index += 1;
+    }
+    if let Some(ref _v) = params.date_creation {
+        conditions.push(format!("u.date_creation = ${param_index}"));
+        field_param_indices.push(("date_creation".to_string(), param_index));
+        param_index += 1;
+    }
+    if let Some(ref _v) = params.date_debut {
+        conditions.push(format!("u.date_debut = ${param_index}"));
+        field_param_indices.push(("date_debut".to_string(), param_index));
+        param_index += 1;
+    }
+
+    let _ = param_index; // suppress unused warning
+
+    // Build ORDER BY
+    let sort_field = params.sort.unwrap_or(if has_q {
+        UniteLegaleSortField::Relevance
+    } else {
+        UniteLegaleSortField::DateCreation
+    });
+
+    let resolved_dir = params.direction.unwrap_or(SortDirection::Desc);
+
+    let order_by = match (sort_field, resolved_dir) {
+        (UniteLegaleSortField::Relevance, SortDirection::Asc) => "score ASC",
+        (UniteLegaleSortField::Relevance, SortDirection::Desc) => "score DESC",
+        (UniteLegaleSortField::DateCreation, SortDirection::Asc) => {
+            "u.date_creation ASC NULLS LAST"
+        }
+        (UniteLegaleSortField::DateCreation, SortDirection::Desc) => {
+            "u.date_creation DESC NULLS LAST"
+        }
+        (UniteLegaleSortField::DateDebut, SortDirection::Asc) => "u.date_debut ASC NULLS LAST",
+        (UniteLegaleSortField::DateDebut, SortDirection::Desc) => "u.date_debut DESC NULLS LAST",
+    };
+
+    // Assemble query — use a CTE to isolate the search from the COUNT window function,
+    // because ParadeDB's custom scan planner rejects unsupported query shapes when
+    // COUNT(*) OVER() is combined with BM25 index scans.
+    let where_clause = if conditions.is_empty() {
+        String::new()
+    } else {
+        format!("WHERE {}", conditions.join(" AND "))
+    };
+
+    let sql = format!(
+        "WITH search_results AS (SELECT {} FROM unite_legale u {} ORDER BY {} LIMIT {} OFFSET {}) SELECT *, COUNT(*) OVER() AS total FROM search_results",
+        select_columns.join(", "),
+        where_clause,
+        order_by,
+        limit,
+        offset
+    );
+
+    // Bind parameters in order
+    let mut query = sql_query(&sql).into_boxed();
+
+    if let Some(ref q) = params.q {
+        query = query.bind::<Text, _>(q);
+    }
+
+    for (field_name, _) in &field_param_indices {
+        match field_name.as_str() {
+            "etat_administratif" => {
+                let val = match params.etat_administratif.unwrap() {
+                    common::EtatAdministratif::A => "A",
+                    common::EtatAdministratif::F => "F",
+                };
+                query = query.bind::<Text, _>(val);
+            }
+            "activite_principale" => {
+                query = query.bind::<Text, _>(params.activite_principale.as_ref().unwrap());
+            }
+            "categorie_juridique" => {
+                query = query.bind::<Text, _>(params.categorie_juridique.as_ref().unwrap());
+            }
+            "categorie_entreprise" => {
+                query = query.bind::<Text, _>(params.categorie_entreprise.as_ref().unwrap());
+            }
+            "date_creation" => {
+                query = query.bind::<Date, _>(params.date_creation.unwrap());
+            }
+            "date_debut" => {
+                query = query.bind::<Date, _>(params.date_debut.unwrap());
+            }
+            _ => {}
+        }
+    }
+
+    let results = query
+        .load::<UniteLegaleSearchResult>(connection)
+        .map_err(|e| -> Error { e.into() })?;
+
+    Ok(UniteLegaleSearchOutput {
+        results,
+        limit,
+        offset,
+        sort: sort_field,
+        direction: resolved_dir,
+    })
 }
 
 pub struct UniteLegaleModel {}

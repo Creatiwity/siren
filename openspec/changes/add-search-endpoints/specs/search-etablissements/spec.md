@@ -84,27 +84,47 @@ The system SHALL allow filtering establishments within a geographic radius from 
 
 ### Requirement: Sort etablissement search results
 
-The system SHALL allow sorting search results via a `sort` query parameter.
+The system SHALL allow sorting search results via a `sort` query parameter using the format `<field>` or `<field>:<direction>` where direction is `asc` or `desc`. When direction is omitted, sensible defaults apply per field.
 
 #### Scenario: Sort by distance
 
 - **WHEN** a GET request is made to `/v3/etablissements?lat=48.8566&lng=2.3522&radius=5000&sort=distance`
 - **THEN** results are sorted by geographic distance ascending (nearest first)
 
+#### Scenario: Sort by distance descending
+
+- **WHEN** a GET request is made to `/v3/etablissements?lat=48.8566&lng=2.3522&radius=5000&sort=distance:desc`
+- **THEN** results are sorted by geographic distance descending (farthest first)
+
 #### Scenario: Sort by relevance
 
 - **WHEN** a GET request is made to `/v3/etablissements?q=creati&sort=relevance`
 - **THEN** results are sorted by BM25 text relevance score descending (most relevant first)
+
+#### Scenario: Sort by relevance ascending
+
+- **WHEN** a GET request is made to `/v3/etablissements?q=creati&sort=relevance:asc`
+- **THEN** results are sorted by BM25 text relevance score ascending (least relevant first)
 
 #### Scenario: Sort by date_creation
 
 - **WHEN** a GET request is made to `/v3/etablissements?sort=date_creation`
 - **THEN** results are sorted by `date_creation` descending (newest first)
 
+#### Scenario: Sort by date_creation ascending
+
+- **WHEN** a GET request is made to `/v3/etablissements?sort=date_creation:asc`
+- **THEN** results are sorted by `date_creation` ascending (oldest first)
+
 #### Scenario: Sort by date_debut
 
 - **WHEN** a GET request is made to `/v3/etablissements?sort=date_debut`
 - **THEN** results are sorted by `date_debut` descending (newest first)
+
+#### Scenario: Sort by date_debut ascending
+
+- **WHEN** a GET request is made to `/v3/etablissements?sort=date_debut:asc`
+- **THEN** results are sorted by `date_debut` ascending (oldest first)
 
 #### Scenario: Default sort with text search
 
@@ -157,9 +177,10 @@ The system SHALL return search results in a structured response with metadata.
 #### Scenario: Successful search response
 
 - **WHEN** a search query returns results
-- **THEN** the response body contains an `etablissements` array with each item containing at minimum: `siret`, `siren`, `etat_administratif`, `date_creation`, `search_denomination`, `code_postal`, `libelle_commune`, `activite_principale`, `etablissement_siege`
+- **THEN** the response body contains an `etablissements` array with each item containing at minimum: `siret`, `siren`, `etat_administratif`, `date_creation`, `denomination_usuelle`, `enseigne_1`, `enseigne_2`, `enseigne_3`, `code_postal`, `libelle_commune`, `activite_principale`, `etablissement_siege`
 - **AND** the response includes `total` with the total count of matching results
 - **AND** the response includes `limit` and `offset` reflecting the applied pagination
+- **AND** the response includes `sort` and `direction` reflecting the resolved sort field and direction
 
 #### Scenario: Empty search results
 
