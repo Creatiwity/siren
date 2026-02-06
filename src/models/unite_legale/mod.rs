@@ -91,6 +91,7 @@ impl UpdatableModel for UniteLegaleModel {
                     dsl::economie_sociale_solidaire,
                     dsl::societe_mission,
                     dsl::caractere_employeur,
+                    dsl::activite_principale_naf25,
                 ),
                 |write| copy_remote_zipped_csv(remote_file.to_reader(), write),
             )
