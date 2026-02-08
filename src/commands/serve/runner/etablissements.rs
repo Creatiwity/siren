@@ -91,7 +91,7 @@ async fn search_etablissements(
         });
     }
 
-    // Validate sort constraints (parse field name before ':' direction suffix)
+    // Validate sort constraints
     match params.sort {
         Some(EtablissementSortField::Distance) if !has_all_geo => {
             return Err(Error::InvalidSearchParams {

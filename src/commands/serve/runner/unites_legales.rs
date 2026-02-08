@@ -77,7 +77,7 @@ async fn search_unites_legales(
     let span = span!(Level::TRACE, "GET /unites_legales (search)");
     let _enter = span.enter();
 
-    // Validate sort constraints (parse field name before ':' direction suffix)
+    // Validate sort constraints
     match params.sort {
         Some(UniteLegaleSortField::Relevance) if params.q.is_none() => {
             return Err(Error::InvalidSearchParams {
