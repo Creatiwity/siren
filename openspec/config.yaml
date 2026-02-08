@@ -1,0 +1,25 @@
+schema: spec-driven
+
+context: |
+    Tech stack: Rust
+    We use conventional commits
+    Domain: API to provide Sirene data from French government
+
+    Key components:
+    - Diesel ORM for PostgreSQL database interactions
+    - Warp for HTTP API endpoints
+    - Sentry for error tracking and monitoring
+    - Tokio for async runtime
+    - INSEE API integration for daily data synchronization
+
+    Project structure:
+    - Commands: CLI interface for update and serve operations
+    - Connectors: Database and INSEE API connectors
+    - Models: Data structures for units legales and establishments
+    - Update: Logic for data synchronization and updates
+
+    API endpoints:
+    - GET /v3/unites_legales/<siren>
+    - GET /v3/etablissements/<siret>
+    - POST /admin/update (with API key authentication)
+    - GET /admin/update/status (with API key authentication)

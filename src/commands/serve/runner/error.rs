@@ -1,14 +1,18 @@
 use crate::connectors::Error as ConnectorError;
 use crate::models::{etablissement, unite_legale, update_metadata};
 use crate::update::error::Error as InternalUpdate;
+use axum::{
+    Json,
+    http::StatusCode,
+    response::{IntoResponse, Response},
+};
 use custom_error::custom_error;
 use serde::Serialize;
-use std::convert::Infallible;
-use tracing::{debug, error, warn};
-use warp::{Rejection, Reply, http::StatusCode};
+use tracing::error;
 
 custom_error! { pub Error
     InvalidData = "Invalid data",
+    InvalidSearchParams{message: String} = "Invalid search parameters: {message}",
     MissingApiKey = "[Admin] Missing API key in configuration",
     ApiKey = "[Admin] Wrong API key",
     MissingBaseUrlForAsync = "[Admin] No BASE_URL configured, needed for asynchronous updates",
@@ -20,40 +24,52 @@ custom_error! { pub Error
     Status {source: update_metadata::error::Error} = "[Status] {source}",
 }
 
-impl warp::reject::Reject for Error {}
+impl IntoResponse for Error {
+    fn into_response(self) -> Response {
+        let (status, message) = match self {
+            Error::InvalidData => (StatusCode::BAD_REQUEST, self.to_string()),
+            Error::InvalidSearchParams { message: _ } => {
+                (StatusCode::BAD_REQUEST, self.to_string())
+            }
+            Error::MissingApiKey => (StatusCode::UNAUTHORIZED, self.to_string()),
+            Error::ApiKey => (StatusCode::UNAUTHORIZED, self.to_string()),
+            Error::MissingBaseUrlForAsync => (StatusCode::BAD_REQUEST, self.to_string()),
+            Error::LocalConnectionFailed { source: _ } => {
+                (StatusCode::INTERNAL_SERVER_ERROR, self.to_string())
+            }
+            Error::UpdateConnector { source: _ } => {
+                (StatusCode::INTERNAL_SERVER_ERROR, self.to_string())
+            }
+            Error::Update { source: _ } => (StatusCode::INTERNAL_SERVER_ERROR, self.to_string()),
+            Error::UniteLegale { ref source } => match source {
+                unite_legale::error::Error::UniteLegaleNotFound => {
+                    (StatusCode::NOT_FOUND, self.to_string())
+                }
+                _ => (StatusCode::INTERNAL_SERVER_ERROR, self.to_string()),
+            },
+            Error::Etablissement { ref source } => match source {
+                etablissement::error::Error::EtablissementNotFound => {
+                    (StatusCode::NOT_FOUND, self.to_string())
+                }
+                _ => (StatusCode::INTERNAL_SERVER_ERROR, self.to_string()),
+            },
+            Error::Status { ref source } => match source {
+                update_metadata::error::Error::MetadataNotFound => {
+                    (StatusCode::NOT_FOUND, self.to_string())
+                }
+                _ => (StatusCode::INTERNAL_SERVER_ERROR, self.to_string()),
+            },
+        };
 
-impl From<ConnectorError> for Rejection {
-    fn from(e: ConnectorError) -> Self {
-        let error: Error = e.into();
-        error.into()
-    }
-}
+        if status == StatusCode::INTERNAL_SERVER_ERROR {
+            error!("[InternalServerError] {}", message);
+        }
 
-impl From<InternalUpdate> for Rejection {
-    fn from(e: InternalUpdate) -> Self {
-        let error: Error = e.into();
-        error.into()
-    }
-}
-
-impl From<unite_legale::error::Error> for Rejection {
-    fn from(e: unite_legale::error::Error) -> Self {
-        let error: Error = e.into();
-        error.into()
-    }
-}
-
-impl From<etablissement::error::Error> for Rejection {
-    fn from(e: etablissement::error::Error) -> Self {
-        let error: Error = e.into();
-        error.into()
-    }
-}
-
-impl From<update_metadata::error::Error> for Rejection {
-    fn from(e: update_metadata::error::Error) -> Self {
-        let error: Error = e.into();
-        error.into()
+        Json(ErrorResponse {
+            code: status.as_u16(),
+            message,
+        })
+        .into_response()
     }
 }
 
@@ -61,64 +77,4 @@ impl From<update_metadata::error::Error> for Rejection {
 struct ErrorResponse {
     code: u16,
     message: String,
-}
-
-pub async fn handle_rejection(err: Rejection) -> Result<impl Reply, Infallible> {
-    let (code, message) = if err.is_not_found() {
-        (StatusCode::NOT_FOUND, String::from("Not found"))
-    } else if let Some(e) = err.find::<Error>() {
-        debug!("[HandledError] {:?}", e);
-
-        (
-            match e {
-                Error::InvalidData => StatusCode::BAD_REQUEST,
-                Error::MissingApiKey => StatusCode::UNAUTHORIZED,
-                Error::ApiKey => StatusCode::UNAUTHORIZED,
-                Error::MissingBaseUrlForAsync => StatusCode::BAD_REQUEST,
-                Error::LocalConnectionFailed { source: _ } => StatusCode::INTERNAL_SERVER_ERROR,
-                Error::UpdateConnector { source: _ } => StatusCode::INTERNAL_SERVER_ERROR,
-                Error::Update { source: _ } => StatusCode::INTERNAL_SERVER_ERROR,
-                Error::UniteLegale { source } => match source {
-                    unite_legale::error::Error::UniteLegaleNotFound => StatusCode::NOT_FOUND,
-                    _ => StatusCode::INTERNAL_SERVER_ERROR,
-                },
-                Error::Etablissement { source } => match source {
-                    etablissement::error::Error::EtablissementNotFound => StatusCode::NOT_FOUND,
-                    _ => StatusCode::INTERNAL_SERVER_ERROR,
-                },
-                Error::Status { source } => match source {
-                    update_metadata::error::Error::MetadataNotFound => StatusCode::NOT_FOUND,
-                    _ => StatusCode::INTERNAL_SERVER_ERROR,
-                },
-            },
-            e.to_string(),
-        )
-    } else if let Some(body_error) = err.find::<warp::body::BodyDeserializeError>() {
-        warn!("[Json] {}", body_error);
-
-        (StatusCode::BAD_REQUEST, body_error.to_string())
-    } else if let Some(e) = err.find::<warp::reject::MethodNotAllowed>() {
-        warn!("[Method] {}", e);
-
-        (StatusCode::NOT_FOUND, String::from("Not found"))
-    } else {
-        warn!("[Rejection] Unhandled error {:?}", err);
-
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            String::from("Internal server error"),
-        )
-    };
-
-    if code == StatusCode::INTERNAL_SERVER_ERROR {
-        error!("[InternalServerError] {}", message);
-    }
-
-    Ok(warp::reply::with_status(
-        warp::reply::json(&ErrorResponse {
-            code: code.as_u16(),
-            message,
-        }),
-        code,
-    ))
 }

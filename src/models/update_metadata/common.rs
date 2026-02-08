@@ -8,8 +8,9 @@ use diesel::sql_types::{Jsonb, Text};
 use diesel::{AsExpression, FromSqlRow, prelude::*};
 use serde::{Deserialize, Serialize};
 use std::io::Write;
+use utoipa::ToSchema;
 
-#[derive(Queryable, Serialize)]
+#[derive(Queryable, Serialize, Clone)]
 pub struct UpdateMetadata {
     pub id: i32,
     pub synthetic_group_type: SyntheticGroupType,
@@ -49,7 +50,9 @@ pub struct ErrorUpdateMetadata {
     pub finished_timestamp: DateTime<Utc>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, FromSqlRow, AsExpression)]
+#[derive(
+    Debug, ToSchema, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, FromSqlRow, AsExpression,
+)]
 #[diesel(sql_type = Text)]
 pub enum SyntheticGroupType {
     UnitesLegales,

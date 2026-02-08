@@ -4,8 +4,8 @@ use super::types::{
     InseeCountQueryParams, InseeCountResponse, InseeQueryParams, InseeResponse,
     etablissement::InseeEtablissementResponse, unite_legale::InseeUniteLegaleResponse,
 };
-use crate::models::etablissement::common::Etablissement;
-use crate::models::unite_legale::common::UniteLegale;
+use crate::models::etablissement::common::EtablissementInsertable;
+use crate::models::unite_legale::common::UniteLegaleInsertable;
 use chrono::NaiveDateTime;
 
 const MAX_CALL: u8 = 20;
@@ -67,7 +67,7 @@ impl Connector {
         &mut self,
         start_timestamp: NaiveDateTime,
         cursor: String,
-    ) -> Result<(Option<String>, Vec<UniteLegale>), InseeUpdate> {
+    ) -> Result<(Option<String>, Vec<UniteLegaleInsertable>), InseeUpdate> {
         self.wait_for_insee_limitation().await;
 
         let (next_cursor, response) = get_daily_data::<InseeUniteLegaleResponse>(
@@ -95,7 +95,7 @@ impl Connector {
         &mut self,
         start_timestamp: NaiveDateTime,
         cursor: String,
-    ) -> Result<(Option<String>, Vec<Etablissement>), InseeUpdate> {
+    ) -> Result<(Option<String>, Vec<EtablissementInsertable>), InseeUpdate> {
         self.wait_for_insee_limitation().await;
 
         let (next_cursor, response) = get_daily_data::<InseeEtablissementResponse>(
