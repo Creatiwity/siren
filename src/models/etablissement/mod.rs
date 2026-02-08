@@ -69,6 +69,7 @@ pub fn search(
         "e.libelle_commune".to_string(),
         "e.activite_principale".to_string(),
         "e.etablissement_siege".to_string(),
+        "e.position".to_string(),
     ];
 
     if has_geo {

@@ -134,6 +134,7 @@ async fn search_etablissements(
                 libelle_commune: r.libelle_commune,
                 activite_principale: r.activite_principale,
                 etablissement_siege: r.etablissement_siege,
+                position: r.position,
                 meter_distance: r.meter_distance,
                 score: r.score,
             })

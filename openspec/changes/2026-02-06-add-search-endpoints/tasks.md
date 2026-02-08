@@ -30,6 +30,6 @@
 ## 6. Verification
 
 - [x] 6.1 Verify the project compiles with `cargo build`
-- [ ] 6.2 Manual test: search etablissements with text query, field filters, geographic radius, sorting, and pagination
-- [ ] 6.3 Manual test: search unites legales with text query, field filters, sorting, and pagination
-- [ ] 6.4 Verify OpenAPI documentation renders correctly in Scalar at `/scalar`
+- [x] 6.2 Manual test: search etablissements with text query, field filters, geographic radius, sorting, and pagination
+- [x] 6.3 Manual test: search unites legales with text query, field filters, sorting, and pagination
+- [x] 6.4 Verify OpenAPI documentation renders correctly in Scalar at `/scalar`

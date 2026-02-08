@@ -24,11 +24,23 @@ The HTTP server SHALL be migrated from Warp to Axum while maintaining all existi
 - **THEN** the server responds with the corresponding `UniteLegaleResponse`
 - **AND** the response includes the unit legale data, associated establishments, and siege establishment
 
+#### Scenario: Search Unites Legales Endpoint
+
+- **WHEN** a GET request is made to `/v3/unites_legales` with optional query parameters
+- **THEN** the server responds with a paginated list of matching legal units
+- **AND** the response is documented in OpenAPI via Scalar
+
 #### Scenario: Etablissement Endpoint
 
 - **WHEN** a GET request is made to `/v3/etablissements/<siret>` where `<siret>` is a valid 14-digit SIRET
 - **THEN** the server responds with the corresponding `EtablissementResponse`
 - **AND** the response includes the establishment data and associated unit legale with siege establishment
+
+#### Scenario: Search Etablissements Endpoint
+
+- **WHEN** a GET request is made to `/v3/etablissements` with optional query parameters
+- **THEN** the server responds with a paginated list of matching establishments
+- **AND** the response is documented in OpenAPI via Scalar
 
 #### Scenario: Admin Update Endpoint
 

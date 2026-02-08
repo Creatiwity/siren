@@ -2,9 +2,16 @@ use super::super::schema::etablissement;
 use chrono::{NaiveDate, NaiveDateTime};
 use diesel::prelude::*;
 use diesel::sql_types::{BigInt, Bool, Float4, Float8, Nullable, Text, VarChar};
+use postgis_diesel::sql_types::Geography;
 use postgis_diesel::types::Point;
 use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
+
+#[derive(ToSchema, Serialize, Clone, Debug)]
+pub struct EtablissementPoint {
+    pub x: f64,
+    pub y: f64,
+}
 
 #[derive(Insertable, Serialize, Clone, Debug)]
 #[diesel(table_name = etablissement)]
@@ -124,7 +131,7 @@ pub struct Etablissement {
     pub caractere_employeur: Option<String>,
     pub activite_principale_naf25: Option<String>,
     pub search_denomination: Option<String>,
-    #[schema(value_type = Option<Object>)]
+    #[schema(value_type = Option<EtablissementPoint>)]
     pub position: Option<Point>,
 }
 
@@ -200,6 +207,9 @@ pub struct EtablissementSearchResult {
     pub score: Option<f32>,
     #[diesel(sql_type = BigInt)]
     pub total: i64,
+    #[schema(value_type = Option<EtablissementPoint>)]
+    #[diesel(sql_type = Nullable<Geography>)]
+    pub position: Option<Point>,
 }
 
 pub struct EtablissementSearchOutput {
@@ -234,6 +244,8 @@ pub struct EtablissementSearchResultResponse {
     pub libelle_commune: Option<String>,
     pub activite_principale: Option<String>,
     pub etablissement_siege: bool,
+    #[schema(value_type = Option<EtablissementPoint>)]
+    pub position: Option<Point>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub meter_distance: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
