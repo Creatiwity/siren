@@ -35,7 +35,7 @@ pub async fn run(addr: SocketAddr, context: Context) {
     let shared_context = Arc::new(context);
 
     let (router, api) = OpenApiRouter::with_openapi(ApiDoc::openapi())
-        .nest("/v3/admin", admin::router())
+        .nest("/admin", admin::router())
         .nest("/v3/etablissements", etablissements::router())
         .nest("/v3/unites_legales", unites_legales::router())
         .merge(root::router())

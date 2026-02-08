@@ -53,7 +53,7 @@ pub fn search(
     let has_q = params.q.is_some();
 
     let limit = params.limit.unwrap_or(20).clamp(1, 100);
-    let offset = params.offset.unwrap_or(0).clamp(0, 100_000_000);
+    let offset = params.offset.unwrap_or(0).clamp(0, 10_000);
 
     // Build SELECT columns
     let mut select_columns = vec![
@@ -202,7 +202,7 @@ pub fn search(
     };
 
     let sql = format!(
-        "WITH search_results AS (SELECT {} FROM {} {} ORDER BY {} LIMIT {} OFFSET {}) SELECT *, COUNT(*) OVER() AS total FROM search_results",
+        "WITH search_results AS (SELECT {} FROM {} {} ORDER BY {}) SELECT *, COUNT(*) OVER() AS total FROM search_results LIMIT {} OFFSET {}",
         select_columns.join(", "),
         from_parts.join(", "),
         where_clause,

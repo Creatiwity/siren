@@ -61,7 +61,7 @@ The system SHALL allow filtering legal units by exact field values via query par
 
 ### Requirement: Sort unite legale search results
 
-The system SHALL allow sorting search results via a `sort` query parameter using the format `<field>` or `<field>:<direction>` where direction is `asc` or `desc`. When direction is omitted, sensible defaults apply per field.
+The system SHALL allow sorting search results via `sort` and `direction` query parameters. The `sort` parameter specifies the field to sort by, and the `direction` parameter specifies the sort direction (`asc` or `desc`). When direction is omitted, sensible defaults apply per field.
 
 #### Scenario: Sort by relevance
 
@@ -70,7 +70,7 @@ The system SHALL allow sorting search results via a `sort` query parameter using
 
 #### Scenario: Sort by relevance ascending
 
-- **WHEN** a GET request is made to `/v3/unites_legales?q=creati&sort=relevance:asc`
+- **WHEN** a GET request is made to `/v3/unites_legales?q=creati&sort=relevance&direction=asc`
 - **THEN** results are sorted by BM25 text relevance score ascending (least relevant first)
 
 #### Scenario: Sort by date_creation
@@ -80,7 +80,7 @@ The system SHALL allow sorting search results via a `sort` query parameter using
 
 #### Scenario: Sort by date_creation ascending
 
-- **WHEN** a GET request is made to `/v3/unites_legales?sort=date_creation:asc`
+- **WHEN** a GET request is made to `/v3/unites_legales?sort=date_creation&direction=asc`
 - **THEN** results are sorted by `date_creation` ascending (oldest first)
 
 #### Scenario: Sort by date_debut
@@ -90,7 +90,7 @@ The system SHALL allow sorting search results via a `sort` query parameter using
 
 #### Scenario: Sort by date_debut ascending
 
-- **WHEN** a GET request is made to `/v3/unites_legales?sort=date_debut:asc`
+- **WHEN** a GET request is made to `/v3/unites_legales?sort=date_debut&direction=asc`
 - **THEN** results are sorted by `date_debut` ascending (oldest first)
 
 #### Scenario: Default sort with text search
