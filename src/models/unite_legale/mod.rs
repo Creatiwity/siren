@@ -21,6 +21,7 @@ use error::Error;
 pub fn get(connection: &mut Connection, siren: &str) -> Result<UniteLegale, Error> {
     dsl::unite_legale
         .find(siren)
+        .select(UniteLegale::as_select())
         .first::<UniteLegale>(connection)
         .map_err(|error| error.into())
 }

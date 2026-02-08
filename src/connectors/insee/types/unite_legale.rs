@@ -1,5 +1,5 @@
 use super::{Header, InseeResponse};
-use crate::models::unite_legale::common::UniteLegale;
+use crate::models::unite_legale::common::UniteLegaleInsertable;
 use chrono::{NaiveDate, NaiveDateTime};
 use serde::Deserialize;
 
@@ -86,7 +86,7 @@ pub struct PeriodeInseeUniteLegale {
     pub caractere_employeur_unite_legale: Option<String>,
 }
 
-impl From<&InseeUniteLegale> for Option<UniteLegale> {
+impl From<&InseeUniteLegale> for Option<UniteLegaleInsertable> {
     fn from(u: &InseeUniteLegale) -> Self {
         u.periodes_unite_legale
             .iter()
@@ -101,9 +101,9 @@ impl From<&InseeUniteLegale> for Option<UniteLegale> {
     }
 }
 
-impl From<InseeUniteLegaleWithPeriode> for UniteLegale {
+impl From<InseeUniteLegaleWithPeriode> for UniteLegaleInsertable {
     fn from(u: InseeUniteLegaleWithPeriode) -> Self {
-        UniteLegale {
+        UniteLegaleInsertable {
             siren: u.content.siren,
             statut_diffusion: u.content.statut_diffusion_unite_legale,
             unite_purgee: Some(u.content.unite_purgee_unite_legale.to_string()),
@@ -141,7 +141,6 @@ impl From<InseeUniteLegaleWithPeriode> for UniteLegale {
             societe_mission: u.periode.societe_mission_unite_legale,
             caractere_employeur: u.periode.caractere_employeur_unite_legale,
             activite_principale_naf25: None,
-            search_denomination: None,
         }
     }
 }

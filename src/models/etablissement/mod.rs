@@ -21,6 +21,7 @@ use error::Error;
 pub fn get(connection: &mut Connection, siret: &str) -> Result<Etablissement, Error> {
     dsl::etablissement
         .find(siret)
+        .select(Etablissement::as_select())
         .first::<Etablissement>(connection)
         .map_err(|error| error.into())
 }
@@ -31,6 +32,7 @@ pub fn get_with_siren(
 ) -> Result<Vec<Etablissement>, Error> {
     dsl::etablissement
         .filter(dsl::siren.eq(siren))
+        .select(Etablissement::as_select())
         .load::<Etablissement>(connection)
         .map_err(|error| error.into())
 }
@@ -41,6 +43,7 @@ pub fn get_siege_with_siren(
 ) -> Result<Etablissement, Error> {
     dsl::etablissement
         .filter(dsl::siren.eq(siren).and(dsl::etablissement_siege.eq(true)))
+        .select(Etablissement::as_select())
         .first::<Etablissement>(connection)
         .map_err(|error| error.into())
 }

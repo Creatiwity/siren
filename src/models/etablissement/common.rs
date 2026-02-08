@@ -69,11 +69,9 @@ pub struct EtablissementInsertable {
     pub activite_principale: Option<String>,
     pub nomenclature_activite_principale: Option<String>,
     pub caractere_employeur: Option<String>,
-    pub search_denomination: Option<String>,
-    pub position: Option<Point>,
 }
 
-#[derive(Insertable, Queryable, Selectable, ToSchema, Serialize, Clone, Debug)]
+#[derive(Queryable, Selectable, ToSchema, Serialize, Clone, Debug)]
 #[diesel(table_name = etablissement)]
 pub struct Etablissement {
     pub siren: String,
@@ -130,7 +128,6 @@ pub struct Etablissement {
     pub nomenclature_activite_principale: Option<String>,
     pub caractere_employeur: Option<String>,
     pub activite_principale_naf25: Option<String>,
-    pub search_denomination: Option<String>,
     #[schema(value_type = Option<EtablissementPoint>)]
     pub position: Option<Point>,
 }
