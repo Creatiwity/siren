@@ -205,7 +205,7 @@ pub fn search(
     };
 
     let sql = format!(
-        "WITH search_results AS (SELECT {} FROM {} {} ORDER BY {}) SELECT *, COUNT(*) OVER() AS total FROM search_results LIMIT {} OFFSET {}",
+        "WITH search_results AS (SELECT {} FROM {} {}) SELECT *, COUNT(*) OVER() AS total FROM search_results ORDER BY {} LIMIT {} OFFSET {}",
         select_columns.join(", "),
         from_parts.join(", "),
         where_clause,
