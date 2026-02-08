@@ -1,5 +1,5 @@
 use super::{Header, InseeResponse};
-use crate::models::etablissement::common::Etablissement;
+use crate::models::etablissement::common::EtablissementInsertable;
 use chrono::{NaiveDate, NaiveDateTime};
 use serde::Deserialize;
 
@@ -88,7 +88,7 @@ pub struct InseePeriodeEtablissement {
     caractere_employeur_etablissement: Option<String>,
 }
 
-impl From<&InseeEtablissement> for Option<Etablissement> {
+impl From<&InseeEtablissement> for Option<EtablissementInsertable> {
     fn from(u: &InseeEtablissement) -> Self {
         u.periodes_etablissement
             .iter()
@@ -103,11 +103,11 @@ impl From<&InseeEtablissement> for Option<Etablissement> {
     }
 }
 
-impl From<InseeEtablissementWithPeriode> for Etablissement {
+impl From<InseeEtablissementWithPeriode> for EtablissementInsertable {
     fn from(e: InseeEtablissementWithPeriode) -> Self {
         let adresse = e.content.adresse_etablissement;
 
-        Etablissement {
+        EtablissementInsertable {
             siret: e.content.siret,
             siren: e.content.siren,
             nic: e.content.nic,
@@ -166,7 +166,6 @@ impl From<InseeEtablissementWithPeriode> for Etablissement {
                 .periode
                 .nomenclature_activite_principale_etablissement,
             caractere_employeur: e.periode.caractere_employeur_etablissement,
-            activite_principale_naf25: None,
         }
     }
 }

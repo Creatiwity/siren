@@ -1,0 +1,35 @@
+--- src/models/schema_full.rs	2025-02-25 10:45:46
++++ src/models/schema.rs	2025-02-25 10:46:40
+@@ -1,18 +1,11 @@
+ // @generated automatically by Diesel CLI.
+-
+-pub mod sql_types {
+-    #[derive(diesel::sql_types::SqlType)]
+-    #[diesel(postgres_type(name = "geography"))]
+-    pub struct Geography;
+-}
+ 
+ diesel::table! {
+     use diesel::sql_types::*;
+     use postgis_diesel::sql_types::*;
+-    use super::sql_types::Geography;
+ 
+     etablissement (siret) {
+         #[max_length = 9]
+         siren -> Varchar,
+         nic -> Text,
+         #[max_length = 14]
+@@ -75,13 +68,12 @@
+     }
+ }
+ 
+ diesel::table! {
+     use diesel::sql_types::*;
+     use postgis_diesel::sql_types::*;
+-    use super::sql_types::Geography;
+ 
+     etablissement_staging (siret) {
+         #[max_length = 9]
+         siren -> Varchar,
+         nic -> Text,
+         #[max_length = 14]

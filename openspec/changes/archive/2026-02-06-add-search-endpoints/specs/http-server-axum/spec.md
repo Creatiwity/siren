@@ -1,8 +1,5 @@
-# http-server-axum Specification
+## MODIFIED Requirements
 
-## Purpose
-TBD - created by archiving change migrate-from-warp-to-axum. Update Purpose after archive.
-## Requirements
 ### Requirement: HTTP Server with Axum
 
 The HTTP server SHALL be migrated from Warp to Axum while maintaining all existing endpoints and functionality.
@@ -57,4 +54,3 @@ The HTTP server SHALL be migrated from Warp to Axum while maintaining all existi
 
 - **WHEN** a POST request is made to `/admin/update/status/error` with valid API key
 - **THEN** the server sets the current update status to error
-

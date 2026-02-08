@@ -23,6 +23,7 @@ diesel_migrations = { version = "2.3", features = ["postgres"] }
 dotenv = "0.15"
 futures = "0.3"
 openssl-sys = { version = "0.9", features = ["vendored"] }
+postgis_diesel = { version = "3.1", features = ["serde"] }
 pq-sys = { version = "0.7", features = ["bundled"] }
 r2d2 = "0.8"
 reqwest = { version = "0.13", default-features = false, features = [
@@ -49,4 +50,4 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 utoipa = { version = "5.4", features = ["axum_extras", "chrono"] }
 utoipa-axum = "0.2"
 utoipa-scalar = { version = "0.3", features = ["axum"] }
-zip = "7.3"
+zip = "7.4"
