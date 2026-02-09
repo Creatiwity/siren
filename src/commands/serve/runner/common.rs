@@ -1,5 +1,6 @@
 use crate::connectors::ConnectorsBuilders;
 use crate::models::etablissement::common::Etablissement;
+use crate::models::lien_succession::common::LienSuccession;
 use crate::models::unite_legale::common::UniteLegale;
 use crate::models::update_metadata::common::SyntheticGroupType;
 use chrono::{DateTime, Utc};
@@ -65,4 +66,9 @@ pub struct UniteLegaleEtablissementInnerResponse {
     #[serde(flatten)]
     pub unite_legale: UniteLegale,
     pub etablissement_siege: Etablissement,
+}
+
+#[derive(ToSchema, Serialize)]
+pub struct LiensSuccessionResponse {
+    pub liens_succession: Vec<LienSuccession>,
 }

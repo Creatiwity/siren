@@ -57,6 +57,7 @@ pub struct ErrorUpdateMetadata {
 pub enum SyntheticGroupType {
     UnitesLegales,
     Etablissements,
+    LiensSuccession,
     All,
 }
 
@@ -125,7 +126,12 @@ impl From<SyntheticGroupType> for Vec<GroupType> {
         match group {
             SyntheticGroupType::UnitesLegales => vec![GroupType::UnitesLegales],
             SyntheticGroupType::Etablissements => vec![GroupType::Etablissements],
-            SyntheticGroupType::All => vec![GroupType::UnitesLegales, GroupType::Etablissements],
+            SyntheticGroupType::LiensSuccession => vec![GroupType::LiensSuccession],
+            SyntheticGroupType::All => vec![
+                GroupType::UnitesLegales,
+                GroupType::Etablissements,
+                GroupType::LiensSuccession,
+            ],
         }
     }
 }
@@ -136,6 +142,7 @@ impl ToSql<Text, Pg> for SyntheticGroupType {
         match *self {
             SyntheticGroupType::UnitesLegales => out.write_all(b"unites_legales")?,
             SyntheticGroupType::Etablissements => out.write_all(b"etablissements")?,
+            SyntheticGroupType::LiensSuccession => out.write_all(b"liens_succession")?,
             SyntheticGroupType::All => out.write_all(b"all")?,
         }
         Ok(IsNull::No)
@@ -147,6 +154,7 @@ impl FromSql<Text, Pg> for SyntheticGroupType {
         match bytes.as_bytes() {
             b"unites_legales" => Ok(SyntheticGroupType::UnitesLegales),
             b"etablissements" => Ok(SyntheticGroupType::Etablissements),
+            b"liens_succession" => Ok(SyntheticGroupType::LiensSuccession),
             b"all" => Ok(SyntheticGroupType::All),
             _ => Err("Unrecognized enum variant".into()),
         }
@@ -158,6 +166,7 @@ impl std::fmt::Display for SyntheticGroupType {
         match self {
             SyntheticGroupType::UnitesLegales => write!(f, "unités légales"),
             SyntheticGroupType::Etablissements => write!(f, "établissements"),
+            SyntheticGroupType::LiensSuccession => write!(f, "liens de succession"),
             SyntheticGroupType::All => write!(f, "all"),
         }
     }

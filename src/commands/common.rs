@@ -5,6 +5,7 @@ use serde::Deserialize;
 pub enum CmdGroupType {
     UnitesLegales,
     Etablissements,
+    LiensSuccession,
     All,
 }
 
@@ -13,6 +14,7 @@ impl From<CmdGroupType> for SyntheticGroupType {
         match group {
             CmdGroupType::UnitesLegales => SyntheticGroupType::UnitesLegales,
             CmdGroupType::Etablissements => SyntheticGroupType::Etablissements,
+            CmdGroupType::LiensSuccession => SyntheticGroupType::LiensSuccession,
             CmdGroupType::All => SyntheticGroupType::All,
         }
     }

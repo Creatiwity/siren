@@ -1,6 +1,7 @@
 mod admin;
 mod error;
 mod etablissements;
+mod liens_succession;
 mod root;
 mod unites_legales;
 
@@ -22,7 +23,7 @@ use utoipa_scalar::{Scalar, Servable};
         description = "API providing information about all companies in France",
         contact(name = "Julien Blatecky", email = "contact@creatiwity.net"),
         license(name = "MIT", url = "https://opensource.org/licenses/MIT"),
-        version = "5.0.1"
+        version = "5.1.0"
     ),
     tags(
         (name = common::PUBLIC_TAG, description = "Public endpoint"),
@@ -37,6 +38,10 @@ pub async fn run(addr: SocketAddr, context: Context) {
     let (router, api) = OpenApiRouter::with_openapi(ApiDoc::openapi())
         .nest("/admin", admin::router())
         .nest("/v3/etablissements", etablissements::router())
+        .nest(
+            "/v3/etablissements/liens_succession",
+            liens_succession::router(),
+        )
         .nest("/v3/unites_legales", unites_legales::router())
         .merge(root::router())
         .split_for_parts();

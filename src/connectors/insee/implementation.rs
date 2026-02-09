@@ -4,7 +4,9 @@ use super::types::{
     InseeCountQueryParams, InseeCountResponse, InseeQueryParams, InseeResponse,
     etablissement::InseeEtablissementResponse, unite_legale::InseeUniteLegaleResponse,
 };
+use crate::connectors::insee::types::lien_succession::InseeLienSuccessionResponse;
 use crate::models::etablissement::common::EtablissementInsertable;
+use crate::models::lien_succession::common::LienSuccession;
 use crate::models::unite_legale::common::UniteLegaleInsertable;
 use chrono::NaiveDateTime;
 
@@ -16,16 +18,25 @@ pub const INITIAL_CURSOR: &str = "*";
 struct EndpointConfig {
     route: &'static str,
     query_field: &'static str,
+    sorting: bool,
 }
 
 const UNITES_LEGALES_ENDPOINT: EndpointConfig = EndpointConfig {
     route: "siren",
     query_field: "dateDernierTraitementUniteLegale",
+    sorting: true,
 };
 
 const ETABLISSEMENTS_ENDPOINT: EndpointConfig = EndpointConfig {
     route: "siret",
     query_field: "dateDernierTraitementEtablissement",
+    sorting: true,
+};
+
+const LIENS_SUCCESSION_ENDPOINT: EndpointConfig = EndpointConfig {
+    route: "siret/liensSuccession",
+    query_field: "dateDernierTraitementLienSuccession",
+    sorting: false,
 };
 
 impl Connector {
@@ -61,6 +72,15 @@ impl Connector {
         self.wait_for_insee_limitation().await;
 
         get_total(&self.client, &ETABLISSEMENTS_ENDPOINT, start_timestamp).await
+    }
+
+    pub async fn get_total_liens_succession(
+        &mut self,
+        start_timestamp: NaiveDateTime,
+    ) -> Result<u32, InseeUpdate> {
+        self.wait_for_insee_limitation().await;
+
+        get_total(&self.client, &LIENS_SUCCESSION_ENDPOINT, start_timestamp).await
     }
 
     pub async fn get_daily_unites_legales(
@@ -118,6 +138,30 @@ impl Connector {
             },
         ))
     }
+
+    pub async fn get_daily_liens_succession(
+        &mut self,
+        start_timestamp: NaiveDateTime,
+        cursor: String,
+    ) -> Result<(Option<String>, Vec<LienSuccession>), InseeUpdate> {
+        self.wait_for_insee_limitation().await;
+
+        let (next_cursor, response) = get_daily_data::<InseeLienSuccessionResponse>(
+            &self.client,
+            &LIENS_SUCCESSION_ENDPOINT,
+            start_timestamp,
+            cursor,
+        )
+        .await?;
+
+        Ok((
+            next_cursor,
+            match response {
+                Some(resp) => resp.liens_succession.iter().map(|u| u.into()).collect(),
+                None => vec![],
+            },
+        ))
+    }
 }
 
 async fn get_daily_data<T: InseeResponse>(
@@ -138,7 +182,9 @@ async fn get_daily_data<T: InseeResponse>(
             ),
             nombre: 1000,
             curseur: cursor,
-            tri: format!("{} asc", config.query_field),
+            tri: config
+                .sorting
+                .then_some(format!("{} asc", config.query_field)),
         })
         .send()
         .await?
