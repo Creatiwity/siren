@@ -23,7 +23,7 @@ use utoipa_scalar::{Scalar, Servable};
         description = "API providing information about all companies in France",
         contact(name = "Julien Blatecky", email = "contact@creatiwity.net"),
         license(name = "MIT", url = "https://opensource.org/licenses/MIT"),
-        version = "5.0.1"
+        version = "5.1.0"
     ),
     tags(
         (name = common::PUBLIC_TAG, description = "Public endpoint"),
