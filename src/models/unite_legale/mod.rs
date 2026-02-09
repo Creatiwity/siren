@@ -50,12 +50,17 @@ pub fn search(
     ];
 
     if has_q {
-        select_columns.push("paradedb.score(u.ctid) AS score".to_string());
+        select_columns.push("pdb.score(u.siren) AS score".to_string());
+        select_columns.push("NULL::bigint AS total".to_string());
+        select_columns.push(
+            "pdb.agg('{\"value_count\": {\"field\": \"siren\"}}') OVER () AS total_json"
+                .to_string(),
+        );
     } else {
         select_columns.push("NULL::real AS score".to_string());
+        select_columns.push("COUNT(*) OVER() AS total".to_string());
+        select_columns.push("NULL::jsonb AS total_json".to_string());
     }
-
-    // COUNT(*) OVER() is added by the outer CTE query, not here
 
     // Build WHERE conditions
     let mut conditions: Vec<String> = Vec::new();
@@ -125,9 +130,7 @@ pub fn search(
         (UniteLegaleSortField::DateDebut, SortDirection::Desc) => "u.date_debut DESC NULLS LAST",
     };
 
-    // Assemble query — use a CTE to isolate the search from the COUNT window function,
-    // because ParadeDB's custom scan planner rejects unsupported query shapes when
-    // COUNT(*) OVER() is combined with BM25 index scans.
+    // Assemble query
     let where_clause = if conditions.is_empty() {
         String::new()
     } else {
@@ -135,7 +138,7 @@ pub fn search(
     };
 
     let sql = format!(
-        "WITH search_results AS (SELECT {} FROM unite_legale u {}) SELECT *, COUNT(*) OVER() AS total FROM search_results ORDER BY {} LIMIT {} OFFSET {}",
+        "SELECT {} FROM unite_legale u {} ORDER BY {} LIMIT {} OFFSET {}",
         select_columns.join(", "),
         where_clause,
         order_by,

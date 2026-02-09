@@ -82,12 +82,17 @@ pub fn search(
     }
 
     if has_q {
-        select_columns.push("paradedb.score(e.ctid) AS score".to_string());
+        select_columns.push("pdb.score(e.siret) AS score".to_string());
+        select_columns.push("NULL::bigint AS total".to_string());
+        select_columns.push(
+            "pdb.agg('{\"value_count\": {\"field\": \"siret\"}}') OVER () AS total_json"
+                .to_string(),
+        );
     } else {
         select_columns.push("NULL::real AS score".to_string());
+        select_columns.push("COUNT(*) OVER() AS total".to_string());
+        select_columns.push("NULL::jsonb AS total_json".to_string());
     }
-
-    // COUNT(*) OVER() is added by the outer CTE query, not here
 
     // Build FROM clause
     let mut from_parts = vec!["etablissement e".to_string()];
@@ -195,9 +200,7 @@ pub fn search(
         (EtablissementSortField::DateDebut, SortDirection::Desc) => "e.date_debut DESC NULLS LAST",
     };
 
-    // Assemble query — use a CTE to isolate the search from the COUNT window function,
-    // because ParadeDB's custom scan planner rejects unsupported query shapes when
-    // COUNT(*) OVER() is combined with BM25 index scans.
+    // Assemble query
     let where_clause = if conditions.is_empty() {
         String::new()
     } else {
@@ -205,7 +208,7 @@ pub fn search(
     };
 
     let sql = format!(
-        "WITH search_results AS (SELECT {} FROM {} {}) SELECT *, COUNT(*) OVER() AS total FROM search_results ORDER BY {} LIMIT {} OFFSET {}",
+        "SELECT {} FROM {} {} ORDER BY {} LIMIT {} OFFSET {}",
         select_columns.join(", "),
         from_parts.join(", "),
         where_clause,
