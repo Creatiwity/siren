@@ -1,7 +1,7 @@
 use super::super::schema::etablissement;
 use chrono::{NaiveDate, NaiveDateTime};
 use diesel::prelude::*;
-use diesel::sql_types::{BigInt, Bool, Float4, Float8, Nullable, Text, VarChar};
+use diesel::sql_types::{BigInt, Bool, Float4, Float8, Jsonb, Nullable, Text, VarChar};
 use postgis_diesel::sql_types::Geography;
 use postgis_diesel::types::Point;
 use serde::{Deserialize, Serialize};
@@ -202,8 +202,10 @@ pub struct EtablissementSearchResult {
     pub meter_distance: Option<f64>,
     #[diesel(sql_type = Nullable<Float4>)]
     pub score: Option<f32>,
-    #[diesel(sql_type = BigInt)]
-    pub total: i64,
+    #[diesel(sql_type = Nullable<BigInt>)]
+    pub total: Option<i64>,
+    #[diesel(sql_type = Nullable<Jsonb>)]
+    pub total_json: Option<serde_json::Value>,
     #[schema(value_type = Option<EtablissementPoint>)]
     #[diesel(sql_type = Nullable<Geography>)]
     pub position: Option<Point>,

@@ -58,11 +58,11 @@ spec:
               value: {{ .Values.sentryDsn }}
           livenessProbe:
             httpGet:
-              path: /v3
+              path: /
               port: http
           readinessProbe:
             httpGet:
-              path: /v3
+              path: /
               port: http
           resources:
             {{- toYaml .Values.resources | nindent 12 }}

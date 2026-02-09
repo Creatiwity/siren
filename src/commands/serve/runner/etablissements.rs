@@ -115,7 +115,15 @@ async fn search_etablissements(
 
     let output = models::etablissement::search(&mut connection, &params)?;
 
-    let total = output.results.first().map(|r| r.total).unwrap_or(0);
+    let total = output
+        .results
+        .first()
+        .map(|r| match (r.total, r.total_json.as_ref()) {
+            (Some(total), _) => total,
+            (None, Some(json)) => json["value"].as_f64().unwrap_or(0.0) as i64,
+            _ => 0,
+        })
+        .unwrap_or(0);
 
     Ok(Json(EtablissementSearchResponse {
         etablissements: output

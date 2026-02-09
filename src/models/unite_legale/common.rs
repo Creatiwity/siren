@@ -1,7 +1,7 @@
 use super::super::schema::unite_legale;
 use chrono::{NaiveDate, NaiveDateTime};
 use diesel::prelude::*;
-use diesel::sql_types::{BigInt, Float4, Nullable, Text, VarChar};
+use diesel::sql_types::{BigInt, Float4, Jsonb, Nullable, Text, VarChar};
 use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
 
@@ -146,8 +146,10 @@ pub struct UniteLegaleSearchResult {
     pub categorie_entreprise: Option<String>,
     #[diesel(sql_type = Nullable<Float4>)]
     pub score: Option<f32>,
-    #[diesel(sql_type = BigInt)]
-    pub total: i64,
+    #[diesel(sql_type = Nullable<BigInt>)]
+    pub total: Option<i64>,
+    #[diesel(sql_type = Nullable<Jsonb>)]
+    pub total_json: Option<serde_json::Value>,
 }
 
 pub struct UniteLegaleSearchOutput {
