@@ -5,7 +5,7 @@
 [![docker image info](https://images.microbadger.com/badges/image/creatiwity/siren.svg)](http://microbadger.com/images/creatiwity/siren)
 [![docker tag](https://images.microbadger.com/badges/version/creatiwity/siren.svg)](https://hub.docker.com/r/creatiwity/siren/tags/)
 
-REST API for serving INSEE files v3.
+REST API for serving INSEE files v3 with full-text search and geographic search capabilities.
 
 ## Getting started
 
@@ -13,16 +13,32 @@ To have a working copy of this project, follow the instructions.
 
 ### Installation
 
-Setup [Rust](https://www.rust-lang.org).
+1. **Setup Rust**: Install [Rust](https://www.rust-lang.org) (version 1.70+ recommended)
 
-Define your environment variables as defined in `.env.sample`. You can either manually define these environment variables or use a `.env` file.
+2. **Environment variables**: Define your environment variables as defined in `.env.sample`. You can either manually define these environment variables or use a `.env` file.
 
-Setup a postgresql database (macOS commands).
+3. **PostgreSQL database**: Setup PostgreSQL with required extensions (macOS commands):
 
-```
+```bash
 brew install postgresql
 createuser --pwprompt sirene # set password to sirenepw for instance
 createdb --owner=sirene sirene
+
+# Connect to database and enable required extensions
+psql -U sirene -d sirene
+CREATE EXTENSION IF NOT EXISTS postgis;
+CREATE EXTENSION IF NOT EXISTS pg_search;
+\q
+```
+
+4. **Required PostgreSQL extensions**:
+   - `postgis` (for geographic search)
+   - `pg_search` (for full-text search with BM25 from ParadeDB)
+
+5. **Optional**: For development, you may want to install:
+```bash
+brew install diesel_cli  # For database migrations
+cargo install cargo-watch  # For auto-reloading during development
 ```
 
 ## Documentation
@@ -111,10 +127,43 @@ Options:
 
 ### HTTP API
 
+#### Lookup Endpoints
+
 ```
 GET /v3/unites_legales/<siren>
 GET /v3/etablissements/<siret>
 ```
+
+#### Search Endpoints (NEW!)
+
+**Search Establishments**
+```
+GET /v3/etablissements?q=<text>&lat=<latitude>&lng=<longitude>&radius=<meters>&sort=<field>&direction=<asc|desc>&limit=<number>&offset=<number>
+```
+
+**Search Legal Units**
+```
+GET /v3/unites_legales?q=<text>&sort=<field>&direction=<asc|desc>&limit=<number>&offset=<number>
+```
+
+**Query Parameters**:
+
+- `q`: Full-text search query (searches in denomination and commune name for establishments, denomination only for legal units)
+- `lat`, `lng`, `radius`: Geographic search (establishments only) - filters results within radius meters from (lat,lng) point
+- `sort`: Sort field - `distance` (geo only), `relevance` (text search), `date_creation`, `date_debut`
+- `direction`: Sort direction - `asc` or `desc` (defaults to sensible values per sort field)
+- `limit`: Results per page (default: 20, max: 100)
+- `offset`: Pagination offset (default: 0, max: 10000)
+- `etat_administratif`: Filter by administrative status (A=active, F=closed)
+- `code_postal`: Filter by postal code
+- `siren`: Filter by SIREN (establishments only)
+- `code_commune`: Filter by commune code
+- `activite_principale`: Filter by main activity code
+- `etablissement_siege`: Filter by headquarters status (establishments only)
+- `categorie_juridique`: Filter by legal category (legal units only)
+- `categorie_entreprise`: Filter by company category (legal units only)
+- `date_creation`: Filter by creation date (legal units only)
+- `date_debut`: Filter by start date (legal units only)
 
 **Maintenance**
 
@@ -175,9 +224,30 @@ Help:
 cargo run help
 ```
 
+## Features
+
+### Core Features
+- REST API for INSEE SIREN/SIRET data
+- Automatic updates from INSEE API
+- PostgreSQL backend with efficient indexing
+- Docker support for easy deployment
+
+### New Search Features (v5.0+)
+- **Full-text search**: BM25 algorithm with n-gram tokenization for partial matches
+- **Geographic search**: Radius filtering and distance-based sorting using PostGIS
+- **Field filtering**: Filter by administrative status, activity codes, dates, etc.
+- **Flexible sorting**: By relevance, distance, or dates
+- **Pagination**: Efficient offset/limit pagination with accurate total counts
+
+### Technical Features
+- **PostgreSQL extensions**: PostGIS for spatial data, pg_search for full-text search
+- **Optimized queries**: Raw SQL with parameterized queries for performance
+- **OpenAPI documentation**: Complete API documentation via Scalar
+- **Async support**: Optional asynchronous updates for large datasets
+
 ## Tests
 
-```
+```bash
 cargo test
 ```
 
@@ -185,9 +255,84 @@ cargo test
 
 A docker image is built and a sample `docker-compose.yml` with its `docker` folder are usable to test it.
 
+### Docker Setup
+
+```bash
+docker-compose up -d
+```
+
+### Environment Variables
+
+Required for production:
+```
+RUST_LOG=sirene=warn
+SIRENE_ENV=production
+BASE_URL=https://your-domain.com
+API_KEY=your-secret-key
+DATABASE_URL=postgresql://user:password@db:5432/sirene
+DATABASE_POOL_SIZE=100
+INSEE_CREDENTIALS=your-insee-api-key
+```
+
+## Development
+
+### Running locally
+
+```bash
+# Start the server
+cargo run -- serve --env development --port 8080 --host 0.0.0.0
+
+# Run tests
+cargo test
+
+# Run with auto-reload
+cargo watch -x 'run -- serve --env development --port 8080'
+```
+
+### Database Migrations
+
+```bash
+# Run migrations
+diesel migration run
+
+# Create new migration
+diesel migration generate migration_name
+```
+
+## API Documentation
+
+The API includes comprehensive OpenAPI documentation accessible at:
+- `/scalar` - Interactive Scalar API documentation
+- `/openapi.json` - OpenAPI specification
+
+## Examples
+
+### Search Establishments
+
+```bash
+# Text search
+curl "http://localhost:8080/v3/etablissements?q=boulangerie&limit=5"
+
+# Geographic search (within 1km of Eiffel Tower)
+curl "http://localhost:8080/v3/etablissements?lat=48.8584&lng=2.2945&radius=1000&sort=distance"
+
+# Combined search with filters
+curl "http://localhost:8080/v3/etablissements?q=restaurant&code_postal=75001&etat_administratif=A&sort=relevance&limit=10"
+```
+
+### Search Legal Units
+
+```bash
+# Text search with sorting
+curl "http://localhost:8080/v3/unites_legales?q=creati&sort=date_creation&direction=desc&limit=5"
+
+# Filter by activity code
+curl "http://localhost:8080/v3/unites_legales?activite_principale=62.01Z&categorie_juridique=5710"
+```
+
 ## Authors
 
--   **Julien Blatecky** - [Julien1619](https://twitter.com/Julien1619)
+- **Julien Blatecky** - [@Julien1619](https://twitter.com/Julien1619)
 
 ## License
 
