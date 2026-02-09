@@ -1,5 +1,5 @@
 use crate::connectors::Error as ConnectorError;
-use crate::models::{etablissement, unite_legale, update_metadata};
+use crate::models::{etablissement, lien_succession, unite_legale, update_metadata};
 use crate::update::error::Error as InternalUpdate;
 use axum::{
     Json,
@@ -21,6 +21,7 @@ custom_error! { pub Error
     Update {source: InternalUpdate} = "[Update] {source}",
     UniteLegale {source: unite_legale::error::Error} = "[UniteLegale] {source}",
     Etablissement {source: etablissement::error::Error} = "[Etablissement] {source}",
+    LienSuccession {source: lien_succession::error::Error} = "[LienSuccession] {source}",
     Status {source: update_metadata::error::Error} = "[Status] {source}",
 }
 
@@ -53,6 +54,9 @@ impl IntoResponse for Error {
                 }
                 _ => (StatusCode::INTERNAL_SERVER_ERROR, self.to_string()),
             },
+            Error::LienSuccession { source: _ } => {
+                (StatusCode::INTERNAL_SERVER_ERROR, self.to_string())
+            }
             Error::Status { ref source } => match source {
                 update_metadata::error::Error::MetadataNotFound => {
                     (StatusCode::NOT_FOUND, self.to_string())

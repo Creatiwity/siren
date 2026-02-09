@@ -54,7 +54,7 @@ pub fn copy_remote_zipped_csv(
     })?;
 
     debug!(
-        "Unzipping and inserting file etablissement extracted to database ({} bytes)",
+        "Unzipping and inserting extracted to database ({} bytes)",
         zipped_csv_file.size()
     );
 

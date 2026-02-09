@@ -162,6 +162,40 @@ diesel::table! {
     use diesel::sql_types::*;
     use postgis_diesel::sql_types::*;
 
+    lien_succession (id) {
+        id -> Uuid,
+        #[max_length = 14]
+        siret_etablissement_predecesseur -> Varchar,
+        #[max_length = 14]
+        siret_etablissement_successeur -> Varchar,
+        date_lien_succession -> Date,
+        transfert_siege -> Bool,
+        continuite_economique -> Bool,
+        date_dernier_traitement_lien_succession -> Nullable<Timestamp>,
+    }
+}
+
+diesel::table! {
+    use diesel::sql_types::*;
+    use postgis_diesel::sql_types::*;
+
+    lien_succession_staging (id) {
+        id -> Uuid,
+        #[max_length = 14]
+        siret_etablissement_predecesseur -> Varchar,
+        #[max_length = 14]
+        siret_etablissement_successeur -> Varchar,
+        date_lien_succession -> Date,
+        transfert_siege -> Bool,
+        continuite_economique -> Bool,
+        date_dernier_traitement_lien_succession -> Nullable<Timestamp>,
+    }
+}
+
+diesel::table! {
+    use diesel::sql_types::*;
+    use postgis_diesel::sql_types::*;
+
     unite_legale (siren) {
         #[max_length = 9]
         siren -> Varchar,
@@ -282,6 +316,8 @@ diesel::allow_tables_to_appear_in_same_query!(
     etablissement,
     etablissement_staging,
     group_metadata,
+    lien_succession,
+    lien_succession_staging,
     unite_legale,
     unite_legale_staging,
     update_metadata,

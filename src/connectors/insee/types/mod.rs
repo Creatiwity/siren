@@ -1,4 +1,5 @@
 pub mod etablissement;
+pub mod lien_succession;
 pub mod unite_legale;
 
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
@@ -11,7 +12,7 @@ pub struct InseeQueryParams {
     pub q: String,
     pub nombre: u16,
     pub curseur: String,
-    pub tri: String,
+    pub tri: Option<String>,
 }
 
 #[derive(Serialize)]

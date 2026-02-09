@@ -1,5 +1,6 @@
 use super::super::common::UpdatableModel;
 use super::super::etablissement::EtablissementModel;
+use super::super::lien_succession::LienSuccessionModel;
 use super::super::schema::group_metadata;
 use super::super::unite_legale::UniteLegaleModel;
 use chrono::{DateTime, Utc};
@@ -42,6 +43,7 @@ pub struct MetadataTimestamps {
 pub enum GroupType {
     UnitesLegales,
     Etablissements,
+    LiensSuccession,
 }
 
 impl GroupType {
@@ -49,6 +51,7 @@ impl GroupType {
         match self {
             GroupType::UnitesLegales => Box::new(UniteLegaleModel {}),
             GroupType::Etablissements => Box::new(EtablissementModel {}),
+            GroupType::LiensSuccession => Box::new(LienSuccessionModel {}),
         }
     }
 }
@@ -59,6 +62,7 @@ impl ToSql<Text, Pg> for GroupType {
         match *self {
             GroupType::UnitesLegales => out.write_all(b"unites_legales")?,
             GroupType::Etablissements => out.write_all(b"etablissements")?,
+            GroupType::LiensSuccession => out.write_all(b"liens_succession")?,
         }
         Ok(IsNull::No)
     }
@@ -69,6 +73,7 @@ impl FromSql<Text, Pg> for GroupType {
         match bytes.as_bytes() {
             b"unites_legales" => Ok(GroupType::UnitesLegales),
             b"etablissements" => Ok(GroupType::Etablissements),
+            b"liens_succession" => Ok(GroupType::LiensSuccession),
             _ => Err("Unrecognized enum variant".into()),
         }
     }
@@ -79,6 +84,7 @@ impl std::fmt::Display for GroupType {
         match self {
             GroupType::UnitesLegales => write!(f, "unités légales"),
             GroupType::Etablissements => write!(f, "établissements"),
+            GroupType::LiensSuccession => write!(f, "liens de succession"),
         }
     }
 }
