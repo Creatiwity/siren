@@ -90,7 +90,7 @@ pub fn search(
 
     if let Some(qi) = q_param_index {
         select_columns.push(format!(
-            "word_similarity(lower(${qi}), lower(coalesce(e.search_denomination, '') || ' ' || coalesce(e.libelle_commune, ''))) AS score"
+            "word_similarity(lower(immutable_unaccent(${qi})), search_denomination || ' ' || lower(immutable_unaccent(coalesce(e.libelle_commune, '')))) AS score"
         ));
     } else {
         select_columns.push("NULL::real AS score".to_string());
@@ -117,7 +117,7 @@ pub fn search(
     // Text search
     if has_q {
         conditions.push(format!(
-            "(lower(coalesce(e.search_denomination, '')) % lower(${param_index}) OR lower(coalesce(e.libelle_commune, '')) % lower(${param_index}))"
+            "(e.search_denomination % lower(immutable_unaccent(${param_index})) OR lower(immutable_unaccent(coalesce(e.libelle_commune, ''))) % lower(immutable_unaccent(${param_index})))"
         ));
         param_index += 1;
     }

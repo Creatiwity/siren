@@ -51,7 +51,7 @@ pub fn search(
 
     if has_q {
         select_columns.push(
-            "word_similarity(lower($1), lower(coalesce(u.search_denomination, ''))) AS score"
+            "word_similarity(lower(immutable_unaccent($1)), u.search_denomination) AS score"
                 .to_string(),
         );
     } else {
@@ -66,7 +66,7 @@ pub fn search(
     // Text search
     if has_q {
         conditions.push(format!(
-            "lower(coalesce(u.search_denomination, '')) % lower(${param_index})"
+            "u.search_denomination % lower(immutable_unaccent(${param_index}))"
         ));
         param_index += 1;
     }

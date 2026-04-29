@@ -15,5 +15,7 @@ ALTER TABLE unite_legale DROP COLUMN search_denomination;
 DROP TABLE "public"."unite_legale_staging";
 CREATE TABLE "public"."unite_legale_staging" (LIKE "public"."unite_legale" INCLUDING DEFAULTS INCLUDING CONSTRAINTS INCLUDING IDENTITY INCLUDING INDEXES);
 
+DROP FUNCTION IF EXISTS immutable_unaccent(text);
+DROP EXTENSION IF EXISTS "unaccent";
 DROP EXTENSION IF EXISTS "pg_trgm";
 DROP EXTENSION IF EXISTS "postgis";
