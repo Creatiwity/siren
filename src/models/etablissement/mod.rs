@@ -58,6 +58,13 @@ pub fn search(
     let limit = params.limit.unwrap_or(20).clamp(1, 100);
     let offset = params.offset.unwrap_or(0).clamp(0, 10_000);
 
+    // Precompute q param index: geo binds lng+lat ($1,$2) before q
+    let q_param_index: Option<u32> = if has_q {
+        Some(if has_geo { 3 } else { 1 })
+    } else {
+        None
+    };
+
     // Build SELECT columns
     let mut select_columns = vec![
         "e.siret".to_string(),
@@ -81,18 +88,14 @@ pub fn search(
         select_columns.push("NULL::float8 AS meter_distance".to_string());
     }
 
-    if has_q {
-        select_columns.push("pdb.score(e.siret) AS score".to_string());
-        select_columns.push("NULL::bigint AS total".to_string());
-        select_columns.push(
-            "pdb.agg('{\"value_count\": {\"field\": \"siret\"}}') OVER () AS total_json"
-                .to_string(),
-        );
+    if let Some(qi) = q_param_index {
+        select_columns.push(format!(
+            "word_similarity(lower(unaccent(${qi})), lower(unaccent(coalesce(e.search_denomination, '') || ' ' || coalesce(e.libelle_commune, '')))) AS score"
+        ));
     } else {
         select_columns.push("NULL::real AS score".to_string());
-        select_columns.push("COUNT(*) OVER() AS total".to_string());
-        select_columns.push("NULL::jsonb AS total_json".to_string());
     }
+    select_columns.push("COUNT(*) OVER() AS total".to_string());
 
     // Build FROM clause
     let mut from_parts = vec!["etablissement e".to_string()];
@@ -112,15 +115,11 @@ pub fn search(
     let mut conditions: Vec<String> = Vec::new();
 
     // Text search
-    let q_param_index;
     if has_q {
-        q_param_index = Some(param_index);
         conditions.push(format!(
-            "(e.search_denomination ||| ${param_index} OR e.libelle_commune ||| ${param_index})"
+            "(lower(unaccent(coalesce(e.search_denomination, ''))) % lower(unaccent(${param_index})) OR lower(unaccent(coalesce(e.libelle_commune, ''))) % lower(unaccent(${param_index})))"
         ));
         param_index += 1;
-    } else {
-        q_param_index = None;
     }
 
     // Geo filter
@@ -227,7 +226,6 @@ pub fn search(
     }
 
     if let Some(ref q) = params.q {
-        let _ = q_param_index;
         query = query.bind::<Text, _>(q);
     }
 

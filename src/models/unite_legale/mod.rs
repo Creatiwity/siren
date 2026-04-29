@@ -50,17 +50,14 @@ pub fn search(
     ];
 
     if has_q {
-        select_columns.push("pdb.score(u.siren) AS score".to_string());
-        select_columns.push("NULL::bigint AS total".to_string());
         select_columns.push(
-            "pdb.agg('{\"value_count\": {\"field\": \"siren\"}}') OVER () AS total_json"
+            "word_similarity(lower(unaccent($1)), lower(unaccent(coalesce(u.search_denomination, '')))) AS score"
                 .to_string(),
         );
     } else {
         select_columns.push("NULL::real AS score".to_string());
-        select_columns.push("COUNT(*) OVER() AS total".to_string());
-        select_columns.push("NULL::jsonb AS total_json".to_string());
     }
+    select_columns.push("COUNT(*) OVER() AS total".to_string());
 
     // Build WHERE conditions
     let mut conditions: Vec<String> = Vec::new();
@@ -68,7 +65,9 @@ pub fn search(
 
     // Text search
     if has_q {
-        conditions.push(format!("u.search_denomination ||| ${param_index}"));
+        conditions.push(format!(
+            "lower(unaccent(coalesce(u.search_denomination, ''))) % lower(unaccent(${param_index}))"
+        ));
         param_index += 1;
     }
 
