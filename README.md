@@ -28,14 +28,12 @@ createdb --owner=sirene sirene
 psql -U sirene -d sirene
 CREATE EXTENSION IF NOT EXISTS postgis;
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
-CREATE EXTENSION IF NOT EXISTS unaccent;
 \q
 ```
 
 4. **Required PostgreSQL extensions**:
    - `postgis` (for geographic search)
-   - `pg_trgm` (for full-text search with trigram similarity)
-   - `unaccent` (for accent-insensitive search)
+   - `pg_trgm` (for full-text search with trigram similarity, case-insensitive)
 
 5. **Optional**: For development, you may want to install:
 ```bash
@@ -235,14 +233,14 @@ cargo run help
 - Docker support for easy deployment
 
 ### New Search Features (v5.0+)
-- **Full-text search**: Trigram similarity (`pg_trgm`) with accent normalization (`unaccent`) for partial and fuzzy matches
+- **Full-text search**: Trigram similarity (`pg_trgm`) with case-insensitive matching for partial and fuzzy matches
 - **Geographic search**: Radius filtering and distance-based sorting using PostGIS
 - **Field filtering**: Filter by administrative status, activity codes, dates, etc.
 - **Flexible sorting**: By relevance, distance, or dates
 - **Pagination**: Efficient offset/limit pagination with accurate total counts
 
 ### Technical Features
-- **PostgreSQL extensions**: PostGIS for spatial data, pg_trgm + unaccent for full-text search
+- **PostgreSQL extensions**: PostGIS for spatial data, pg_trgm for full-text search
 - **Optimized queries**: Raw SQL with parameterized queries for performance
 - **OpenAPI documentation**: Complete API documentation via Scalar
 - **Async support**: Optional asynchronous updates for large datasets
@@ -284,11 +282,12 @@ Si vous avez une installation existante qui utilise l'extension `pg_search` (Par
 psql -U sirene -d sirene -f migrate_from_pg_search.sql
 ```
 
-Ce script :
+Ce script (transactionnel) :
 1. Supprime les anciens index BM25 ParadeDB
-2. Active `pg_trgm` et `unaccent`
-3. Crée les nouveaux index GIN trigramme
-4. Désactive l'extension `pg_search`
+2. Active `pg_trgm`
+3. Crée les nouveaux index GIN trigramme sur `lower(column)`
+4. Recrée les tables de staging pour hériter des nouveaux index
+5. Désactive l'extension `pg_search`
 
 Les nouvelles installations n'ont pas besoin de ce script : les migrations Diesel utilisent directement `pg_trgm`.
 
