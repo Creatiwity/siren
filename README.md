@@ -27,13 +27,15 @@ createdb --owner=sirene sirene
 # Connect to database and enable required extensions
 psql -U sirene -d sirene
 CREATE EXTENSION IF NOT EXISTS postgis;
-CREATE EXTENSION IF NOT EXISTS pg_search;
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+CREATE EXTENSION IF NOT EXISTS unaccent;
 \q
 ```
 
 4. **Required PostgreSQL extensions**:
    - `postgis` (for geographic search)
-   - `pg_search` (for full-text search with BM25 from ParadeDB)
+   - `pg_trgm` (for full-text search with trigram similarity)
+   - `unaccent` (for accent-insensitive search, via immutable wrapper)
 
 5. **Optional**: For development, you may want to install:
 ```bash
@@ -233,14 +235,14 @@ cargo run help
 - Docker support for easy deployment
 
 ### New Search Features (v5.0+)
-- **Full-text search**: BM25 algorithm with n-gram tokenization for partial matches
+- **Full-text search**: Trigram similarity (`pg_trgm`) with case and accent-insensitive matching for partial and fuzzy matches
 - **Geographic search**: Radius filtering and distance-based sorting using PostGIS
 - **Field filtering**: Filter by administrative status, activity codes, dates, etc.
 - **Flexible sorting**: By relevance, distance, or dates
 - **Pagination**: Efficient offset/limit pagination with accurate total counts
 
 ### Technical Features
-- **PostgreSQL extensions**: PostGIS for spatial data, pg_search for full-text search
+- **PostgreSQL extensions**: PostGIS for spatial data, pg_trgm + unaccent for full-text search
 - **Optimized queries**: Raw SQL with parameterized queries for performance
 - **OpenAPI documentation**: Complete API documentation via Scalar
 - **Async support**: Optional asynchronous updates for large datasets
@@ -273,6 +275,25 @@ DATABASE_URL=postgresql://user:password@db:5432/sirene
 DATABASE_POOL_SIZE=100
 INSEE_CREDENTIALS=your-insee-api-key
 ```
+
+## Migration depuis pg_search
+
+Si vous avez une installation existante qui utilise l'extension `pg_search` (ParadeDB), exécutez le script de migration manuelle fourni à la racine du projet :
+
+```bash
+psql -U sirene -d sirene -f migrate_from_pg_search.sql
+```
+
+Ce script (transactionnel) :
+1. Supprime les anciens index BM25 ParadeDB
+2. Active `pg_trgm` et `unaccent`
+3. Crée la fonction `immutable_unaccent()` (wrapper IMMUTABLE requis pour les index)
+4. Reconstruit `search_denomination` avec normalisation `lower(immutable_unaccent(...))`
+5. Crée les nouveaux index GIN
+6. Recrée les tables de staging pour hériter des nouveaux index et colonnes
+7. Désactive l'extension `pg_search`
+
+Les nouvelles installations n'ont pas besoin de ce script : les migrations Diesel utilisent directement `pg_trgm`.
 
 ## Development
 

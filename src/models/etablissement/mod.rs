@@ -15,7 +15,7 @@ use diesel::pg::upsert::excluded;
 use diesel::pg::{CopyFormat, CopyHeader};
 use diesel::prelude::*;
 use diesel::sql_query;
-use diesel::sql_types::{Bool, Float8, Text};
+use diesel::sql_types::{BigInt, Bool, Float8, Text};
 use error::Error;
 
 pub fn get(connection: &mut Connection, siret: &str) -> Result<Etablissement, Error> {
@@ -48,6 +48,14 @@ pub fn get_siege_with_siren(
         .map_err(|error| error.into())
 }
 
+const SEARCH_TOTAL_CAP: i64 = 10_000;
+
+#[derive(QueryableByName)]
+struct RowCount {
+    #[diesel(sql_type = BigInt)]
+    count: i64,
+}
+
 pub fn search(
     connection: &mut Connection,
     params: &EtablissementSearchParams,
@@ -57,6 +65,13 @@ pub fn search(
 
     let limit = params.limit.unwrap_or(20).clamp(1, 100);
     let offset = params.offset.unwrap_or(0).clamp(0, 10_000);
+
+    // Precompute q param index: geo binds lng+lat ($1,$2) before q
+    let q_param_index: Option<u32> = if has_q {
+        Some(if has_geo { 3 } else { 1 })
+    } else {
+        None
+    };
 
     // Build SELECT columns
     let mut select_columns = vec![
@@ -81,17 +96,14 @@ pub fn search(
         select_columns.push("NULL::float8 AS meter_distance".to_string());
     }
 
-    if has_q {
-        select_columns.push("pdb.score(e.siret) AS score".to_string());
-        select_columns.push("NULL::bigint AS total".to_string());
-        select_columns.push(
-            "pdb.agg('{\"value_count\": {\"field\": \"siret\"}}') OVER () AS total_json"
-                .to_string(),
-        );
+    if let Some(qi) = q_param_index {
+        select_columns.push(format!(
+            "word_similarity(lower(immutable_unaccent(${qi})), e.search_denomination) AS score"
+        ));
+        select_columns.push("0::bigint AS total".to_string());
     } else {
         select_columns.push("NULL::real AS score".to_string());
         select_columns.push("COUNT(*) OVER() AS total".to_string());
-        select_columns.push("NULL::jsonb AS total_json".to_string());
     }
 
     // Build FROM clause
@@ -112,15 +124,11 @@ pub fn search(
     let mut conditions: Vec<String> = Vec::new();
 
     // Text search
-    let q_param_index;
     if has_q {
-        q_param_index = Some(param_index);
         conditions.push(format!(
-            "(e.search_denomination ||| ${param_index} OR e.libelle_commune ||| ${param_index})"
+            "e.search_denomination % lower(immutable_unaccent(${param_index}))"
         ));
         param_index += 1;
-    } else {
-        q_param_index = None;
     }
 
     // Geo filter
@@ -227,7 +235,6 @@ pub fn search(
     }
 
     if let Some(ref q) = params.q {
-        let _ = q_param_index;
         query = query.bind::<Text, _>(q);
     }
 
@@ -269,8 +276,68 @@ pub fn search(
         .load::<EtablissementSearchResult>(connection)
         .map_err(|e| -> Error { e.into() })?;
 
+    let total = if has_q {
+        let count_sql = format!(
+            "SELECT count(*) AS count FROM (SELECT 1 FROM {} {} LIMIT {}) _sub",
+            from_parts.join(", "),
+            where_clause,
+            SEARCH_TOTAL_CAP + 1
+        );
+        let mut count_query = sql_query(&count_sql).into_boxed();
+        if has_geo {
+            count_query = count_query
+                .bind::<Float8, _>(params.lng.unwrap())
+                .bind::<Float8, _>(params.lat.unwrap());
+        }
+        if let Some(ref q) = params.q {
+            count_query = count_query.bind::<Text, _>(q);
+        }
+        if has_geo {
+            count_query = count_query.bind::<Float8, _>(params.radius.unwrap());
+        }
+        for (field_name, _) in &field_param_indices {
+            match field_name.as_str() {
+                "etat_administratif" => {
+                    let val = match params.etat_administratif.unwrap() {
+                        common::EtatAdministratif::A => "A",
+                        common::EtatAdministratif::F => "F",
+                    };
+                    count_query = count_query.bind::<Text, _>(val);
+                }
+                "code_postal" => {
+                    count_query =
+                        count_query.bind::<Text, _>(params.code_postal.as_ref().unwrap());
+                }
+                "siren" => {
+                    count_query = count_query.bind::<Text, _>(params.siren.as_ref().unwrap());
+                }
+                "code_commune" => {
+                    count_query =
+                        count_query.bind::<Text, _>(params.code_commune.as_ref().unwrap());
+                }
+                "activite_principale" => {
+                    count_query =
+                        count_query.bind::<Text, _>(params.activite_principale.as_ref().unwrap());
+                }
+                "etablissement_siege" => {
+                    count_query =
+                        count_query.bind::<Bool, _>(params.etablissement_siege.unwrap());
+                }
+                _ => {}
+            }
+        }
+        let raw = count_query
+            .get_result::<RowCount>(connection)
+            .map(|r| r.count)
+            .unwrap_or(0);
+        raw.min(SEARCH_TOTAL_CAP)
+    } else {
+        results.first().map(|r| r.total).unwrap_or(0)
+    };
+
     Ok(EtablissementSearchOutput {
         results,
+        total,
         limit,
         offset,
         sort: sort_field,
