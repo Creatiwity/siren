@@ -1,5 +1,4 @@
 DROP INDEX etablissement_search_denomination_trgm_idx;
-DROP INDEX etablissement_libelle_commune_trgm_idx;
 DROP INDEX etablissement_position_index;
 
 ALTER TABLE etablissement DROP COLUMN search_denomination;

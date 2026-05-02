@@ -152,6 +152,7 @@ pub struct UniteLegaleSearchResult {
 
 pub struct UniteLegaleSearchOutput {
     pub results: Vec<UniteLegaleSearchResult>,
+    pub total: i64,
     pub limit: i64,
     pub offset: i64,
     pub sort: UniteLegaleSortField,

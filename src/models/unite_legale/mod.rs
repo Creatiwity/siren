@@ -15,7 +15,7 @@ use diesel::pg::upsert::excluded;
 use diesel::pg::{CopyFormat, CopyHeader};
 use diesel::prelude::*;
 use diesel::sql_query;
-use diesel::sql_types::{Date, Text};
+use diesel::sql_types::{BigInt, Date, Text};
 use error::Error;
 
 pub fn get(connection: &mut Connection, siren: &str) -> Result<UniteLegale, Error> {
@@ -24,6 +24,14 @@ pub fn get(connection: &mut Connection, siren: &str) -> Result<UniteLegale, Erro
         .select(UniteLegale::as_select())
         .first::<UniteLegale>(connection)
         .map_err(|error| error.into())
+}
+
+const SEARCH_TOTAL_CAP: i64 = 10_000;
+
+#[derive(QueryableByName)]
+struct RowCount {
+    #[diesel(sql_type = BigInt)]
+    count: i64,
 }
 
 pub fn search(
@@ -54,10 +62,11 @@ pub fn search(
             "word_similarity(lower(immutable_unaccent($1)), u.search_denomination) AS score"
                 .to_string(),
         );
+        select_columns.push("0::bigint AS total".to_string());
     } else {
         select_columns.push("NULL::real AS score".to_string());
+        select_columns.push("COUNT(*) OVER() AS total".to_string());
     }
-    select_columns.push("COUNT(*) OVER() AS total".to_string());
 
     // Build WHERE conditions
     let mut conditions: Vec<String> = Vec::new();
@@ -184,8 +193,58 @@ pub fn search(
         .load::<UniteLegaleSearchResult>(connection)
         .map_err(|e| -> Error { e.into() })?;
 
+    let total = if has_q {
+        let count_sql = format!(
+            "SELECT count(*) AS count FROM (SELECT 1 FROM unite_legale u {} LIMIT {}) _sub",
+            where_clause,
+            SEARCH_TOTAL_CAP + 1
+        );
+        let mut count_query = sql_query(&count_sql).into_boxed();
+        if let Some(ref q) = params.q {
+            count_query = count_query.bind::<Text, _>(q);
+        }
+        for (field_name, _) in &field_param_indices {
+            match field_name.as_str() {
+                "etat_administratif" => {
+                    let val = match params.etat_administratif.unwrap() {
+                        common::EtatAdministratif::A => "A",
+                        common::EtatAdministratif::F => "F",
+                    };
+                    count_query = count_query.bind::<Text, _>(val);
+                }
+                "activite_principale" => {
+                    count_query =
+                        count_query.bind::<Text, _>(params.activite_principale.as_ref().unwrap());
+                }
+                "categorie_juridique" => {
+                    count_query =
+                        count_query.bind::<Text, _>(params.categorie_juridique.as_ref().unwrap());
+                }
+                "categorie_entreprise" => {
+                    count_query =
+                        count_query.bind::<Text, _>(params.categorie_entreprise.as_ref().unwrap());
+                }
+                "date_creation" => {
+                    count_query = count_query.bind::<Date, _>(params.date_creation.unwrap());
+                }
+                "date_debut" => {
+                    count_query = count_query.bind::<Date, _>(params.date_debut.unwrap());
+                }
+                _ => {}
+            }
+        }
+        let raw = count_query
+            .get_result::<RowCount>(connection)
+            .map(|r| r.count)
+            .unwrap_or(0);
+        raw.min(SEARCH_TOTAL_CAP)
+    } else {
+        results.first().map(|r| r.total).unwrap_or(0)
+    };
+
     Ok(UniteLegaleSearchOutput {
         results,
+        total,
         limit,
         offset,
         sort: sort_field,

@@ -211,6 +211,7 @@ pub struct EtablissementSearchResult {
 
 pub struct EtablissementSearchOutput {
     pub results: Vec<EtablissementSearchResult>,
+    pub total: i64,
     pub limit: i64,
     pub offset: i64,
     pub sort: EtablissementSortField,

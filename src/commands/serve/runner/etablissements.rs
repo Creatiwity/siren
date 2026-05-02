@@ -115,7 +115,7 @@ async fn search_etablissements(
 
     let output = models::etablissement::search(&mut connection, &params)?;
 
-    let total = output.results.first().map(|r| r.total).unwrap_or(0);
+    let total = output.total;
 
     Ok(Json(EtablissementSearchResponse {
         etablissements: output

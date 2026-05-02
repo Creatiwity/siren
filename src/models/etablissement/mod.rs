@@ -15,7 +15,7 @@ use diesel::pg::upsert::excluded;
 use diesel::pg::{CopyFormat, CopyHeader};
 use diesel::prelude::*;
 use diesel::sql_query;
-use diesel::sql_types::{Bool, Float8, Text};
+use diesel::sql_types::{BigInt, Bool, Float8, Text};
 use error::Error;
 
 pub fn get(connection: &mut Connection, siret: &str) -> Result<Etablissement, Error> {
@@ -46,6 +46,14 @@ pub fn get_siege_with_siren(
         .select(Etablissement::as_select())
         .first::<Etablissement>(connection)
         .map_err(|error| error.into())
+}
+
+const SEARCH_TOTAL_CAP: i64 = 10_000;
+
+#[derive(QueryableByName)]
+struct RowCount {
+    #[diesel(sql_type = BigInt)]
+    count: i64,
 }
 
 pub fn search(
@@ -90,12 +98,13 @@ pub fn search(
 
     if let Some(qi) = q_param_index {
         select_columns.push(format!(
-            "word_similarity(lower(immutable_unaccent(${qi})), search_denomination || ' ' || lower(immutable_unaccent(coalesce(e.libelle_commune, '')))) AS score"
+            "word_similarity(lower(immutable_unaccent(${qi})), e.search_denomination) AS score"
         ));
+        select_columns.push("0::bigint AS total".to_string());
     } else {
         select_columns.push("NULL::real AS score".to_string());
+        select_columns.push("COUNT(*) OVER() AS total".to_string());
     }
-    select_columns.push("COUNT(*) OVER() AS total".to_string());
 
     // Build FROM clause
     let mut from_parts = vec!["etablissement e".to_string()];
@@ -117,7 +126,7 @@ pub fn search(
     // Text search
     if has_q {
         conditions.push(format!(
-            "(e.search_denomination % lower(immutable_unaccent(${param_index})) OR lower(immutable_unaccent(coalesce(e.libelle_commune, ''))) % lower(immutable_unaccent(${param_index})))"
+            "e.search_denomination % lower(immutable_unaccent(${param_index}))"
         ));
         param_index += 1;
     }
@@ -267,8 +276,68 @@ pub fn search(
         .load::<EtablissementSearchResult>(connection)
         .map_err(|e| -> Error { e.into() })?;
 
+    let total = if has_q {
+        let count_sql = format!(
+            "SELECT count(*) AS count FROM (SELECT 1 FROM {} {} LIMIT {}) _sub",
+            from_parts.join(", "),
+            where_clause,
+            SEARCH_TOTAL_CAP + 1
+        );
+        let mut count_query = sql_query(&count_sql).into_boxed();
+        if has_geo {
+            count_query = count_query
+                .bind::<Float8, _>(params.lng.unwrap())
+                .bind::<Float8, _>(params.lat.unwrap());
+        }
+        if let Some(ref q) = params.q {
+            count_query = count_query.bind::<Text, _>(q);
+        }
+        if has_geo {
+            count_query = count_query.bind::<Float8, _>(params.radius.unwrap());
+        }
+        for (field_name, _) in &field_param_indices {
+            match field_name.as_str() {
+                "etat_administratif" => {
+                    let val = match params.etat_administratif.unwrap() {
+                        common::EtatAdministratif::A => "A",
+                        common::EtatAdministratif::F => "F",
+                    };
+                    count_query = count_query.bind::<Text, _>(val);
+                }
+                "code_postal" => {
+                    count_query =
+                        count_query.bind::<Text, _>(params.code_postal.as_ref().unwrap());
+                }
+                "siren" => {
+                    count_query = count_query.bind::<Text, _>(params.siren.as_ref().unwrap());
+                }
+                "code_commune" => {
+                    count_query =
+                        count_query.bind::<Text, _>(params.code_commune.as_ref().unwrap());
+                }
+                "activite_principale" => {
+                    count_query =
+                        count_query.bind::<Text, _>(params.activite_principale.as_ref().unwrap());
+                }
+                "etablissement_siege" => {
+                    count_query =
+                        count_query.bind::<Bool, _>(params.etablissement_siege.unwrap());
+                }
+                _ => {}
+            }
+        }
+        let raw = count_query
+            .get_result::<RowCount>(connection)
+            .map(|r| r.count)
+            .unwrap_or(0);
+        raw.min(SEARCH_TOTAL_CAP)
+    } else {
+        results.first().map(|r| r.total).unwrap_or(0)
+    };
+
     Ok(EtablissementSearchOutput {
         results,
+        total,
         limit,
         offset,
         sort: sort_field,

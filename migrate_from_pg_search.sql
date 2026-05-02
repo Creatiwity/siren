@@ -23,18 +23,14 @@ $$SELECT unaccent('unaccent', $1)$$;
 
 -- 4. Reconstruire search_denomination avec normalisation (lower + unaccent)
 ALTER TABLE etablissement DROP COLUMN search_denomination;
-ALTER TABLE etablissement ADD COLUMN search_denomination TEXT GENERATED ALWAYS AS (lower(immutable_unaccent(coalesce(denomination_usuelle, '') || ' ' || coalesce(enseigne_1, '') || ' ' || coalesce(enseigne_2, '') || ' ' || coalesce(enseigne_3, '')))) STORED;
+ALTER TABLE etablissement ADD COLUMN search_denomination TEXT GENERATED ALWAYS AS (lower(immutable_unaccent(coalesce(denomination_usuelle, '') || ' ' || coalesce(enseigne_1, '') || ' ' || coalesce(enseigne_2, '') || ' ' || coalesce(enseigne_3, '') || ' ' || coalesce(libelle_commune, '')))) STORED;
 
 ALTER TABLE unite_legale DROP COLUMN search_denomination;
 ALTER TABLE unite_legale ADD COLUMN search_denomination TEXT GENERATED ALWAYS AS (lower(immutable_unaccent(coalesce(denomination, '') || ' ' || coalesce(denomination_usuelle_1, '') || ' ' || coalesce(denomination_usuelle_2, '') || ' ' || coalesce(denomination_usuelle_3, '')))) STORED;
 
--- 5. Creer les nouveaux index GIN
---    search_denomination est deja normalise : index simple
---    libelle_commune est une colonne brute : index fonctionnel lower(immutable_unaccent())
+-- 5. Creer les nouveaux index GIN (search_denomination est deja normalise : index simple)
 CREATE INDEX IF NOT EXISTS etablissement_search_denomination_trgm_idx
     ON etablissement USING GIN (search_denomination gin_trgm_ops);
-CREATE INDEX IF NOT EXISTS etablissement_libelle_commune_trgm_idx
-    ON etablissement USING GIN (lower(immutable_unaccent(libelle_commune)) gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS unite_legale_search_denomination_trgm_idx
     ON unite_legale USING GIN (search_denomination gin_trgm_ops);
 

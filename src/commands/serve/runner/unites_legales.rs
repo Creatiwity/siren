@@ -96,7 +96,7 @@ async fn search_unites_legales(
 
     let output = models::unite_legale::search(&mut connection, &params)?;
 
-    let total = output.results.first().map(|r| r.total).unwrap_or(0);
+    let total = output.total;
 
     Ok(Json(UniteLegaleSearchResponse {
         unites_legales: output
