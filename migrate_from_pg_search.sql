@@ -28,11 +28,20 @@ ALTER TABLE etablissement ADD COLUMN search_denomination TEXT GENERATED ALWAYS A
 ALTER TABLE unite_legale DROP COLUMN search_denomination;
 ALTER TABLE unite_legale ADD COLUMN search_denomination TEXT GENERATED ALWAYS AS (lower(immutable_unaccent(coalesce(denomination, '') || ' ' || coalesce(denomination_usuelle_1, '') || ' ' || coalesce(denomination_usuelle_2, '') || ' ' || coalesce(denomination_usuelle_3, '')))) STORED;
 
--- 5. Creer les nouveaux index GIN (search_denomination est deja normalise : index simple)
+-- 5. Creer les nouveaux index GIN (full + partiels par etat_administratif)
 CREATE INDEX IF NOT EXISTS etablissement_search_denomination_trgm_idx
     ON etablissement USING GIN (search_denomination gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS etablissement_search_denom_a_trgm_idx
+    ON etablissement USING GIN (search_denomination gin_trgm_ops) WHERE etat_administratif = 'A';
+CREATE INDEX IF NOT EXISTS etablissement_search_denom_f_trgm_idx
+    ON etablissement USING GIN (search_denomination gin_trgm_ops) WHERE etat_administratif = 'F';
+
 CREATE INDEX IF NOT EXISTS unite_legale_search_denomination_trgm_idx
     ON unite_legale USING GIN (search_denomination gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS unite_legale_search_denom_a_trgm_idx
+    ON unite_legale USING GIN (search_denomination gin_trgm_ops) WHERE etat_administratif = 'A';
+CREATE INDEX IF NOT EXISTS unite_legale_search_denom_f_trgm_idx
+    ON unite_legale USING GIN (search_denomination gin_trgm_ops) WHERE etat_administratif = 'F';
 
 -- 6. Recreer les tables de staging pour qu'elles heritent des nouveaux index et colonnes
 --    (LIKE ... INCLUDING INDEXES capture les index au moment de la creation)
