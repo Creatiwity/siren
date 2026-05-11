@@ -156,6 +156,9 @@ GET /v3/unites_legales?q=<text>&sort=<field>&direction=<asc|desc>&limit=<number>
 - `direction`: Sort direction - `asc` or `desc` (defaults to sensible values per sort field)
 - `limit`: Results per page (default: 20, max: 100)
 - `offset`: Pagination offset (default: 0, max: 10000)
+
+> **Note**: When using `q`, the returned `total` is capped at 10 000 for performance (early-exit count query). Without `q`, `total` is an exact `COUNT(*)` on indexed filters.
+
 - `etat_administratif`: Filter by administrative status (A=active, F=closed)
 - `code_postal`: Filter by postal code
 - `siren`: Filter by SIREN (establishments only)
