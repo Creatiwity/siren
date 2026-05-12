@@ -242,7 +242,7 @@ cargo run help
 - **Geographic search**: Radius filtering and distance-based sorting using PostGIS
 - **Field filtering**: Filter by administrative status, activity codes, dates, etc.
 - **Flexible sorting**: By relevance, distance, or dates
-- **Pagination**: Efficient offset/limit pagination with accurate total counts
+- **Pagination**: Efficient offset/limit pagination for large result sets
 
 ### Technical Features
 - **PostgreSQL extensions**: PostGIS for spatial data, pg_trgm + unaccent for full-text search
