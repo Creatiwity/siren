@@ -157,8 +157,7 @@ GET /v3/unites_legales?q=<text>&sort=<field>&direction=<asc|desc>&limit=<number>
 - `limit`: Results per page (default: 20, max: 100)
 - `offset`: Pagination offset (default: 0, max: 10000)
 
-> **Note**: When using `q`, the returned `total` is capped at 10 000 for performance (early-exit count query). Without `q`, `total` is an exact `COUNT(*)` on indexed filters.
-
+> **`total` field**: exact count for filter-only queries; capped at 10,000 for text searches (`q`) — if `total == 10000` there may be more results.
 - `etat_administratif`: Filter by administrative status (A=active, F=closed)
 - `code_postal`: Filter by postal code
 - `siren`: Filter by SIREN (establishments only)
@@ -242,7 +241,7 @@ cargo run help
 - **Geographic search**: Radius filtering and distance-based sorting using PostGIS
 - **Field filtering**: Filter by administrative status, activity codes, dates, etc.
 - **Flexible sorting**: By relevance, distance, or dates
-- **Pagination**: Efficient offset/limit pagination for large result sets
+- **Pagination**: Efficient offset/limit pagination — exact total for filter-only queries, capped at 10,000 for text searches (`q`) to avoid full-table counts
 
 ### Technical Features
 - **PostgreSQL extensions**: PostGIS for spatial data, pg_trgm + unaccent for full-text search
