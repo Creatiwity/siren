@@ -15,7 +15,7 @@ use diesel::pg::upsert::excluded;
 use diesel::pg::{CopyFormat, CopyHeader};
 use diesel::prelude::*;
 use diesel::sql_query;
-use diesel::sql_types::{Date, Text};
+use diesel::sql_types::{BigInt, Date, Text};
 use error::Error;
 
 pub fn get(connection: &mut Connection, siren: &str) -> Result<UniteLegale, Error> {
@@ -24,6 +24,14 @@ pub fn get(connection: &mut Connection, siren: &str) -> Result<UniteLegale, Erro
         .select(UniteLegale::as_select())
         .first::<UniteLegale>(connection)
         .map_err(|error| error.into())
+}
+
+const SEARCH_TOTAL_CAP: i64 = 10_000;
+
+#[derive(QueryableByName)]
+struct RowCount {
+    #[diesel(sql_type = BigInt)]
+    count: i64,
 }
 
 pub fn search(
@@ -50,16 +58,12 @@ pub fn search(
     ];
 
     if has_q {
-        select_columns.push("pdb.score(u.siren) AS score".to_string());
-        select_columns.push("NULL::bigint AS total".to_string());
         select_columns.push(
-            "pdb.agg('{\"value_count\": {\"field\": \"siren\"}}') OVER () AS total_json"
+            "word_similarity(lower(immutable_unaccent($1)), u.search_denomination) AS score"
                 .to_string(),
         );
     } else {
         select_columns.push("NULL::real AS score".to_string());
-        select_columns.push("COUNT(*) OVER() AS total".to_string());
-        select_columns.push("NULL::jsonb AS total_json".to_string());
     }
 
     // Build WHERE conditions
@@ -68,7 +72,9 @@ pub fn search(
 
     // Text search
     if has_q {
-        conditions.push(format!("u.search_denomination ||| ${param_index}"));
+        conditions.push(format!(
+            "lower(immutable_unaccent(${param_index})) <% u.search_denomination"
+        ));
         param_index += 1;
     }
 
@@ -185,8 +191,65 @@ pub fn search(
         .load::<UniteLegaleSearchResult>(connection)
         .map_err(|e| -> Error { e.into() })?;
 
+    let count_sql = format!(
+        "SELECT count(*) AS count FROM (SELECT 1 FROM unite_legale u {} LIMIT {}) _sub",
+        where_clause,
+        SEARCH_TOTAL_CAP + 1
+    );
+    let mut count_query = sql_query(&count_sql).into_boxed();
+    if let Some(ref q) = params.q {
+        count_query = count_query.bind::<Text, _>(q);
+    }
+    for (field_name, _) in &field_param_indices {
+        match field_name.as_str() {
+            "etat_administratif" => {
+                let val = match params.etat_administratif.unwrap() {
+                    common::EtatAdministratif::A => "A",
+                    common::EtatAdministratif::F => "F",
+                };
+                count_query = count_query.bind::<Text, _>(val);
+            }
+            "activite_principale" => {
+                count_query =
+                    count_query.bind::<Text, _>(params.activite_principale.as_ref().unwrap());
+            }
+            "categorie_juridique" => {
+                count_query =
+                    count_query.bind::<Text, _>(params.categorie_juridique.as_ref().unwrap());
+            }
+            "categorie_entreprise" => {
+                count_query =
+                    count_query.bind::<Text, _>(params.categorie_entreprise.as_ref().unwrap());
+            }
+            "date_creation" => {
+                count_query = count_query.bind::<Date, _>(params.date_creation.unwrap());
+            }
+            "date_debut" => {
+                count_query = count_query.bind::<Date, _>(params.date_debut.unwrap());
+            }
+            _ => {}
+        }
+    }
+    let total = if has_q {
+        connection
+            .build_transaction()
+            .read_only()
+            .run(|conn| {
+                diesel::sql_query("SET LOCAL enable_seqscan = off").execute(conn)?;
+                count_query.get_result::<RowCount>(conn)
+            })
+            .map(|r| r.count.min(SEARCH_TOTAL_CAP))
+            .unwrap_or(0)
+    } else {
+        count_query
+            .get_result::<RowCount>(connection)
+            .map(|r| r.count.min(SEARCH_TOTAL_CAP))
+            .unwrap_or(0)
+    };
+
     Ok(UniteLegaleSearchOutput {
         results,
+        total,
         limit,
         offset,
         sort: sort_field,
