@@ -196,6 +196,34 @@ diesel::table! {
     use diesel::sql_types::*;
     use postgis_diesel::sql_types::*;
 
+    siren_doublons (id) {
+        id -> Int8,
+        #[max_length = 9]
+        siren_doublon -> Varchar,
+        #[max_length = 9]
+        siren -> Varchar,
+        date_dernier_traitement -> Nullable<Date>,
+    }
+}
+
+diesel::table! {
+    use diesel::sql_types::*;
+    use postgis_diesel::sql_types::*;
+
+    siren_doublons_staging (id) {
+        id -> Int8,
+        #[max_length = 9]
+        siren_doublon -> Varchar,
+        #[max_length = 9]
+        siren -> Varchar,
+        date_dernier_traitement -> Nullable<Date>,
+    }
+}
+
+diesel::table! {
+    use diesel::sql_types::*;
+    use postgis_diesel::sql_types::*;
+
     unite_legale (siren) {
         #[max_length = 9]
         siren -> Varchar,
@@ -318,6 +346,8 @@ diesel::allow_tables_to_appear_in_same_query!(
     group_metadata,
     lien_succession,
     lien_succession_staging,
+    siren_doublons,
+    siren_doublons_staging,
     unite_legale,
     unite_legale_staging,
     update_metadata,

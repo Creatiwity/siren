@@ -58,6 +58,7 @@ pub enum SyntheticGroupType {
     UnitesLegales,
     Etablissements,
     LiensSuccession,
+    SirenDoublons,
     All,
 }
 
@@ -127,10 +128,12 @@ impl From<SyntheticGroupType> for Vec<GroupType> {
             SyntheticGroupType::UnitesLegales => vec![GroupType::UnitesLegales],
             SyntheticGroupType::Etablissements => vec![GroupType::Etablissements],
             SyntheticGroupType::LiensSuccession => vec![GroupType::LiensSuccession],
+            SyntheticGroupType::SirenDoublons => vec![GroupType::SirenDoublons],
             SyntheticGroupType::All => vec![
                 GroupType::UnitesLegales,
                 GroupType::Etablissements,
                 GroupType::LiensSuccession,
+                GroupType::SirenDoublons,
             ],
         }
     }
@@ -143,6 +146,7 @@ impl ToSql<Text, Pg> for SyntheticGroupType {
             SyntheticGroupType::UnitesLegales => out.write_all(b"unites_legales")?,
             SyntheticGroupType::Etablissements => out.write_all(b"etablissements")?,
             SyntheticGroupType::LiensSuccession => out.write_all(b"liens_succession")?,
+            SyntheticGroupType::SirenDoublons => out.write_all(b"siren_doublons")?,
             SyntheticGroupType::All => out.write_all(b"all")?,
         }
         Ok(IsNull::No)
@@ -155,6 +159,7 @@ impl FromSql<Text, Pg> for SyntheticGroupType {
             b"unites_legales" => Ok(SyntheticGroupType::UnitesLegales),
             b"etablissements" => Ok(SyntheticGroupType::Etablissements),
             b"liens_succession" => Ok(SyntheticGroupType::LiensSuccession),
+            b"siren_doublons" => Ok(SyntheticGroupType::SirenDoublons),
             b"all" => Ok(SyntheticGroupType::All),
             _ => Err("Unrecognized enum variant".into()),
         }
@@ -167,6 +172,7 @@ impl std::fmt::Display for SyntheticGroupType {
             SyntheticGroupType::UnitesLegales => write!(f, "unités légales"),
             SyntheticGroupType::Etablissements => write!(f, "établissements"),
             SyntheticGroupType::LiensSuccession => write!(f, "liens de succession"),
+            SyntheticGroupType::SirenDoublons => write!(f, "siren doublons"),
             SyntheticGroupType::All => write!(f, "all"),
         }
     }

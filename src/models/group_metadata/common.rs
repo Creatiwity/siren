@@ -1,6 +1,7 @@
 use super::super::common::UpdatableModel;
 use super::super::etablissement::EtablissementModel;
 use super::super::lien_succession::LienSuccessionModel;
+use super::super::siren_doublon::SirenDoublonModel;
 use super::super::schema::group_metadata;
 use super::super::unite_legale::UniteLegaleModel;
 use chrono::{DateTime, Utc};
@@ -44,6 +45,7 @@ pub enum GroupType {
     UnitesLegales,
     Etablissements,
     LiensSuccession,
+    SirenDoublons,
 }
 
 impl GroupType {
@@ -52,6 +54,7 @@ impl GroupType {
             GroupType::UnitesLegales => Box::new(UniteLegaleModel {}),
             GroupType::Etablissements => Box::new(EtablissementModel {}),
             GroupType::LiensSuccession => Box::new(LienSuccessionModel {}),
+            GroupType::SirenDoublons => Box::new(SirenDoublonModel {}),
         }
     }
 }
@@ -63,6 +66,7 @@ impl ToSql<Text, Pg> for GroupType {
             GroupType::UnitesLegales => out.write_all(b"unites_legales")?,
             GroupType::Etablissements => out.write_all(b"etablissements")?,
             GroupType::LiensSuccession => out.write_all(b"liens_succession")?,
+            GroupType::SirenDoublons => out.write_all(b"siren_doublons")?,
         }
         Ok(IsNull::No)
     }
@@ -74,6 +78,7 @@ impl FromSql<Text, Pg> for GroupType {
             b"unites_legales" => Ok(GroupType::UnitesLegales),
             b"etablissements" => Ok(GroupType::Etablissements),
             b"liens_succession" => Ok(GroupType::LiensSuccession),
+            b"siren_doublons" => Ok(GroupType::SirenDoublons),
             _ => Err("Unrecognized enum variant".into()),
         }
     }
@@ -85,6 +90,7 @@ impl std::fmt::Display for GroupType {
             GroupType::UnitesLegales => write!(f, "unités légales"),
             GroupType::Etablissements => write!(f, "établissements"),
             GroupType::LiensSuccession => write!(f, "liens de succession"),
+            GroupType::SirenDoublons => write!(f, "siren doublons"),
         }
     }
 }

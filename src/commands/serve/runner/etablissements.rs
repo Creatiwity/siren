@@ -4,6 +4,7 @@ use super::common::{
 };
 use super::error::Error;
 use crate::models;
+use crate::models::etablissement::error::Error as EtablissementModelError;
 use crate::models::etablissement::common::{
     EtablissementSearchParams, EtablissementSearchResponse, EtablissementSearchResultResponse,
     EtablissementSortField,
@@ -26,6 +27,7 @@ use utoipa_axum::{router::OpenApiRouter, routes};
     responses(
         (status = 200, description = "Etablissement response", body = EtablissementResponse),
         (status = 400, description = "Invalid SIRET"),
+        (status = 301, description = "Redirect to siege of canonical SIREN"),
         (status = 404, description = "Etablissement not found")
     ),
     tag = super::common::PUBLIC_TAG
@@ -48,7 +50,27 @@ async fn get_etablissement_by_siret(
         .get()
         .map_err(|e| Error::LocalConnectionFailed { source: e })?;
 
-    let etablissement = models::etablissement::get(&mut connection, &siret)?;
+    let etablissement = match models::etablissement::get(&mut connection, &siret) {
+        Ok(e) => e,
+        Err(EtablissementModelError::EtablissementNotFound) => {
+            let siren = &siret[..9];
+            if let Some(canonical_siren) =
+                models::siren_doublon::find_canonical_siren(&mut connection, siren)
+                    .ok()
+                    .flatten()
+                && let Ok(siege) =
+                    models::etablissement::get_siege_with_siren(&mut connection, &canonical_siren)
+            {
+                return Err(Error::SirenDoublonRedirect {
+                    location: format!("/v3/etablissements/{}", siege.siret),
+                });
+            }
+            return Err(Error::Etablissement {
+                source: EtablissementModelError::EtablissementNotFound,
+            });
+        }
+        Err(e) => return Err(Error::Etablissement { source: e }),
+    };
     let unite_legale = models::unite_legale::get(&mut connection, &etablissement.siren)?;
     let etablissement_siege =
         models::etablissement::get_siege_with_siren(&mut connection, &etablissement.siren)?;

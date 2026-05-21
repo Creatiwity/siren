@@ -5,3 +5,4 @@ pub mod lien_succession;
 pub mod schema;
 pub mod unite_legale;
 pub mod update_metadata;
+pub mod siren_doublon;

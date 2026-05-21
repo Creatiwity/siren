@@ -1,6 +1,7 @@
 use super::common::{Context, UniteLegaleInnerResponse, UniteLegaleResponse};
 use super::error::Error;
 use crate::models;
+use crate::models::unite_legale::error::Error as UniteLegaleModelError;
 use crate::models::unite_legale::common::{
     UniteLegaleSearchParams, UniteLegaleSearchResponse, UniteLegaleSearchResultResponse,
     UniteLegaleSortField,
@@ -23,6 +24,7 @@ use utoipa_axum::{router::OpenApiRouter, routes};
     responses(
         (status = 200, description = "UniteLegale response", body = UniteLegaleResponse),
         (status = 400, description = "Invalid SIREN"),
+        (status = 301, description = "Redirect to canonical SIREN"),
         (status = 404, description = "UniteLegale not found")
     ),
     tag = super::common::PUBLIC_TAG
@@ -45,7 +47,24 @@ async fn get_unite_legale_by_siren(
         .get()
         .map_err(|e| Error::LocalConnectionFailed { source: e })?;
 
-    let unite_legale = models::unite_legale::get(&mut connection, &siren)?;
+    let unite_legale = match models::unite_legale::get(&mut connection, &siren) {
+        Ok(u) => u,
+        Err(UniteLegaleModelError::UniteLegaleNotFound) => {
+            if let Some(canonical_siren) =
+                models::siren_doublon::find_canonical_siren(&mut connection, &siren)
+                    .ok()
+                    .flatten()
+            {
+                return Err(Error::SirenDoublonRedirect {
+                    location: format!("/v3/unites_legales/{}", canonical_siren),
+                });
+            }
+            return Err(Error::UniteLegale {
+                source: UniteLegaleModelError::UniteLegaleNotFound,
+            });
+        }
+        Err(e) => return Err(Error::UniteLegale { source: e }),
+    };
     let etablissements = models::etablissement::get_with_siren(&mut connection, &siren)?;
     let etablissement_siege =
         models::etablissement::get_siege_with_siren(&mut connection, &unite_legale.siren)?;

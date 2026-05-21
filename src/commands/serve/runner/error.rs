@@ -3,7 +3,7 @@ use crate::models::{etablissement, lien_succession, unite_legale, update_metadat
 use crate::update::error::Error as InternalUpdate;
 use axum::{
     Json,
-    http::StatusCode,
+    http::{StatusCode, header},
     response::{IntoResponse, Response},
 };
 use custom_error::custom_error;
@@ -23,11 +23,15 @@ custom_error! { pub Error
     Etablissement {source: etablissement::error::Error} = "[Etablissement] {source}",
     LienSuccession {source: lien_succession::error::Error} = "[LienSuccession] {source}",
     Status {source: update_metadata::error::Error} = "[Status] {source}",
+    SirenDoublonRedirect{location: String} = "Moved permanently to {location}",
 }
 
 impl IntoResponse for Error {
     fn into_response(self) -> Response {
         let (status, message) = match self {
+            Error::SirenDoublonRedirect { location } => {
+                return (StatusCode::MOVED_PERMANENTLY, [(header::LOCATION, location.as_str())]).into_response();
+            }
             Error::InvalidData => (StatusCode::BAD_REQUEST, self.to_string()),
             Error::InvalidSearchParams { message: _ } => {
                 (StatusCode::BAD_REQUEST, self.to_string())
