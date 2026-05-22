@@ -6,6 +6,7 @@ pub enum CmdGroupType {
     UnitesLegales,
     Etablissements,
     LiensSuccession,
+    SirenDoublons,
     All,
 }
 
@@ -15,6 +16,7 @@ impl From<CmdGroupType> for SyntheticGroupType {
             CmdGroupType::UnitesLegales => SyntheticGroupType::UnitesLegales,
             CmdGroupType::Etablissements => SyntheticGroupType::Etablissements,
             CmdGroupType::LiensSuccession => SyntheticGroupType::LiensSuccession,
+            CmdGroupType::SirenDoublons => SyntheticGroupType::SirenDoublons,
             CmdGroupType::All => SyntheticGroupType::All,
         }
     }
