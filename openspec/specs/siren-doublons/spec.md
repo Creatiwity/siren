@@ -1,7 +1,7 @@
 # siren-doublons Specification
 
 ## Purpose
-TBD - created by archiving change siren-doublons-redirect. Update Purpose after archive.
+Décrit les comportements attendus pour l'ingestion du fichier StockDoublons (doublons SIREN publiés par l'INSEE) dans le pipeline de mise à jour, et le lookup `find_canonical_siren` utilisé pour les redirections 301 sur les endpoints `/v3/unites_legales` et `/v3/etablissements`.
 ## Requirements
 ### Requirement: Ingestion du fichier StockDoublons dans le pipeline de mise à jour
 
@@ -23,7 +23,7 @@ Le système SHALL ingérer le fichier `StockDoublons_utf8.zip` (colonnes `siren`
 
 - **WHEN** l'action `swap-data` est exécutée pour le groupe `siren-doublons`
 - **AND** des données ont été insérées en staging
-- **THEN** le contenu de `siren_doublons_staging` remplace celui de `siren_doublons` (truncate + insert)
+- **THEN** `siren_doublons` est renommé en `siren_doublons_temp`, `siren_doublons_staging` est renommé en `siren_doublons`, et `siren_doublons_temp` est tronqué et renommé en `siren_doublons_staging` (swap atomique par renommage de tables)
 
 #### Scenario: Groupe `all` inclut les doublons
 

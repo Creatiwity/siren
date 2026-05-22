@@ -1,6 +1,6 @@
 ## 1. Migration base de données
 
-- [x] 1.1 Créer une migration Diesel ajoutant les tables `siren_doublons` et `siren_doublons_staging` (colonnes : `siren_doublon` VARCHAR(9) PK, `siren_canonique` VARCHAR(9) NOT NULL, `date_dernier_traitement_doublon` DATE nullable)
+- [x] 1.1 Créer une migration Diesel ajoutant les tables `siren_doublons` et `siren_doublons_staging` (colonnes : `id` BIGSERIAL PK, `siren_doublon` VARCHAR(9) NOT NULL, `siren` VARCHAR(9) NOT NULL, `date_dernier_traitement` DATE nullable)
 - [x] 1.2 Ajouter dans la même migration (ou une migration dédiée) la ligne `group_metadata` pour `SirenDoublons` avec l'URL `https://object.files.data.gouv.fr/data-pipeline-open/siren/stock/StockDoublons_utf8.zip`
 - [x] 1.3 Mettre à jour `src/models/schema.rs` pour refléter les nouvelles tables (auto-généré par `diesel migration run`)
 
@@ -9,7 +9,7 @@
 - [x] 2.1 Créer `src/models/siren_doublon/mod.rs` et `src/models/siren_doublon/common.rs` avec les structs Diesel (`SirenDoublon`, `SirenDoublonStaging`)
 - [x] 2.2 Créer `src/models/siren_doublon/error.rs` avec le type d'erreur du modèle
 - [x] 2.3 Implémenter `fn find_canonical_siren(conn: &mut Connection, siren: &str) -> Result<Option<String>, Error>` dans `src/models/siren_doublon/mod.rs`
-- [x] 2.4 Implémenter `SirenDoublonModel` avec le trait `UpdatableModel` : `insert_remote_file_in_staging` (truncate staging + COPY CSV), `swap` (truncate production + insert from staging), `count` / `count_staging`, no-op pour `update_daily_data` / `get_total_count`, `None` pour `get_last_insee_synced_timestamp`
+- [x] 2.4 Implémenter `SirenDoublonModel` avec le trait `UpdatableModel` : `insert_remote_file_in_staging` (truncate staging + COPY CSV), `swap` (renommage atomique : siren_doublons → siren_doublons_temp, siren_doublons_staging → siren_doublons, truncate + rename temp → siren_doublons_staging), `count` / `count_staging`, no-op pour `update_daily_data` / `get_total_count`, `None` pour `get_last_insee_synced_timestamp`
 - [x] 2.5 Ajouter `pub mod siren_doublon;` dans `src/models/mod.rs`
 
 ## 3. Intégration pipeline `GroupType`
