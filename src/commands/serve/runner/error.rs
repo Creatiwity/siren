@@ -1,5 +1,5 @@
 use crate::connectors::Error as ConnectorError;
-use crate::models::{etablissement, lien_succession, unite_legale, update_metadata};
+use crate::models::{etablissement, lien_succession, siren_doublon, unite_legale, update_metadata};
 use crate::update::error::Error as InternalUpdate;
 use axum::{
     Json,
@@ -24,6 +24,7 @@ custom_error! { pub Error
     LienSuccession {source: lien_succession::error::Error} = "[LienSuccession] {source}",
     Status {source: update_metadata::error::Error} = "[Status] {source}",
     SirenDoublonRedirect{location: String} = "Moved permanently to {location}",
+    SirenDoublonLookup{source: siren_doublon::error::Error} = "[SirenDoublon] {source}",
 }
 
 impl IntoResponse for Error {
@@ -39,6 +40,9 @@ impl IntoResponse for Error {
             Error::MissingApiKey => (StatusCode::UNAUTHORIZED, self.to_string()),
             Error::ApiKey => (StatusCode::UNAUTHORIZED, self.to_string()),
             Error::MissingBaseUrlForAsync => (StatusCode::BAD_REQUEST, self.to_string()),
+            Error::SirenDoublonLookup { source: _ } => {
+                (StatusCode::INTERNAL_SERVER_ERROR, self.to_string())
+            }
             Error::LocalConnectionFailed { source: _ } => {
                 (StatusCode::INTERNAL_SERVER_ERROR, self.to_string())
             }

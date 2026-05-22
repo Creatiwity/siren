@@ -50,14 +50,14 @@ async fn get_unite_legale_by_siren(
     let unite_legale = match models::unite_legale::get(&mut connection, &siren) {
         Ok(u) => u,
         Err(UniteLegaleModelError::UniteLegaleNotFound) => {
-            if let Some(canonical_siren) =
-                models::siren_doublon::find_canonical_siren(&mut connection, &siren)
-                    .ok()
-                    .flatten()
-            {
-                return Err(Error::SirenDoublonRedirect {
-                    location: format!("/v3/unites_legales/{}", canonical_siren),
-                });
+            match models::siren_doublon::find_canonical_siren(&mut connection, &siren) {
+                Ok(Some(canonical_siren)) => {
+                    return Err(Error::SirenDoublonRedirect {
+                        location: format!("/v3/unites_legales/{}", canonical_siren),
+                    })
+                }
+                Ok(None) => {}
+                Err(e) => return Err(Error::SirenDoublonLookup { source: e }),
             }
             return Err(Error::UniteLegale {
                 source: UniteLegaleModelError::UniteLegaleNotFound,

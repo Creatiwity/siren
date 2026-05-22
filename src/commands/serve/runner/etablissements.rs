@@ -54,16 +54,18 @@ async fn get_etablissement_by_siret(
         Ok(e) => e,
         Err(EtablissementModelError::EtablissementNotFound) => {
             let siren = &siret[..9];
-            if let Some(canonical_siren) =
-                models::siren_doublon::find_canonical_siren(&mut connection, siren)
-                    .ok()
-                    .flatten()
-                && let Ok(siege) =
-                    models::etablissement::get_siege_with_siren(&mut connection, &canonical_siren)
-            {
-                return Err(Error::SirenDoublonRedirect {
-                    location: format!("/v3/etablissements/{}", siege.siret),
-                });
+            match models::siren_doublon::find_canonical_siren(&mut connection, siren) {
+                Ok(Some(canonical_siren)) => {
+                    let siege = models::etablissement::get_siege_with_siren(
+                        &mut connection,
+                        &canonical_siren,
+                    )?;
+                    return Err(Error::SirenDoublonRedirect {
+                        location: format!("/v3/etablissements/{}", siege.siret),
+                    });
+                }
+                Ok(None) => {}
+                Err(e) => return Err(Error::SirenDoublonLookup { source: e }),
             }
             return Err(Error::Etablissement {
                 source: EtablissementModelError::EtablissementNotFound,
