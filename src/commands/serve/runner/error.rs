@@ -74,6 +74,7 @@ impl IntoResponse for Error {
         };
 
         if status == StatusCode::INTERNAL_SERVER_ERROR {
+            sentry::capture_message(&message, sentry::Level::Error);
             error!("[InternalServerError] {}", message);
         }
 
