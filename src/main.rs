@@ -2,11 +2,13 @@
 
 mod commands;
 mod connectors;
+mod diesel_instrumentation;
 mod models;
 mod update;
 
 use connectors::ConnectorsBuilders;
-use diesel::connection::{InstrumentationEvent, set_default_instrumentation};
+use diesel::connection::set_default_instrumentation;
+use diesel_instrumentation::DieselInstrumentation;
 use dotenv::dotenv;
 use sentry::SentryFutureExt;
 use tracing_subscriber::{EnvFilter, prelude::*};
@@ -38,15 +40,8 @@ fn main() {
         .with(sentry::integrations::tracing::layer())
         .init();
 
-    // Log Diesel SQL queries via tracing (activate with RUST_LOG=diesel::query=debug)
-    set_default_instrumentation(|| {
-        Some(Box::new(|event: InstrumentationEvent<'_>| {
-            if let InstrumentationEvent::StartQuery { query, .. } = event {
-                tracing::debug!(target: "diesel::query", sql = %query);
-            }
-        }))
-    })
-    .expect("Failed to set diesel instrumentation");
+    set_default_instrumentation(|| Some(Box::new(DieselInstrumentation)))
+        .expect("Failed to set diesel instrumentation");
 
     tokio::runtime::Builder::new_multi_thread()
         .enable_all()

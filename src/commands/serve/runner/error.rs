@@ -25,13 +25,18 @@ custom_error! { pub Error
     Status {source: update_metadata::error::Error} = "[Status] {source}",
     SirenDoublonRedirect{location: String} = "Moved permanently to {location}",
     SirenDoublonLookup{source: siren_doublon::error::Error} = "[SirenDoublon] {source}",
+    BlockingTaskPanicked = "Internal error",
 }
 
 impl IntoResponse for Error {
     fn into_response(self) -> Response {
         let (status, message) = match self {
             Error::SirenDoublonRedirect { location } => {
-                return (StatusCode::MOVED_PERMANENTLY, [(header::LOCATION, location.as_str())]).into_response();
+                return (
+                    StatusCode::MOVED_PERMANENTLY,
+                    [(header::LOCATION, location.as_str())],
+                )
+                    .into_response();
             }
             Error::InvalidData => (StatusCode::BAD_REQUEST, self.to_string()),
             Error::InvalidSearchParams { message: _ } => {
@@ -71,6 +76,7 @@ impl IntoResponse for Error {
                 }
                 _ => (StatusCode::INTERNAL_SERVER_ERROR, self.to_string()),
             },
+            Error::BlockingTaskPanicked => (StatusCode::INTERNAL_SERVER_ERROR, self.to_string()),
         };
 
         if status == StatusCode::INTERNAL_SERVER_ERROR {
