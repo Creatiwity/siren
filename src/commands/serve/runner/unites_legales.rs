@@ -11,7 +11,7 @@ use axum::{
     extract::{Path, Query, State},
 };
 use std::sync::Arc;
-use tracing::{Level, span};
+use tracing::Span;
 use utoipa_axum::{router::OpenApiRouter, routes};
 
 /// Get unit legale by SIREN
@@ -33,49 +33,53 @@ async fn get_unite_legale_by_siren(
     State(context): State<Arc<Context>>,
     Path(siren): Path<String>,
 ) -> Result<Json<UniteLegaleResponse>, Error> {
-    let span = span!(Level::TRACE, "GET /unites_legales");
-    let _enter = span.enter();
-
     if siren.len() != 9 {
         return Err(Error::InvalidData);
     }
 
-    let connectors = context.builders.create();
-    let mut connection = connectors
-        .local
-        .pool
-        .get()
-        .map_err(|e| Error::LocalConnectionFailed { source: e })?;
+    let current_span = Span::current();
+    tokio::task::spawn_blocking(move || {
+        let _enter = current_span.enter();
 
-    let unite_legale = match models::unite_legale::get(&mut connection, &siren) {
-        Ok(u) => u,
-        Err(UniteLegaleModelError::UniteLegaleNotFound) => {
-            match models::siren_doublon::find_canonical_siren(&mut connection, &siren) {
-                Ok(Some(canonical_siren)) => {
-                    return Err(Error::SirenDoublonRedirect {
-                        location: format!("/v3/unites_legales/{}", canonical_siren),
-                    });
+        let connectors = context.builders.create();
+        let mut connection = connectors
+            .local
+            .pool
+            .get()
+            .map_err(|e| Error::LocalConnectionFailed { source: e })?;
+
+        let unite_legale = match models::unite_legale::get(&mut connection, &siren) {
+            Ok(u) => u,
+            Err(UniteLegaleModelError::UniteLegaleNotFound) => {
+                match models::siren_doublon::find_canonical_siren(&mut connection, &siren) {
+                    Ok(Some(canonical_siren)) => {
+                        return Err(Error::SirenDoublonRedirect {
+                            location: format!("/v3/unites_legales/{}", canonical_siren),
+                        });
+                    }
+                    Ok(None) => {}
+                    Err(e) => return Err(Error::SirenDoublonLookup { source: e }),
                 }
-                Ok(None) => {}
-                Err(e) => return Err(Error::SirenDoublonLookup { source: e }),
+                return Err(Error::UniteLegale {
+                    source: UniteLegaleModelError::UniteLegaleNotFound,
+                });
             }
-            return Err(Error::UniteLegale {
-                source: UniteLegaleModelError::UniteLegaleNotFound,
-            });
-        }
-        Err(e) => return Err(Error::UniteLegale { source: e }),
-    };
-    let etablissements = models::etablissement::get_with_siren(&mut connection, &siren)?;
-    let etablissement_siege =
-        models::etablissement::get_siege_with_siren(&mut connection, &unite_legale.siren)?;
+            Err(e) => return Err(Error::UniteLegale { source: e }),
+        };
+        let etablissements = models::etablissement::get_with_siren(&mut connection, &siren)?;
+        let etablissement_siege =
+            models::etablissement::get_siege_with_siren(&mut connection, &unite_legale.siren)?;
 
-    Ok(Json(UniteLegaleResponse {
-        unite_legale: UniteLegaleInnerResponse {
-            unite_legale,
-            etablissements,
-            etablissement_siege,
-        },
-    }))
+        Ok(Json(UniteLegaleResponse {
+            unite_legale: UniteLegaleInnerResponse {
+                unite_legale,
+                etablissements,
+                etablissement_siege,
+            },
+        }))
+    })
+    .await
+    .unwrap_or_else(|_| Err(Error::BlockingTaskPanicked))
 }
 
 /// Search legal units
@@ -93,10 +97,6 @@ async fn search_unites_legales(
     State(context): State<Arc<Context>>,
     Query(params): Query<UniteLegaleSearchParams>,
 ) -> Result<Json<UniteLegaleSearchResponse>, Error> {
-    let span = span!(Level::TRACE, "GET /unites_legales (search)");
-    let _enter = span.enter();
-
-    // Validate sort constraints
     match params.sort {
         Some(UniteLegaleSortField::Relevance) if params.q.is_none() => {
             return Err(Error::InvalidSearchParams {
@@ -106,41 +106,47 @@ async fn search_unites_legales(
         _ => {}
     }
 
-    let connectors = context.builders.create();
-    let mut connection = connectors
-        .local
-        .pool
-        .get()
-        .map_err(|e| Error::LocalConnectionFailed { source: e })?;
+    let current_span = Span::current();
+    tokio::task::spawn_blocking(move || {
+        let _enter = current_span.enter();
 
-    let output = models::unite_legale::search(&mut connection, &params)?;
+        let connectors = context.builders.create();
+        let mut connection = connectors
+            .local
+            .pool
+            .get()
+            .map_err(|e| Error::LocalConnectionFailed { source: e })?;
 
-    let total = output.total;
+        let output = models::unite_legale::search(&mut connection, &params)?;
+        let total = output.total;
 
-    Ok(Json(UniteLegaleSearchResponse {
-        unites_legales: output
-            .results
-            .into_iter()
-            .map(|r| UniteLegaleSearchResultResponse {
-                siren: r.siren,
-                etat_administratif: r.etat_administratif,
-                date_creation: r.date_creation,
-                denomination: r.denomination,
-                denomination_usuelle_1: r.denomination_usuelle_1,
-                denomination_usuelle_2: r.denomination_usuelle_2,
-                denomination_usuelle_3: r.denomination_usuelle_3,
-                activite_principale: r.activite_principale,
-                categorie_juridique: r.categorie_juridique,
-                categorie_entreprise: r.categorie_entreprise,
-                score: r.score,
-            })
-            .collect(),
-        total,
-        limit: output.limit,
-        offset: output.offset,
-        sort: output.sort,
-        direction: output.direction,
-    }))
+        Ok(Json(UniteLegaleSearchResponse {
+            unites_legales: output
+                .results
+                .into_iter()
+                .map(|r| UniteLegaleSearchResultResponse {
+                    siren: r.siren,
+                    etat_administratif: r.etat_administratif,
+                    date_creation: r.date_creation,
+                    denomination: r.denomination,
+                    denomination_usuelle_1: r.denomination_usuelle_1,
+                    denomination_usuelle_2: r.denomination_usuelle_2,
+                    denomination_usuelle_3: r.denomination_usuelle_3,
+                    activite_principale: r.activite_principale,
+                    categorie_juridique: r.categorie_juridique,
+                    categorie_entreprise: r.categorie_entreprise,
+                    score: r.score,
+                })
+                .collect(),
+            total,
+            limit: output.limit,
+            offset: output.offset,
+            sort: output.sort,
+            direction: output.direction,
+        }))
+    })
+    .await
+    .unwrap_or_else(|_| Err(Error::BlockingTaskPanicked))
 }
 
 pub fn router() -> OpenApiRouter<Arc<Context>> {
