@@ -46,23 +46,27 @@ impl UpdateSummary {
         }
     }
 
-    pub fn start(
+    pub async fn start(
         &mut self,
         connectors: &Connectors,
         synthetic_group: SyntheticGroupType,
         force: bool,
     ) -> Result<(), Error> {
-        update_metadata::launch_update(connectors, synthetic_group, force).map(|date| {
-            self.started_timestamp = date;
-            Ok(())
-        })?
+        update_metadata::launch_update(connectors, synthetic_group, force)
+            .await
+            .map(|date| {
+                self.started_timestamp = date;
+                Ok(())
+            })?
     }
 
-    pub fn finish(&mut self, connectors: &Connectors) -> Result<(), Error> {
+    pub async fn finish(&mut self, connectors: &Connectors) -> Result<(), Error> {
         self.finished_timestamp = Some(Utc::now());
         self.updated = self.steps.iter().any(|s| s.updated);
 
-        update_metadata::finished_update(connectors, self.clone()).map(|_| Ok(()))?
+        update_metadata::finished_update(connectors, self.clone())
+            .await
+            .map(|_| Ok(()))?
     }
 }
 
@@ -89,17 +93,21 @@ impl<'a> SummaryStepDelegate<'a> {
         }
     }
 
-    pub fn start(&self, connectors: &Connectors) -> Result<(), Error> {
-        update_metadata::progress_update(connectors, self.summary.clone()).map(|_| Ok(()))?
+    pub async fn start(&self, connectors: &Connectors) -> Result<(), Error> {
+        update_metadata::progress_update(connectors, self.summary.clone())
+            .await
+            .map(|_| Ok(()))?
     }
 
-    pub fn finish(&mut self, connectors: &Connectors) -> Result<(), Error> {
+    pub async fn finish(&mut self, connectors: &Connectors) -> Result<(), Error> {
         if let Some(step_summary) = self.summary.steps.first_mut() {
             step_summary.finished_timestamp = Some(Utc::now());
             step_summary.updated = step_summary.groups.iter().any(|g| g.updated);
         }
 
-        update_metadata::progress_update(connectors, self.summary.clone()).map(|_| Ok(()))?
+        update_metadata::progress_update(connectors, self.summary.clone())
+            .await
+            .map(|_| Ok(()))?
     }
 }
 
@@ -111,7 +119,7 @@ impl SummaryGroupDelegate<'_, '_> {
         }
     }
 
-    pub fn start(
+    pub async fn start(
         &mut self,
         connectors: &Connectors,
         reference_timestamp: Option<DateTime<Utc>>,
@@ -124,19 +132,25 @@ impl SummaryGroupDelegate<'_, '_> {
         }
 
         update_metadata::progress_update(connectors, self.step_delegate.summary.clone())
+            .await
             .map(|_| Ok(()))?
     }
 
-    pub fn progress(&mut self, connectors: &Connectors, done_count: u32) -> Result<(), Error> {
+    pub async fn progress(
+        &mut self,
+        connectors: &Connectors,
+        done_count: u32,
+    ) -> Result<(), Error> {
         if let Some(group_summary) = self.get_current_mut() {
             group_summary.done_count = done_count;
         }
 
         update_metadata::progress_update(connectors, self.step_delegate.summary.clone())
+            .await
             .map(|_| Ok(()))?
     }
 
-    pub fn finish(
+    pub async fn finish(
         &mut self,
         connectors: &Connectors,
         status_label: String,
@@ -151,6 +165,7 @@ impl SummaryGroupDelegate<'_, '_> {
         }
 
         update_metadata::progress_update(connectors, self.step_delegate.summary.clone())
+            .await
             .map(|_| Ok(()))?
     }
 }

@@ -6,7 +6,6 @@ use axum::{
     extract::{Path, State},
 };
 use std::sync::Arc;
-use tracing::Span;
 use utoipa_axum::{router::OpenApiRouter, routes};
 
 /// Get liens successions by SIRET
@@ -30,23 +29,12 @@ async fn get_liens_succession_by_siret(
         return Err(Error::InvalidData);
     }
 
-    let current_span = Span::current();
-    tokio::task::spawn_blocking(move || {
-        let _enter = current_span.enter();
+    let connectors = context.builders.create();
+    let mut connection = connectors.local.pool.get().await?;
 
-        let connectors = context.builders.create();
-        let mut connection = connectors
-            .local
-            .pool
-            .get()
-            .map_err(|e| Error::LocalConnectionFailed { source: e })?;
+    let liens_succession = models::lien_succession::get(&mut connection, &siret).await?;
 
-        let liens_succession = models::lien_succession::get(&mut connection, &siret)?;
-
-        Ok(Json(LiensSuccessionResponse { liens_succession }))
-    })
-    .await
-    .unwrap_or_else(|_| Err(Error::BlockingTaskPanicked))
+    Ok(Json(LiensSuccessionResponse { liens_succession }))
 }
 
 pub fn router() -> OpenApiRouter<Arc<Context>> {

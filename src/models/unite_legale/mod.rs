@@ -16,13 +16,15 @@ use diesel::pg::{CopyFormat, CopyHeader};
 use diesel::prelude::*;
 use diesel::sql_query;
 use diesel::sql_types::{BigInt, Date, Text};
+use diesel_async::{AsyncConnection, RunQueryDsl};
 use error::Error;
 
-pub fn get(connection: &mut Connection, siren: &str) -> Result<UniteLegale, Error> {
+pub async fn get(connection: &mut Connection, siren: &str) -> Result<UniteLegale, Error> {
     dsl::unite_legale
         .find(siren)
         .select(UniteLegale::as_select())
         .first::<UniteLegale>(connection)
+        .await
         .map_err(|error| error.into())
 }
 
@@ -34,7 +36,7 @@ struct RowCount {
     count: i64,
 }
 
-pub fn search(
+pub async fn search(
     connection: &mut Connection,
     params: &UniteLegaleSearchParams,
 ) -> Result<UniteLegaleSearchOutput, Error> {
@@ -189,6 +191,7 @@ pub fn search(
 
     let results = query
         .load::<UniteLegaleSearchResult>(connection)
+        .await
         .map_err(|e| -> Error { e.into() })?;
 
     let count_sql = format!(
@@ -230,19 +233,22 @@ pub fn search(
             _ => {}
         }
     }
+
     let total = if has_q {
         connection
-            .build_transaction()
-            .read_only()
-            .run(|conn| {
-                diesel::sql_query("SET LOCAL enable_seqscan = off").execute(conn)?;
-                count_query.get_result::<RowCount>(conn)
+            .transaction(async |conn| {
+                diesel::sql_query("SET LOCAL enable_seqscan = off")
+                    .execute(conn)
+                    .await?;
+                count_query.get_result::<RowCount>(conn).await
             })
+            .await
             .map(|r| r.count.min(SEARCH_TOTAL_CAP))
             .unwrap_or(0)
     } else {
         count_query
             .get_result::<RowCount>(connection)
+            .await
             .map(|r| r.count.min(SEARCH_TOTAL_CAP))
             .unwrap_or(0)
     };
@@ -261,21 +267,23 @@ pub struct UniteLegaleModel {}
 
 #[async_trait]
 impl UpdatableModel for UniteLegaleModel {
-    fn count(&self, connectors: &Connectors) -> Result<i64, UpdatableError> {
-        let mut connection = connectors.local.pool.get()?;
+    async fn count(&self, connectors: &Connectors) -> Result<i64, UpdatableError> {
+        let mut connection = connectors.local.pool.get().await?;
         dsl::unite_legale
             .select(diesel::dsl::count(dsl::siren))
             .first::<i64>(&mut connection)
+            .await
             .map_err(|error| error.into())
     }
 
-    fn count_staging(&self, connectors: &Connectors) -> Result<i64, UpdatableError> {
+    async fn count_staging(&self, connectors: &Connectors) -> Result<i64, UpdatableError> {
         use super::schema::unite_legale_staging::dsl;
 
-        let mut connection = connectors.local.pool.get()?;
+        let mut connection = connectors.local.pool.get().await?;
         dsl::unite_legale_staging
             .select(diesel::dsl::count(dsl::siren))
             .first::<i64>(&mut connection)
+            .await
             .map_err(|error| error.into())
     }
 
@@ -285,87 +293,110 @@ impl UpdatableModel for UniteLegaleModel {
         remote_file: RemoteFile,
     ) -> Result<bool, UpdatableError> {
         use super::schema::unite_legale_staging::dsl;
+        use diesel::Connection as _;
+        use diesel::ExecuteCopyFromDsl as SyncExecuteCopy;
+        use diesel::RunQueryDsl as SyncRunQueryDsl;
 
-        let mut connection = connectors.local.pool.get()?;
+        tokio::task::block_in_place(|| {
+            let mut connection =
+                diesel::pg::PgConnection::establish(&connectors.local.database_url)
+                    .map_err(|_| UpdatableError::SyncConnectionFailed)?;
 
-        sql_query("TRUNCATE unite_legale_staging").execute(&mut connection)?;
-
-        diesel::copy_from(dsl::unite_legale_staging)
-            .from_raw_data(
-                (
-                    dsl::siren,
-                    dsl::statut_diffusion,
-                    dsl::unite_purgee,
-                    dsl::date_creation,
-                    dsl::sigle,
-                    dsl::sexe,
-                    dsl::prenom_1,
-                    dsl::prenom_2,
-                    dsl::prenom_3,
-                    dsl::prenom_4,
-                    dsl::prenom_usuel,
-                    dsl::pseudonyme,
-                    dsl::identifiant_association,
-                    dsl::tranche_effectifs,
-                    dsl::annee_effectifs,
-                    dsl::date_dernier_traitement,
-                    dsl::nombre_periodes,
-                    dsl::categorie_entreprise,
-                    dsl::annee_categorie_entreprise,
-                    dsl::date_debut,
-                    dsl::etat_administratif,
-                    dsl::nom,
-                    dsl::nom_usage,
-                    dsl::denomination,
-                    dsl::denomination_usuelle_1,
-                    dsl::denomination_usuelle_2,
-                    dsl::denomination_usuelle_3,
-                    dsl::categorie_juridique,
-                    dsl::activite_principale,
-                    dsl::nomenclature_activite_principale,
-                    dsl::nic_siege,
-                    dsl::economie_sociale_solidaire,
-                    dsl::societe_mission,
-                    dsl::caractere_employeur,
-                    dsl::activite_principale_naf25,
-                ),
-                |write| copy_remote_zipped_csv(remote_file.to_reader(), write),
+            SyncRunQueryDsl::execute(
+                diesel::sql_query("TRUNCATE unite_legale_staging"),
+                &mut connection,
             )
-            .with_delimiter(',')
-            .with_format(CopyFormat::Csv)
-            .with_header(CopyHeader::Set(true))
-            .execute(&mut connection)
-            .map(|count| count > 0)
-            .map_err(|error| error.into())
+            .map_err(|e| UpdatableError::Database { source: e })?;
+
+            let copy_query = diesel::copy_from(dsl::unite_legale_staging)
+                .from_raw_data(
+                    (
+                        dsl::siren,
+                        dsl::statut_diffusion,
+                        dsl::unite_purgee,
+                        dsl::date_creation,
+                        dsl::sigle,
+                        dsl::sexe,
+                        dsl::prenom_1,
+                        dsl::prenom_2,
+                        dsl::prenom_3,
+                        dsl::prenom_4,
+                        dsl::prenom_usuel,
+                        dsl::pseudonyme,
+                        dsl::identifiant_association,
+                        dsl::tranche_effectifs,
+                        dsl::annee_effectifs,
+                        dsl::date_dernier_traitement,
+                        dsl::nombre_periodes,
+                        dsl::categorie_entreprise,
+                        dsl::annee_categorie_entreprise,
+                        dsl::date_debut,
+                        dsl::etat_administratif,
+                        dsl::nom,
+                        dsl::nom_usage,
+                        dsl::denomination,
+                        dsl::denomination_usuelle_1,
+                        dsl::denomination_usuelle_2,
+                        dsl::denomination_usuelle_3,
+                        dsl::categorie_juridique,
+                        dsl::activite_principale,
+                        dsl::nomenclature_activite_principale,
+                        dsl::nic_siege,
+                        dsl::economie_sociale_solidaire,
+                        dsl::societe_mission,
+                        dsl::caractere_employeur,
+                        dsl::activite_principale_naf25,
+                    ),
+                    |write| copy_remote_zipped_csv(remote_file.to_reader(), write),
+                )
+                .with_delimiter(',')
+                .with_format(CopyFormat::Csv)
+                .with_header(CopyHeader::Set(true));
+            SyncExecuteCopy::execute(copy_query, &mut connection)
+                .map(|count| count > 0)
+                .map_err(|e| UpdatableError::Database { source: e })
+        })
     }
 
-    fn swap(&self, connectors: &Connectors) -> Result<(), UpdatableError> {
-        let mut connection = connectors.local.pool.get()?;
-        connection.build_transaction().read_write().run(|conn| {
-            sql_query("ALTER TABLE unite_legale RENAME TO unite_legale_temp").execute(conn)?;
-            sql_query("ALTER TABLE unite_legale_staging RENAME TO unite_legale").execute(conn)?;
-            sql_query("ALTER TABLE unite_legale_temp RENAME TO unite_legale_staging")
-                .execute(conn)?;
-            sql_query("TRUNCATE unite_legale_staging").execute(conn)?;
-            sql_query(
-                r#"
-                UPDATE group_metadata
-                SET last_imported_timestamp = staging_imported_timestamp
-                WHERE group_type = 'unites_legales'
-                "#,
-            )
-            .execute(conn)?;
-            sql_query(
-                r#"
-                UPDATE group_metadata
-                SET staging_imported_timestamp = NULL
-                WHERE group_type = 'unites_legales'
-                "#,
-            )
-            .execute(conn)?;
+    async fn swap(&self, connectors: &Connectors) -> Result<(), UpdatableError> {
+        let mut connection = connectors.local.pool.get().await?;
+        connection
+            .transaction(async |conn| {
+                sql_query("ALTER TABLE unite_legale RENAME TO unite_legale_temp")
+                    .execute(conn)
+                    .await?;
+                sql_query("ALTER TABLE unite_legale_staging RENAME TO unite_legale")
+                    .execute(conn)
+                    .await?;
+                sql_query("ALTER TABLE unite_legale_temp RENAME TO unite_legale_staging")
+                    .execute(conn)
+                    .await?;
+                sql_query("TRUNCATE unite_legale_staging")
+                    .execute(conn)
+                    .await?;
+                sql_query(
+                    r#"
+                    UPDATE group_metadata
+                    SET last_imported_timestamp = staging_imported_timestamp
+                    WHERE group_type = 'unites_legales'
+                    "#,
+                )
+                .execute(conn)
+                .await?;
+                sql_query(
+                    r#"
+                    UPDATE group_metadata
+                    SET staging_imported_timestamp = NULL
+                    WHERE group_type = 'unites_legales'
+                    "#,
+                )
+                .execute(conn)
+                .await?;
 
-            Ok(())
-        })
+                diesel::QueryResult::Ok(())
+            })
+            .await
+            .map_err(|e| UpdatableError::Database { source: e })
     }
 
     async fn get_total_count(
@@ -381,17 +412,17 @@ impl UpdatableModel for UniteLegaleModel {
         Ok(insee.get_total_unites_legales(start_timestamp).await?)
     }
 
-    // SELECT date_dernier_traitement FROM unite_legale WHERE date_dernier_traitement IS NOT NULL ORDER BY date_dernier_traitement DESC LIMIT 1;
-    fn get_last_insee_synced_timestamp(
+    async fn get_last_insee_synced_timestamp(
         &self,
         connectors: &Connectors,
     ) -> Result<Option<NaiveDateTime>, UpdatableError> {
-        let mut connection = connectors.local.pool.get()?;
+        let mut connection = connectors.local.pool.get().await?;
         dsl::unite_legale
             .select(dsl::date_dernier_traitement)
             .order(dsl::date_dernier_traitement.desc())
             .filter(dsl::date_dernier_traitement.is_not_null())
             .first::<Option<NaiveDateTime>>(&mut connection)
+            .await
             .map_err(|error| error.into())
     }
 
@@ -410,7 +441,7 @@ impl UpdatableModel for UniteLegaleModel {
             .get_daily_unites_legales(start_timestamp, cursor)
             .await?;
 
-        let mut connection = connectors.local.pool.get()?;
+        let mut connection = connectors.local.pool.get().await?;
 
         let updated_count = diesel::insert_into(dsl::unite_legale)
             .values(&unites_legales)
@@ -452,7 +483,8 @@ impl UpdatableModel for UniteLegaleModel {
                 dsl::societe_mission.eq(excluded(dsl::societe_mission)),
                 dsl::caractere_employeur.eq(excluded(dsl::caractere_employeur)),
             ))
-            .execute(&mut connection)?;
+            .execute(&mut connection)
+            .await?;
 
         Ok((next_cursor, updated_count))
     }

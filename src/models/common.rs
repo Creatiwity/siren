@@ -6,24 +6,25 @@ use crate::update::utils::remote_file::RemoteFile;
 use async_trait::async_trait;
 use chrono::NaiveDateTime;
 use custom_error::custom_error;
+use diesel_async::pooled_connection::deadpool::PoolError;
 use tracing::debug;
 
 #[async_trait]
 pub trait UpdatableModel: Sync + Send {
-    fn count(&self, connectors: &Connectors) -> Result<i64, Error>;
-    fn count_staging(&self, connectors: &Connectors) -> Result<i64, Error>;
+    async fn count(&self, connectors: &Connectors) -> Result<i64, Error>;
+    async fn count_staging(&self, connectors: &Connectors) -> Result<i64, Error>;
     fn insert_remote_file_in_staging(
         &self,
         connectors: &Connectors,
         remote_file: RemoteFile,
     ) -> Result<bool, Error>;
-    fn swap(&self, connectors: &Connectors) -> Result<(), Error>;
+    async fn swap(&self, connectors: &Connectors) -> Result<(), Error>;
     async fn get_total_count(
         &self,
         connectors: &mut Connectors,
         start_timestamp: NaiveDateTime,
     ) -> Result<u32, Error>;
-    fn get_last_insee_synced_timestamp(
+    async fn get_last_insee_synced_timestamp(
         &self,
         connectors: &Connectors,
     ) -> Result<Option<NaiveDateTime>, Error>;
@@ -66,7 +67,8 @@ pub fn copy_remote_zipped_csv(
 }
 
 custom_error! { pub Error
-    LocalConnectionFailed{source: r2d2::Error} = "Unable to connect to local database ({source}).",
+    LocalConnectionFailed{source: PoolError} = "Unable to connect to local database ({source}).",
+    SyncConnectionFailed = "Unable to establish sync database connection.",
     Database{source: diesel::result::Error} = "Unable to run some operations on updatable model ({source}).",
     Update {source: InseeUpdate} = "{source}",
     MissingInseeConnector = "Missing required Insee connector",
