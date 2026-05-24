@@ -1,11 +1,11 @@
 use super::common::{Context, UniteLegaleInnerResponse, UniteLegaleResponse};
 use super::error::Error;
 use crate::models;
-use crate::models::unite_legale::error::Error as UniteLegaleModelError;
 use crate::models::unite_legale::common::{
     UniteLegaleSearchParams, UniteLegaleSearchResponse, UniteLegaleSearchResultResponse,
     UniteLegaleSortField,
 };
+use crate::models::unite_legale::error::Error as UniteLegaleModelError;
 use axum::{
     Json,
     extract::{Path, Query, State},
@@ -54,7 +54,7 @@ async fn get_unite_legale_by_siren(
                 Ok(Some(canonical_siren)) => {
                     return Err(Error::SirenDoublonRedirect {
                         location: format!("/v3/unites_legales/{}", canonical_siren),
-                    })
+                    });
                 }
                 Ok(None) => {}
                 Err(e) => return Err(Error::SirenDoublonLookup { source: e }),

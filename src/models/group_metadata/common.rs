@@ -1,8 +1,8 @@
 use super::super::common::UpdatableModel;
 use super::super::etablissement::EtablissementModel;
 use super::super::lien_succession::LienSuccessionModel;
-use super::super::siren_doublon::SirenDoublonModel;
 use super::super::schema::group_metadata;
+use super::super::siren_doublon::SirenDoublonModel;
 use super::super::unite_legale::UniteLegaleModel;
 use chrono::{DateTime, Utc};
 use diesel::deserialize::{self, FromSql};

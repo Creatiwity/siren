@@ -4,11 +4,11 @@ use super::common::{
 };
 use super::error::Error;
 use crate::models;
-use crate::models::etablissement::error::Error as EtablissementModelError;
 use crate::models::etablissement::common::{
     EtablissementSearchParams, EtablissementSearchResponse, EtablissementSearchResultResponse,
     EtablissementSortField,
 };
+use crate::models::etablissement::error::Error as EtablissementModelError;
 use axum::{
     Json,
     extract::{Path, Query, State},

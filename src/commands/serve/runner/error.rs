@@ -31,7 +31,11 @@ impl IntoResponse for Error {
     fn into_response(self) -> Response {
         let (status, message) = match self {
             Error::SirenDoublonRedirect { location } => {
-                return (StatusCode::MOVED_PERMANENTLY, [(header::LOCATION, location.as_str())]).into_response();
+                return (
+                    StatusCode::MOVED_PERMANENTLY,
+                    [(header::LOCATION, location.as_str())],
+                )
+                    .into_response();
             }
             Error::InvalidData => (StatusCode::BAD_REQUEST, self.to_string()),
             Error::InvalidSearchParams { message: _ } => {
