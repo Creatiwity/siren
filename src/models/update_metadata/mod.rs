@@ -9,19 +9,21 @@ use common::{
     UpdateMetadata, UpdateStatus, UpdateSummary,
 };
 use diesel::prelude::*;
+use diesel_async::RunQueryDsl;
 use error::Error;
 
-pub fn launch_update(
+pub async fn launch_update(
     connectors: &Connectors,
     synthetic_group_type: SyntheticGroupType,
     force: bool,
 ) -> Result<DateTime<Utc>, Error> {
-    let mut connection = connectors.local.pool.get()?;
+    let mut connection = connectors.local.pool.get().await?;
 
     let launched_update_result = dsl::update_metadata
         .select(dsl::updated_at)
         .filter(dsl::status.eq(UpdateStatus::Launched))
-        .first::<DateTime<Utc>>(&mut connection);
+        .first::<DateTime<Utc>>(&mut connection)
+        .await;
 
     if let Ok(launched_updated_at) = launched_update_result {
         if Utc::now().signed_duration_since(launched_updated_at) <= Duration::hours(1) {
@@ -32,7 +34,8 @@ pub fn launch_update(
             connectors,
             String::from("Process stopped automatically after being stucked."),
             Utc::now(),
-        )?;
+        )
+        .await?;
     }
 
     let launched_timestamp = Utc::now();
@@ -44,6 +47,7 @@ pub fn launch_update(
             launched_timestamp,
         })
         .execute(&mut connection)
+        .await
     {
         Ok(count) => {
             if count > 0 {
@@ -56,18 +60,25 @@ pub fn launch_update(
     }
 }
 
-pub fn progress_update(connectors: &Connectors, summary: UpdateSummary) -> Result<bool, Error> {
-    let mut connection = connectors.local.pool.get()?;
+pub async fn progress_update(
+    connectors: &Connectors,
+    summary: UpdateSummary,
+) -> Result<bool, Error> {
+    let mut connection = connectors.local.pool.get().await?;
 
     diesel::update(dsl::update_metadata.filter(dsl::status.eq(UpdateStatus::Launched)))
         .set(dsl::summary.eq(summary))
         .execute(&mut connection)
+        .await
         .map(|count| count > 0)
         .map_err(|error| error.into())
 }
 
-pub fn finished_update(connectors: &Connectors, summary: UpdateSummary) -> Result<bool, Error> {
-    let mut connection = connectors.local.pool.get()?;
+pub async fn finished_update(
+    connectors: &Connectors,
+    summary: UpdateSummary,
+) -> Result<bool, Error> {
+    let mut connection = connectors.local.pool.get().await?;
     let finished_timestamp = summary.finished_timestamp;
 
     diesel::update(dsl::update_metadata.filter(dsl::status.eq(UpdateStatus::Launched)))
@@ -77,16 +88,17 @@ pub fn finished_update(connectors: &Connectors, summary: UpdateSummary) -> Resul
             finished_timestamp,
         })
         .execute(&mut connection)
+        .await
         .map(|count| count > 0)
         .map_err(|error| error.into())
 }
 
-pub fn error_update(
+pub async fn error_update(
     connectors: &Connectors,
     error: String,
     finished_timestamp: DateTime<Utc>,
 ) -> Result<bool, Error> {
-    let mut connection = connectors.local.pool.get()?;
+    let mut connection = connectors.local.pool.get().await?;
 
     diesel::update(dsl::update_metadata.filter(dsl::status.eq(UpdateStatus::Launched)))
         .set(&ErrorUpdateMetadata {
@@ -95,26 +107,29 @@ pub fn error_update(
             finished_timestamp,
         })
         .execute(&mut connection)
+        .await
         .map(|count| count > 0)
         .map_err(|error| error.into())
 }
 
-pub fn current_update(connectors: &Connectors) -> Result<UpdateMetadata, Error> {
-    let mut connection = connectors.local.pool.get()?;
+pub async fn current_update(connectors: &Connectors) -> Result<UpdateMetadata, Error> {
+    let mut connection = connectors.local.pool.get().await?;
 
     dsl::update_metadata
         .order(dsl::launched_timestamp.desc())
         .first::<UpdateMetadata>(&mut connection)
+        .await
         .map_err(|error| error.into())
 }
 
-pub fn last_success_update(connectors: &Connectors) -> Result<Option<UpdateMetadata>, Error> {
-    let mut connection = connectors.local.pool.get()?;
+pub async fn last_success_update(connectors: &Connectors) -> Result<Option<UpdateMetadata>, Error> {
+    let mut connection = connectors.local.pool.get().await?;
 
     dsl::update_metadata
         .order(dsl::launched_timestamp.desc())
         .filter(dsl::status.eq(UpdateStatus::Finished))
         .first::<UpdateMetadata>(&mut connection)
+        .await
         .optional()
         .map_err(|error| error.into())
 }

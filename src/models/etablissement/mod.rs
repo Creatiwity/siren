@@ -16,17 +16,19 @@ use diesel::pg::{CopyFormat, CopyHeader};
 use diesel::prelude::*;
 use diesel::sql_query;
 use diesel::sql_types::{BigInt, Bool, Float8, Text};
+use diesel_async::{AsyncConnection, RunQueryDsl};
 use error::Error;
 
-pub fn get(connection: &mut Connection, siret: &str) -> Result<Etablissement, Error> {
+pub async fn get(connection: &mut Connection, siret: &str) -> Result<Etablissement, Error> {
     dsl::etablissement
         .find(siret)
         .select(Etablissement::as_select())
         .first::<Etablissement>(connection)
+        .await
         .map_err(|error| error.into())
 }
 
-pub fn get_with_siren(
+pub async fn get_with_siren(
     connection: &mut Connection,
     siren: &str,
 ) -> Result<Vec<Etablissement>, Error> {
@@ -34,10 +36,11 @@ pub fn get_with_siren(
         .filter(dsl::siren.eq(siren))
         .select(Etablissement::as_select())
         .load::<Etablissement>(connection)
+        .await
         .map_err(|error| error.into())
 }
 
-pub fn get_siege_with_siren(
+pub async fn get_siege_with_siren(
     connection: &mut Connection,
     siren: &str,
 ) -> Result<Etablissement, Error> {
@@ -45,6 +48,7 @@ pub fn get_siege_with_siren(
         .filter(dsl::siren.eq(siren).and(dsl::etablissement_siege.eq(true)))
         .select(Etablissement::as_select())
         .first::<Etablissement>(connection)
+        .await
         .map_err(|error| error.into())
 }
 
@@ -56,7 +60,7 @@ struct RowCount {
     count: i64,
 }
 
-pub fn search(
+pub async fn search(
     connection: &mut Connection,
     params: &EtablissementSearchParams,
 ) -> Result<EtablissementSearchOutput, Error> {
@@ -272,6 +276,7 @@ pub fn search(
 
     let results = query
         .load::<EtablissementSearchResult>(connection)
+        .await
         .map_err(|e| -> Error { e.into() })?;
 
     let count_sql = format!(
@@ -320,19 +325,22 @@ pub fn search(
             _ => {}
         }
     }
+
     let total = if has_q {
         connection
-            .build_transaction()
-            .read_only()
-            .run(|conn| {
-                diesel::sql_query("SET LOCAL enable_seqscan = off").execute(conn)?;
-                count_query.get_result::<RowCount>(conn)
+            .transaction(async |conn| {
+                diesel::sql_query("SET LOCAL enable_seqscan = off")
+                    .execute(conn)
+                    .await?;
+                count_query.get_result::<RowCount>(conn).await
             })
+            .await
             .map(|r| r.count.min(SEARCH_TOTAL_CAP))
             .unwrap_or(0)
     } else {
         count_query
             .get_result::<RowCount>(connection)
+            .await
             .map(|r| r.count.min(SEARCH_TOTAL_CAP))
             .unwrap_or(0)
     };
@@ -351,21 +359,23 @@ pub struct EtablissementModel {}
 
 #[async_trait]
 impl UpdatableModel for EtablissementModel {
-    fn count(&self, connectors: &Connectors) -> Result<i64, UpdatableError> {
-        let mut connection = connectors.local.pool.get()?;
+    async fn count(&self, connectors: &Connectors) -> Result<i64, UpdatableError> {
+        let mut connection = connectors.local.pool.get().await?;
         dsl::etablissement
             .select(diesel::dsl::count(dsl::siret))
             .first::<i64>(&mut connection)
+            .await
             .map_err(|error| error.into())
     }
 
-    fn count_staging(&self, connectors: &Connectors) -> Result<i64, UpdatableError> {
+    async fn count_staging(&self, connectors: &Connectors) -> Result<i64, UpdatableError> {
         use super::schema::etablissement_staging::dsl;
 
-        let mut connection = connectors.local.pool.get()?;
+        let mut connection = connectors.local.pool.get().await?;
         dsl::etablissement_staging
             .select(diesel::dsl::count(dsl::siret))
             .first::<i64>(&mut connection)
+            .await
             .map_err(|error| error.into())
     }
 
@@ -375,106 +385,129 @@ impl UpdatableModel for EtablissementModel {
         remote_file: RemoteFile,
     ) -> Result<bool, UpdatableError> {
         use super::schema::etablissement_staging::dsl;
+        use diesel::Connection as _;
+        use diesel::ExecuteCopyFromDsl as SyncExecuteCopy;
+        use diesel::RunQueryDsl as SyncRunQueryDsl;
 
-        let mut connection = connectors.local.pool.get()?;
+        tokio::task::block_in_place(|| {
+            let mut connection =
+                diesel::pg::PgConnection::establish(&connectors.local.database_url)
+                    .map_err(|_| UpdatableError::SyncConnectionFailed)?;
 
-        sql_query("TRUNCATE etablissement_staging").execute(&mut connection)?;
-
-        diesel::copy_from(dsl::etablissement_staging)
-            .from_raw_data(
-                (
-                    dsl::siren,
-                    dsl::nic,
-                    dsl::siret,
-                    dsl::statut_diffusion,
-                    dsl::date_creation,
-                    dsl::tranche_effectifs,
-                    dsl::annee_effectifs,
-                    dsl::activite_principale_registre_metiers,
-                    dsl::date_dernier_traitement,
-                    dsl::etablissement_siege,
-                    dsl::nombre_periodes,
-                    dsl::complement_adresse,
-                    dsl::numero_voie,
-                    dsl::indice_repetition,
-                    dsl::dernier_numero_voie,
-                    dsl::indice_repetition_dernier_numero_voie,
-                    dsl::type_voie,
-                    dsl::libelle_voie,
-                    dsl::code_postal,
-                    dsl::libelle_commune,
-                    dsl::libelle_commune_etranger,
-                    dsl::distribution_speciale,
-                    dsl::code_commune,
-                    dsl::code_cedex,
-                    dsl::libelle_cedex,
-                    dsl::code_pays_etranger,
-                    dsl::libelle_pays_etranger,
-                    dsl::identifiant_adresse,
-                    dsl::coordonnee_lambert_x,
-                    dsl::coordonnee_lambert_y,
-                    dsl::complement_adresse2,
-                    dsl::numero_voie_2,
-                    dsl::indice_repetition_2,
-                    dsl::type_voie_2,
-                    dsl::libelle_voie_2,
-                    dsl::code_postal_2,
-                    dsl::libelle_commune_2,
-                    dsl::libelle_commune_etranger_2,
-                    dsl::distribution_speciale_2,
-                    dsl::code_commune_2,
-                    dsl::code_cedex_2,
-                    dsl::libelle_cedex_2,
-                    dsl::code_pays_etranger_2,
-                    dsl::libelle_pays_etranger_2,
-                    dsl::date_debut,
-                    dsl::etat_administratif,
-                    dsl::enseigne_1,
-                    dsl::enseigne_2,
-                    dsl::enseigne_3,
-                    dsl::denomination_usuelle,
-                    dsl::activite_principale,
-                    dsl::nomenclature_activite_principale,
-                    dsl::caractere_employeur,
-                    dsl::activite_principale_naf25,
-                ),
-                |write| copy_remote_zipped_csv(remote_file.to_reader(), write),
+            SyncRunQueryDsl::execute(
+                diesel::sql_query("TRUNCATE etablissement_staging"),
+                &mut connection,
             )
-            .with_delimiter(',')
-            .with_format(CopyFormat::Csv)
-            .with_header(CopyHeader::Set(true))
-            .execute(&mut connection)
-            .map(|count| count > 0)
-            .map_err(|error| error.into())
+            .map_err(|e| UpdatableError::Database { source: e })?;
+
+            let copy_query = diesel::copy_from(dsl::etablissement_staging)
+                .from_raw_data(
+                    (
+                        dsl::siren,
+                        dsl::nic,
+                        dsl::siret,
+                        dsl::statut_diffusion,
+                        dsl::date_creation,
+                        dsl::tranche_effectifs,
+                        dsl::annee_effectifs,
+                        dsl::activite_principale_registre_metiers,
+                        dsl::date_dernier_traitement,
+                        dsl::etablissement_siege,
+                        dsl::nombre_periodes,
+                        dsl::complement_adresse,
+                        dsl::numero_voie,
+                        dsl::indice_repetition,
+                        dsl::dernier_numero_voie,
+                        dsl::indice_repetition_dernier_numero_voie,
+                        dsl::type_voie,
+                        dsl::libelle_voie,
+                        dsl::code_postal,
+                        dsl::libelle_commune,
+                        dsl::libelle_commune_etranger,
+                        dsl::distribution_speciale,
+                        dsl::code_commune,
+                        dsl::code_cedex,
+                        dsl::libelle_cedex,
+                        dsl::code_pays_etranger,
+                        dsl::libelle_pays_etranger,
+                        dsl::identifiant_adresse,
+                        dsl::coordonnee_lambert_x,
+                        dsl::coordonnee_lambert_y,
+                        dsl::complement_adresse2,
+                        dsl::numero_voie_2,
+                        dsl::indice_repetition_2,
+                        dsl::type_voie_2,
+                        dsl::libelle_voie_2,
+                        dsl::code_postal_2,
+                        dsl::libelle_commune_2,
+                        dsl::libelle_commune_etranger_2,
+                        dsl::distribution_speciale_2,
+                        dsl::code_commune_2,
+                        dsl::code_cedex_2,
+                        dsl::libelle_cedex_2,
+                        dsl::code_pays_etranger_2,
+                        dsl::libelle_pays_etranger_2,
+                        dsl::date_debut,
+                        dsl::etat_administratif,
+                        dsl::enseigne_1,
+                        dsl::enseigne_2,
+                        dsl::enseigne_3,
+                        dsl::denomination_usuelle,
+                        dsl::activite_principale,
+                        dsl::nomenclature_activite_principale,
+                        dsl::caractere_employeur,
+                        dsl::activite_principale_naf25,
+                    ),
+                    |write| copy_remote_zipped_csv(remote_file.to_reader(), write),
+                )
+                .with_delimiter(',')
+                .with_format(CopyFormat::Csv)
+                .with_header(CopyHeader::Set(true));
+            SyncExecuteCopy::execute(copy_query, &mut connection)
+                .map(|count| count > 0)
+                .map_err(|e| UpdatableError::Database { source: e })
+        })
     }
 
-    fn swap(&self, connectors: &Connectors) -> Result<(), UpdatableError> {
-        let mut connection = connectors.local.pool.get()?;
-        connection.build_transaction().read_write().run(|conn| {
-            sql_query("ALTER TABLE etablissement RENAME TO etablissement_temp").execute(conn)?;
-            sql_query("ALTER TABLE etablissement_staging RENAME TO etablissement").execute(conn)?;
-            sql_query("ALTER TABLE etablissement_temp RENAME TO etablissement_staging")
-                .execute(conn)?;
-            sql_query("TRUNCATE etablissement_staging").execute(conn)?;
-            sql_query(
-                r#"
-            UPDATE group_metadata
-            SET last_imported_timestamp = staging_imported_timestamp
-            WHERE group_type = 'etablissements'
-            "#,
-            )
-            .execute(conn)?;
-            sql_query(
-                r#"
-            UPDATE group_metadata
-            SET staging_imported_timestamp = NULL
-            WHERE group_type = 'etablissements'
-            "#,
-            )
-            .execute(conn)?;
+    async fn swap(&self, connectors: &Connectors) -> Result<(), UpdatableError> {
+        let mut connection = connectors.local.pool.get().await?;
+        connection
+            .transaction(async |conn| {
+                sql_query("ALTER TABLE etablissement RENAME TO etablissement_temp")
+                    .execute(conn)
+                    .await?;
+                sql_query("ALTER TABLE etablissement_staging RENAME TO etablissement")
+                    .execute(conn)
+                    .await?;
+                sql_query("ALTER TABLE etablissement_temp RENAME TO etablissement_staging")
+                    .execute(conn)
+                    .await?;
+                sql_query("TRUNCATE etablissement_staging")
+                    .execute(conn)
+                    .await?;
+                sql_query(
+                    r#"
+                UPDATE group_metadata
+                SET last_imported_timestamp = staging_imported_timestamp
+                WHERE group_type = 'etablissements'
+                "#,
+                )
+                .execute(conn)
+                .await?;
+                sql_query(
+                    r#"
+                UPDATE group_metadata
+                SET staging_imported_timestamp = NULL
+                WHERE group_type = 'etablissements'
+                "#,
+                )
+                .execute(conn)
+                .await?;
 
-            Ok(())
-        })
+                diesel::QueryResult::Ok(())
+            })
+            .await
+            .map_err(|e| UpdatableError::Database { source: e })
     }
 
     async fn get_total_count(
@@ -490,17 +523,17 @@ impl UpdatableModel for EtablissementModel {
         Ok(insee.get_total_etablissements(start_timestamp).await?)
     }
 
-    // SELECT date_dernier_traitement FROM etablissement WHERE date_dernier_traitement IS NOT NULL ORDER BY date_dernier_traitement DESC LIMIT 1;
-    fn get_last_insee_synced_timestamp(
+    async fn get_last_insee_synced_timestamp(
         &self,
         connectors: &Connectors,
     ) -> Result<Option<NaiveDateTime>, UpdatableError> {
-        let mut connection = connectors.local.pool.get()?;
+        let mut connection = connectors.local.pool.get().await?;
         dsl::etablissement
             .select(dsl::date_dernier_traitement)
             .order(dsl::date_dernier_traitement.desc())
             .filter(dsl::date_dernier_traitement.is_not_null())
             .first::<Option<NaiveDateTime>>(&mut connection)
+            .await
             .map_err(|error| error.into())
     }
 
@@ -519,7 +552,7 @@ impl UpdatableModel for EtablissementModel {
             .get_daily_etablissements(start_timestamp, cursor)
             .await?;
 
-        let mut connection = connectors.local.pool.get()?;
+        let mut connection = connectors.local.pool.get().await?;
 
         let updated_count = diesel::insert_into(dsl::etablissement)
             .values(&etablissements)
@@ -582,7 +615,8 @@ impl UpdatableModel for EtablissementModel {
                 dsl::coordonnee_lambert_x.eq(excluded(dsl::coordonnee_lambert_x)),
                 dsl::coordonnee_lambert_y.eq(excluded(dsl::coordonnee_lambert_y)),
             ))
-            .execute(&mut connection)?;
+            .execute(&mut connection)
+            .await?;
 
         Ok((next_cursor, updated_count))
     }

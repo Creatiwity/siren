@@ -1,9 +1,10 @@
 use custom_error::custom_error;
+use diesel_async::pooled_connection::deadpool::PoolError;
 
 custom_error! { pub Error
     AlreadyLaunched = "Unable to launch update while another update is already running.",
     UpdateNotRegistered = "Unable to register this update in database.",
-    LocalConnectionFailed{source: r2d2::Error} = "Unable to connect to local database ({source}).",
+    LocalConnectionFailed{source: PoolError} = "Unable to connect to local database ({source}).",
     MetadataNotFound = "Metadata not found.",
     Database{diesel_error: diesel::result::Error} = "Unable to run some operations on metadata ({diesel_error}).",
 }

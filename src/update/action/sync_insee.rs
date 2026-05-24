@@ -24,18 +24,20 @@ impl Action for SyncInseeAction {
         if connectors.insee.is_some() {
             let model = group_type.get_updatable_model();
 
-            if let Some(last_timestamp) = model.get_last_insee_synced_timestamp(connectors)? {
+            if let Some(last_timestamp) = model.get_last_insee_synced_timestamp(connectors).await? {
                 let mut current_cursor: Option<String> = Some(INITIAL_CURSOR.to_string());
                 let mut updated_count = 0;
                 let timestamp = get_minimum_timestamp_for_request(last_timestamp);
 
                 let planned_count = model.get_total_count(connectors, timestamp).await?;
 
-                summary_delegate.start(
-                    connectors,
-                    Some(DateTime::<Utc>::from_naive_utc_and_offset(timestamp, Utc)),
-                    planned_count,
-                )?;
+                summary_delegate
+                    .start(
+                        connectors,
+                        Some(DateTime::<Utc>::from_naive_utc_and_offset(timestamp, Utc)),
+                        planned_count,
+                    )
+                    .await?;
 
                 debug!("Syncing {} {:#?}...", planned_count, group_type);
 
@@ -47,38 +49,43 @@ impl Action for SyncInseeAction {
                     current_cursor = next_cursor;
                     updated_count += inserted_count;
 
-                    summary_delegate.progress(connectors, updated_count as u32)?;
+                    summary_delegate
+                        .progress(connectors, updated_count as u32)
+                        .await?;
                 }
 
                 debug!("{} {:#?} synced", updated_count, group_type);
 
-                group_metadata::set_last_insee_synced_timestamp(
-                    connectors,
-                    group_type,
-                    Utc::now(),
-                )?;
+                group_metadata::set_last_insee_synced_timestamp(connectors, group_type, Utc::now())
+                    .await?;
 
-                summary_delegate.finish(
-                    connectors,
-                    String::from("synced"),
-                    updated_count as u32,
-                    updated_count > 0,
-                )?;
+                summary_delegate
+                    .finish(
+                        connectors,
+                        String::from("synced"),
+                        updated_count as u32,
+                        updated_count > 0,
+                    )
+                    .await?;
             } else {
-                summary_delegate.finish(
-                    connectors,
-                    String::from("missing last treatment date"),
-                    0,
-                    false,
-                )?;
+                summary_delegate
+                    .finish(
+                        connectors,
+                        String::from("missing last treatment date"),
+                        0,
+                        false,
+                    )
+                    .await?;
             }
         } else {
-            summary_delegate.finish(
-                connectors,
-                String::from("no insee connector configured"),
-                0,
-                false,
-            )?;
+            summary_delegate
+                .finish(
+                    connectors,
+                    String::from("no insee connector configured"),
+                    0,
+                    false,
+                )
+                .await?;
         }
 
         debug!("Syncing of {:#?} done", group_type);
