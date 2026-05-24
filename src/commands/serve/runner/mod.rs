@@ -9,7 +9,7 @@ pub mod common;
 
 use axum::http::{Method, header};
 use common::Context;
-use sentry::integrations::tower::NewSentryLayer;
+use sentry::integrations::tower::{NewSentryLayer, SentryHttpLayer};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use utoipa::OpenApi;
@@ -55,6 +55,7 @@ pub async fn run(addr: SocketAddr, context: Context) {
         )
         .merge(Scalar::with_url("/scalar", api))
         .layer(tower_http::trace::TraceLayer::new_for_http())
+        .layer(SentryHttpLayer::new().enable_transaction())
         .layer(NewSentryLayer::new_from_top())
         .with_state(shared_context);
 
