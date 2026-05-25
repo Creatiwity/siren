@@ -4,6 +4,7 @@ mod commands;
 mod connectors;
 mod diesel_instrumentation;
 mod models;
+mod sentry_crons;
 mod telemetry;
 mod update;
 
@@ -57,9 +58,10 @@ fn main() {
             launch().bind_hub(sentry::Hub::current()).await;
 
             if let Some(provider) = otlp_provider
-                && let Err(e) = provider.shutdown() {
-                    tracing::warn!("OTLP shutdown error: {e}");
-                }
+                && let Err(e) = provider.shutdown()
+            {
+                tracing::warn!("OTLP shutdown error: {e}");
+            }
         });
 }
 

@@ -4,6 +4,7 @@ use crate::models::update_metadata;
 use crate::models::update_metadata::common::{
     Step, SyntheticGroupType, UpdateMetadata, UpdateSummary,
 };
+use crate::sentry_crons::SentryCrons;
 use action::execute_step;
 use chrono::Utc;
 use common::Config;
@@ -42,7 +43,6 @@ async fn execute_workflow(
     config: Config,
     connectors: &mut Connectors,
 ) -> Result<UpdateMetadata, Error> {
-    // Execute workflow
     let mut summary = UpdateSummary::default();
 
     summary
@@ -50,19 +50,37 @@ async fn execute_workflow(
         .await?;
 
     let asynchronous = config.asynchronous;
+    let sentry_crons = config
+        .crontab
+        .as_ref()
+        .and_then(|tab| SentryCrons::for_update(synthetic_group_type).map(|c| (c, tab.clone())));
     let mut thread_connectors = connectors.clone();
 
     let handle = task::spawn(async move {
         task::yield_now().await;
 
-        execute_workflow_thread(
+        if let Some((crons, tab)) = sentry_crons.clone() {
+            crons.notify_in_progress(tab).await;
+        }
+
+        let result = execute_workflow_thread(
             workflow,
             synthetic_group_type,
             config,
             &mut thread_connectors,
             summary,
         )
-        .await
+        .await;
+
+        if let Some((crons, _)) = sentry_crons {
+            if result.is_ok() {
+                crons.notify_ok().await;
+            } else {
+                crons.notify_error().await;
+            }
+        }
+
+        result
     });
 
     if !asynchronous {
