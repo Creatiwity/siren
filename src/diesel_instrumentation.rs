@@ -10,10 +10,15 @@ impl Instrumentation for AsyncDieselInstrumentation {
     fn on_connection_event(&mut self, event: InstrumentationEvent<'_>) {
         match event {
             InstrumentationEvent::StartQuery { query, .. } => {
+                let query_str = query.to_string();
+                let sql = query_str
+                    .split_once(" -- binds:")
+                    .map_or(query_str.as_str(), |(sql, _)| sql.trim_end());
                 self.query_span = Some(tracing::info_span!(
                     "db.sql.query",
+                    "sentry.op" = "db.sql.query",
+                    "sentry.name" = sql,
                     "db.system" = "postgresql",
-                    "db.statement" = tracing::field::display(query),
                     "db.error" = tracing::field::Empty,
                 ));
             }
