@@ -2,6 +2,7 @@
 
 mod commands;
 mod connectors;
+mod diesel_instrumentation;
 mod models;
 mod update;
 
