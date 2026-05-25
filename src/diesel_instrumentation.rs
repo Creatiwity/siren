@@ -11,7 +11,8 @@ impl Instrumentation for AsyncDieselInstrumentation {
         match event {
             InstrumentationEvent::StartQuery { query, .. } => {
                 self.query_span = Some(tracing::info_span!(
-                    "db.query",
+                    "db.sql.query",
+                    "db.system" = "postgresql",
                     "db.statement" = tracing::field::display(query),
                     "db.error" = tracing::field::Empty,
                 ));
@@ -24,7 +25,8 @@ impl Instrumentation for AsyncDieselInstrumentation {
             }
             InstrumentationEvent::BeginTransaction { depth, .. } if depth.get() == 1 => {
                 self.transaction_span = Some(tracing::info_span!(
-                    "db.transaction",
+                    "db.sql.transaction",
+                    "db.system" = "postgresql",
                     "db.rolled_back" = tracing::field::Empty,
                 ));
             }
