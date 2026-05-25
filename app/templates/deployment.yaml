@@ -42,6 +42,8 @@ spec:
               value: {{ .Values.pgHost }}
             - name: "DATABASE_PORT"
               value: "{{ .Values.pgPort }}"
+            - name: "DATABASE_POOL_SIZE"
+              value: "{{ .Values.pgPoolSize }}"
             - name: "DATABASE_NAME"
               value: {{ .Values.pgDatabase }}
             - name: "DATABASE_USER"
