@@ -1,7 +1,9 @@
+use crate::diesel_instrumentation::AsyncDieselInstrumentation;
 use diesel::Connection as DieselConnection;
 use diesel::pg::PgConnection;
+use diesel_async::AsyncConnection;
 use diesel_async::AsyncPgConnection;
-use diesel_async::pooled_connection::AsyncDieselConnectionManager;
+use diesel_async::pooled_connection::{AsyncDieselConnectionManager, ManagerConfig};
 use diesel_async::pooled_connection::deadpool::Pool;
 use diesel_migrations::{EmbeddedMigrations, MigrationHarness, embed_migrations};
 use std::env;
@@ -55,7 +57,19 @@ impl ConnectorBuilder {
                 .expect("Unable to run migrations");
         });
 
-        let manager = AsyncDieselConnectionManager::<AsyncPgConnection>::new(database_url.clone());
+        let mut manager_config = ManagerConfig::<AsyncPgConnection>::default();
+        manager_config.custom_setup = Box::new(|url| {
+            let url = url.to_owned();
+            Box::pin(async move {
+                let mut conn = AsyncPgConnection::establish(&url).await?;
+                conn.set_instrumentation(AsyncDieselInstrumentation::default());
+                Ok(conn)
+            })
+        });
+        let manager = AsyncDieselConnectionManager::<AsyncPgConnection>::new_with_config(
+            database_url.clone(),
+            manager_config,
+        );
 
         let pool = Pool::builder(manager)
             .max_size(pool_size)
