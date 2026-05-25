@@ -1,9 +1,6 @@
 use axum::http::{HeaderName, HeaderValue};
 use axum::{extract::Request, middleware::Next, response::Response};
-use opentelemetry::global;
 use sentry::protocol::{SpanId, TraceId, User};
-use tracing::Instrument;
-use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 pub async fn traceparent_middleware(mut request: Request, next: Next) -> Response {
     let incoming = request
@@ -31,17 +28,7 @@ pub async fn traceparent_middleware(mut request: Request, next: Next) -> Respons
             .insert(HeaderName::from_static("sentry-trace"), value);
     }
 
-    // Extract incoming W3C trace context — ContextGuard is !Send so we use Instrument instead
-    let carrier: std::collections::HashMap<String, String> = request
-        .headers()
-        .iter()
-        .filter_map(|(k, v)| Some((k.as_str().to_owned(), v.to_str().ok()?.to_owned())))
-        .collect();
-    let parent_cx = global::get_text_map_propagator(|prop| prop.extract(&carrier));
-    let span = tracing::info_span!("http.request");
-    let _ = span.set_parent(parent_cx);
-
-    let mut response = next.run(request).instrument(span).await;
+    let mut response = next.run(request).await;
 
     let traceparent = format!("00-{trace_id}-{our_span_id}-{flags:02x}");
     if let Ok(value) = HeaderValue::from_str(&traceparent) {
