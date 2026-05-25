@@ -23,6 +23,7 @@ pub struct UpdateOptions {
     pub group_type: SyntheticGroupType,
     pub force: bool,
     pub asynchronous: bool,
+    pub crontab: Option<String>,
 }
 
 #[derive(ToSchema, Deserialize)]

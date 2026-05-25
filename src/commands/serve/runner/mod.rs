@@ -3,11 +3,13 @@ mod error;
 mod etablissements;
 mod liens_succession;
 mod root;
+mod trace;
 mod unites_legales;
 
 pub mod common;
 
 use axum::http::{Method, header};
+use axum::middleware;
 use common::Context;
 use sentry::integrations::tower::{NewSentryLayer, SentryHttpLayer};
 use std::net::SocketAddr;
@@ -54,9 +56,12 @@ pub async fn run(addr: SocketAddr, context: Context) {
                 .allow_origin(tower_http::cors::Any),
         )
         .merge(Scalar::with_url("/scalar", api))
+        .layer(tower_http::compression::CompressionLayer::new())
         .layer(tower_http::trace::TraceLayer::new_for_http())
         .layer(SentryHttpLayer::new().enable_transaction())
+        .layer(middleware::from_fn(trace::siren_context_middleware))
         .layer(NewSentryLayer::new_from_top())
+        .layer(middleware::from_fn(trace::traceparent_middleware))
         .with_state(shared_context);
 
     axum::serve(

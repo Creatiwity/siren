@@ -5,7 +5,7 @@ metadata:
   labels:
     {{- include "app.labels" . | nindent 4 }}
 spec:
-  schedule: "0 4 * * *"
+  schedule: {{ .Values.cronSchedule | quote }}
   jobTemplate:
     spec:
       template:
@@ -36,4 +36,4 @@ spec:
                   value: {{ .Values.inseeCredentials }}
                 - name: "SENTRY_DSN"
                   value: {{ .Values.sentryDsn }}
-              args: ["update", "all"]
+              args: ["update", "all", "--crontab", {{ .Values.cronSchedule | quote }}]

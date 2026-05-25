@@ -62,6 +62,7 @@ async fn post_update(
         DataConfig {
             force: options.force,
             asynchronous: options.asynchronous,
+            crontab: options.crontab,
         },
         &mut connectors,
     )

@@ -15,6 +15,10 @@ pub struct UpdateFlags {
     #[clap(long = "force")]
     force: bool,
 
+    /// Crontab expression that triggered this execution (for Sentry Crons monitoring)
+    #[clap(long = "crontab")]
+    crontab: Option<String>,
+
     #[clap(subcommand)]
     subcmd: Option<UpdateSubCommand>,
 }
@@ -48,6 +52,7 @@ pub async fn run(flags: UpdateFlags, builders: ConnectorsBuilders) {
     let config = Config {
         force: flags.force,
         asynchronous: false,
+        crontab: flags.crontab,
     };
 
     let summary_result = match flags.subcmd {
