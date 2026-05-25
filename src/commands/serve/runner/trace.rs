@@ -1,6 +1,6 @@
 use axum::http::{HeaderName, HeaderValue};
 use axum::{extract::Request, middleware::Next, response::Response};
-use sentry::protocol::{SpanId, TraceId};
+use sentry::protocol::{SpanId, TraceId, User};
 
 pub async fn traceparent_middleware(mut request: Request, next: Next) -> Response {
     let incoming = request
@@ -38,6 +38,36 @@ pub async fn traceparent_middleware(mut request: Request, next: Next) -> Respons
     }
 
     response
+}
+
+pub async fn siren_context_middleware(request: Request, next: Next) -> Response {
+    let client_id = request
+        .headers()
+        .get("x-siren-client-id")
+        .and_then(|v| v.to_str().ok())
+        .map(str::to_owned);
+
+    let tier = request
+        .headers()
+        .get("x-siren-tier")
+        .and_then(|v| v.to_str().ok())
+        .map(str::to_owned);
+
+    if client_id.is_some() || tier.is_some() {
+        sentry::configure_scope(|scope| {
+            if let Some(ref id) = client_id {
+                scope.set_user(Some(User {
+                    id: Some(id.clone()),
+                    ..Default::default()
+                }));
+            }
+            if let Some(ref t) = tier {
+                scope.set_tag("siren.tier", t);
+            }
+        });
+    }
+
+    next.run(request).await
 }
 
 fn parse_traceparent(header: &str) -> Option<(TraceId, SpanId, u8)> {
