@@ -1,17 +1,9 @@
 use diesel::connection::{Instrumentation, InstrumentationEvent};
 
+#[derive(Default)]
 pub struct AsyncDieselInstrumentation {
     query_span: Option<tracing::Span>,
     transaction_span: Option<tracing::Span>,
-}
-
-impl Default for AsyncDieselInstrumentation {
-    fn default() -> Self {
-        Self {
-            query_span: None,
-            transaction_span: None,
-        }
-    }
 }
 
 impl Instrumentation for AsyncDieselInstrumentation {

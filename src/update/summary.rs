@@ -52,21 +52,17 @@ impl UpdateSummary {
         synthetic_group: SyntheticGroupType,
         force: bool,
     ) -> Result<(), Error> {
-        update_metadata::launch_update(connectors, synthetic_group, force)
-            .await
-            .map(|date| {
-                self.started_timestamp = date;
-                Ok(())
-            })?
+        self.started_timestamp =
+            update_metadata::launch_update(connectors, synthetic_group, force).await?;
+        Ok(())
     }
 
     pub async fn finish(&mut self, connectors: &Connectors) -> Result<(), Error> {
         self.finished_timestamp = Some(Utc::now());
         self.updated = self.steps.iter().any(|s| s.updated);
 
-        update_metadata::finished_update(connectors, self.clone())
-            .await
-            .map(|_| Ok(()))?
+        update_metadata::finished_update(connectors, self.clone()).await?;
+        Ok(())
     }
 }
 
