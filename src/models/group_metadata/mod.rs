@@ -39,7 +39,7 @@ pub async fn set_last_imported_timestamp(
 ) -> Result<bool, Error> {
     let mut connection = connectors.local.pool.get().await?;
     diesel::update(dsl::group_metadata.filter(dsl::group_type.eq(group_type)))
-        .set(dsl::staging_imported_timestamp.eq(timestamp))
+        .set(dsl::last_imported_timestamp.eq(timestamp))
         .execute(&mut connection)
         .await
         .map(|count| count > 0)
