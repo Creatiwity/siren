@@ -4,10 +4,12 @@ mod commands;
 mod connectors;
 mod diesel_instrumentation;
 mod models;
+mod telemetry;
 mod update;
 
 use connectors::ConnectorsBuilders;
 use dotenv::dotenv;
+use opentelemetry::trace::TracerProvider as _;
 use sentry::SentryFutureExt;
 use tracing_subscriber::{EnvFilter, prelude::*};
 
@@ -31,21 +33,33 @@ fn main() {
         },
     ));
 
-    // Load Tracing
-    tracing_subscriber::registry()
-        .with(EnvFilter::from_default_env())
-        .with(tracing_subscriber::fmt::layer())
-        .with(sentry::integrations::tracing::layer())
-        .init();
-
     tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
         .expect("Cannot build Tokio runtime")
         .block_on(async {
+            // Init OTLP before the subscriber so the tracer is ready when layers are built
+            let otlp_provider = telemetry::init_otlp();
+
+            let otel_layer = otlp_provider
+                .as_ref()
+                .map(|p| tracing_opentelemetry::layer().with_tracer(p.tracer("siren")));
+
+            tracing_subscriber::registry()
+                .with(EnvFilter::from_default_env())
+                .with(tracing_subscriber::fmt::layer())
+                .with(sentry::integrations::tracing::layer())
+                .with(otel_layer)
+                .init();
+
             // Futures should to be bound to a Hub
             // Learn more at https://docs.rs/sentry-core/latest/sentry_core/#parallelism-concurrency-and-async
             launch().bind_hub(sentry::Hub::current()).await;
+
+            if let Some(provider) = otlp_provider
+                && let Err(e) = provider.shutdown() {
+                    tracing::warn!("OTLP shutdown error: {e}");
+                }
         });
 }
 
