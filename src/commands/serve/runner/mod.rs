@@ -56,6 +56,7 @@ pub async fn run(addr: SocketAddr, context: Context) {
                 .allow_origin(tower_http::cors::Any),
         )
         .merge(Scalar::with_url("/scalar", api))
+        .layer(tower_http::compression::CompressionLayer::new())
         .layer(tower_http::trace::TraceLayer::new_for_http())
         .layer(SentryHttpLayer::new().enable_transaction())
         .layer(middleware::from_fn(trace::siren_context_middleware))
