@@ -45,7 +45,9 @@ async fn execute_workflow(
     // Execute workflow
     let mut summary = UpdateSummary::default();
 
-    summary.start(connectors, synthetic_group_type, config.force)?;
+    summary
+        .start(connectors, synthetic_group_type, config.force)
+        .await?;
 
     let asynchronous = config.asynchronous;
     let mut thread_connectors = connectors.clone();
@@ -67,7 +69,7 @@ async fn execute_workflow(
         handle.await??;
     }
 
-    Ok(update_metadata::current_update(connectors)?)
+    Ok(update_metadata::current_update(connectors).await?)
 }
 
 async fn execute_workflow_thread(
@@ -82,23 +84,23 @@ async fn execute_workflow_thread(
     for step in workflow.into_iter() {
         let groups: Vec<GroupType> = synthetic_group_type.into();
 
-        execute_step(
+        let result = execute_step(
             step,
             &config,
             groups.as_slice(),
             connectors,
             &mut summary.step_delegate(step),
         )
-        .await
-        .or_else(|error| {
-            error!("Errored: {}", error.to_string());
+        .await;
 
-            update_metadata::error_update(connectors, error.to_string(), Utc::now())?;
-            Err(error)
-        })?;
+        if let Err(err) = result {
+            error!("Errored: {}", err.to_string());
+            update_metadata::error_update(connectors, err.to_string(), Utc::now()).await?;
+            return Err(err);
+        }
     }
 
-    summary.finish(connectors)?;
+    summary.finish(connectors).await?;
 
     debug!("Finished");
 

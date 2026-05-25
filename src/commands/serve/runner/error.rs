@@ -7,6 +7,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use custom_error::custom_error;
+use diesel_async::pooled_connection::deadpool::PoolError;
 use serde::Serialize;
 use tracing::error;
 
@@ -16,7 +17,7 @@ custom_error! { pub Error
     MissingApiKey = "[Admin] Missing API key in configuration",
     ApiKey = "[Admin] Wrong API key",
     MissingBaseUrlForAsync = "[Admin] No BASE_URL configured, needed for asynchronous updates",
-    LocalConnectionFailed{source: r2d2::Error} = "Unable to connect to local database ({source}).",
+    LocalConnectionFailed{source: PoolError} = "Unable to connect to local database ({source}).",
     UpdateConnector {source: ConnectorError} = "[Update] Error while creating connector: {source}",
     Update {source: InternalUpdate} = "[Update] {source}",
     UniteLegale {source: unite_legale::error::Error} = "[UniteLegale] {source}",
@@ -25,7 +26,6 @@ custom_error! { pub Error
     Status {source: update_metadata::error::Error} = "[Status] {source}",
     SirenDoublonRedirect{location: String} = "Moved permanently to {location}",
     SirenDoublonLookup{source: siren_doublon::error::Error} = "[SirenDoublon] {source}",
-    BlockingTaskPanicked = "Internal error",
 }
 
 impl IntoResponse for Error {
@@ -76,7 +76,6 @@ impl IntoResponse for Error {
                 }
                 _ => (StatusCode::INTERNAL_SERVER_ERROR, self.to_string()),
             },
-            Error::BlockingTaskPanicked => (StatusCode::INTERNAL_SERVER_ERROR, self.to_string()),
         };
 
         if status == StatusCode::INTERNAL_SERVER_ERROR {

@@ -100,7 +100,7 @@ async fn get_update_status(
 
     let connectors = context.builders.create();
 
-    let update_metadata = models::update_metadata::current_update(&connectors)?;
+    let update_metadata = models::update_metadata::current_update(&connectors).await?;
 
     reply_with_update_metadata(update_metadata, context.base_url.clone(), api_key)
 }
@@ -160,7 +160,8 @@ async fn post_update_status_to_error(
         &connectors,
         String::from("Process stopped manually."),
         Utc::now(),
-    )?;
+    )
+    .await?;
 
     Ok(Response::new(Body::empty()))
 }

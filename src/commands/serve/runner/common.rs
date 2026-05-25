@@ -10,7 +10,7 @@ use utoipa::ToSchema;
 pub const ADMIN_TAG: &str = "admin";
 pub const PUBLIC_TAG: &str = "public";
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct Context {
     pub builders: ConnectorsBuilders,
     pub api_key: Option<String>,

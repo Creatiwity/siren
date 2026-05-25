@@ -20,7 +20,7 @@ pub async fn execute_step<'a>(
 ) -> Result<(), Error> {
     let action = build_action(config, step);
 
-    summary_delegate.start(connectors)?;
+    summary_delegate.start(connectors).await?;
 
     for group in groups {
         action
@@ -32,7 +32,7 @@ pub async fn execute_step<'a>(
             .await?;
     }
 
-    summary_delegate.finish(connectors)?;
+    summary_delegate.finish(connectors).await?;
 
     Ok(())
 }

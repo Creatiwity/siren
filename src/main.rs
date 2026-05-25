@@ -7,8 +7,6 @@ mod models;
 mod update;
 
 use connectors::ConnectorsBuilders;
-use diesel::connection::set_default_instrumentation;
-use diesel_instrumentation::DieselInstrumentation;
 use dotenv::dotenv;
 use sentry::SentryFutureExt;
 use tracing_subscriber::{EnvFilter, prelude::*};
@@ -39,9 +37,6 @@ fn main() {
         .with(tracing_subscriber::fmt::layer())
         .with(sentry::integrations::tracing::layer())
         .init();
-
-    set_default_instrumentation(|| Some(Box::new(DieselInstrumentation)))
-        .expect("Failed to set diesel instrumentation");
 
     tokio::runtime::Builder::new_multi_thread()
         .enable_all()

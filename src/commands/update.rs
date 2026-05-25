@@ -61,7 +61,9 @@ pub async fn run(flags: UpdateFlags, builders: ConnectorsBuilders) {
                         &connectors,
                         "Process stopped manually.".to_string(),
                         Utc::now(),
-                    ) {
+                    )
+                    .await
+                    {
                         let error: Error = err.into();
                         error.exit()
                     }
