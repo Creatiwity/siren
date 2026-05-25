@@ -19,6 +19,7 @@ rustLog: "sirene=info"
 sireneEnv: "production"
 pgHost:
 pgPort:
+pgPoolSize: 200
 pgDatabase:
 pgUsername:
 pgPassword:
