@@ -1616,6 +1616,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
 
 [[package]]
+name = "jemalloc-sys"
+version = "0.5.4+5.3.0-patched"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ac6c1946e1cea1788cbfde01c993b52a10e2da07f4bac608228d1bed20bfebf2"
+dependencies = [
+ "cc",
+ "libc",
+]
+
+[[package]]
+name = "jemallocator"
+version = "0.5.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a0de374a9f8e63150e6f5e8a60cc14c668226d7a347d8aee1a45766e3c4dd3bc"
+dependencies = [
+ "jemalloc-sys",
+ "libc",
+]
+
+[[package]]
 name = "jni"
 version = "0.22.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2359,9 +2379,9 @@ checksum = "c33a9471896f1c69cecef8d20cbe2f7accd12527ce60845ff44c153bb2a21b49"
 
 [[package]]
 name = "postgis_diesel"
-version = "3.1.0"
+version = "3.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "436e1a10fb43ba8d366b70d0daf6dbff621808dfecfa46d85198f17d3bd2611f"
+checksum = "f86eaf1c7fcbdc58d2550d13c0a622409379318a92dba6d732efd3356f2bee54"
 dependencies = [
  "byteorder",
  "diesel",
@@ -3206,6 +3226,7 @@ dependencies = [
  "diesel_migrations",
  "dotenv",
  "futures",
+ "jemallocator",
  "openssl-sys",
  "opentelemetry",
  "opentelemetry-otlp",

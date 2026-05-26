@@ -1,5 +1,8 @@
 #![recursion_limit = "256"]
 
+#[global_allocator]
+static GLOBAL: jemallocator::Jemalloc = jemallocator::Jemalloc;
+
 mod commands;
 mod connectors;
 mod diesel_instrumentation;
