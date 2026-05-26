@@ -1,6 +1,6 @@
 [package]
 name = "sirene"
-version = "6.4.2"
+version = "6.4.3"
 authors = ["Julien Blatecky <julien.blatecky@creatiwity.net>"]
 edition = "2024"
 
@@ -22,6 +22,7 @@ diesel-async = { version = "0.9", features = ["postgres", "deadpool"] }
 diesel_migrations = { version = "2.3", features = ["postgres"] }
 dotenv = "0.15"
 futures = "0.3"
+jemallocator = "0.5"
 openssl-sys = { version = "0.9", features = ["vendored"] }
 postgis_diesel = { version = "3.1", features = ["serde"] }
 pq-sys = { version = "0.7", features = ["bundled"] }
@@ -31,7 +32,12 @@ reqwest = { version = "0.13", default-features = false, features = [
   "stream",
   "rustls",
 ] }
-sentry = { version = "0.48", features = ["tracing", "logs", "tower-axum-matched-path", "panic"] }
+sentry = { version = "0.48", features = [
+  "tracing",
+  "logs",
+  "tower-axum-matched-path",
+  "panic",
+] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tokio = { version = "1.52", features = [
@@ -43,10 +49,18 @@ tokio = { version = "1.52", features = [
 ] }
 tokio-util = { version = "0.7", features = ["compat"] }
 tower = { version = "0.5" }
-tower-http = { version = "0.6", features = ["cors", "trace", "compression-full"] }
+tower-http = { version = "0.6", features = [
+  "cors",
+  "trace",
+  "compression-full",
+] }
 opentelemetry = { version = "0.32", features = ["trace"] }
 opentelemetry_sdk = { version = "0.32", features = ["rt-tokio"] }
-opentelemetry-otlp = { version = "0.32", default-features = false, features = ["trace", "http-proto", "reqwest-rustls"] }
+opentelemetry-otlp = { version = "0.32", default-features = false, features = [
+  "trace",
+  "http-proto",
+  "reqwest-rustls",
+] }
 tracing = "0.1"
 tracing-opentelemetry = "0.33"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
@@ -54,3 +68,11 @@ utoipa = { version = "5.5", features = ["axum_extras", "chrono"] }
 utoipa-axum = "0.2"
 utoipa-scalar = { version = "0.3", features = ["axum"] }
 zip = "8.6"
+
+[profile.release]
+incremental = false
+lto = "thin"           # ThinLTO pour réduire la taille binaire sans sacrifier les perfs
+codegen-units = 1      # Meilleure optimisation (mais compilation plus lente)
+
+[target.x86_64-unknown-linux-musl]
+rustflags = ["-Ctarget-cpu=native", "-Ctarget-feature=+avx2,+bmi2"]

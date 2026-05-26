@@ -28,6 +28,7 @@ baseUrl:
 inseeCredentials:
 sentryDsn:
 cronSchedule: "0 4 * * *"
+tokioWorkerThreads: 10
 
 serviceAccount:
   # Specifies whether a service account should be created
