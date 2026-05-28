@@ -19,6 +19,8 @@ pub struct Context {
     pub base_url: Option<String>,
     /// Set on SIGTERM, so readiness fails while in-flight requests drain.
     pub shutting_down: Arc<AtomicBool>,
+    #[cfg(feature = "geocoding")]
+    pub geocoder: Option<std::sync::Arc<geocoder_core::Geocoder>>,
 }
 
 #[derive(ToSchema, Deserialize)]

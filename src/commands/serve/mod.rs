@@ -36,6 +36,11 @@ pub struct ServeFlags {
         default_value_t = 0
     )]
     shutdown_delay: u64,
+
+    /// Path to the geocoding index binary (enables address geocoding)
+    #[cfg(feature = "geocoding")]
+    #[clap(long = "geocoding-index-path", env = "GEOCODING_INDEX_PATH")]
+    geocoding_index_path: Option<std::path::PathBuf>,
 }
 
 #[derive(clap::ValueEnum, Clone, Debug)]
@@ -54,6 +59,20 @@ pub async fn run(flags: ServeFlags, builders: ConnectorsBuilders) {
 
     info!("Configuring for {:#?}", flags.environment);
 
+    #[cfg(feature = "geocoding")]
+    let geocoder = flags.geocoding_index_path.as_deref().and_then(|path| {
+        match geocoder_core::Geocoder::open(path) {
+            Ok(g) => {
+                info!("Geocoding index loaded from {}", path.display());
+                Some(std::sync::Arc::new(g))
+            }
+            Err(e) => {
+                tracing::warn!("Failed to load geocoding index: {e}");
+                None
+            }
+        }
+    });
+
     runner::run(
         addr,
         Context {
@@ -61,6 +80,8 @@ pub async fn run(flags: ServeFlags, builders: ConnectorsBuilders) {
             api_key: flags.api_key,
             base_url: flags.base_url,
             shutting_down: Default::default(),
+            #[cfg(feature = "geocoding")]
+            geocoder,
         },
         Duration::from_secs(flags.shutdown_delay),
     )
