@@ -8,6 +8,8 @@ use crate::models::etablissement::common::{
     EtablissementSearchOutput, EtablissementSearchParams, EtablissementSearchResponse,
     EtablissementSearchResultResponse, EtablissementSortField,
 };
+#[cfg(feature = "geocoding")]
+use crate::models::etablissement::common::{DEFAULT_GEOCODING_MIN_SCORE, DEFAULT_GEOCODING_RADIUS};
 use crate::models::etablissement::error::Error as EtablissementModelError;
 use axum::{
     Json,
@@ -96,6 +98,15 @@ async fn search_etablissements(
     State(context): State<Arc<Context>>,
     Query(params): Query<EtablissementSearchParams>,
 ) -> Result<Json<EtablissementSearchResponse>, Error> {
+    if params.address.is_some() && (params.lat.is_some() || params.lng.is_some()) {
+        return Err(Error::InvalidSearchParams {
+            message: "address and lat/lng are mutually exclusive".to_string(),
+        });
+    }
+
+    // Resolve address → lat/lng before geo validation
+    let params = resolve_geocoding(params, &context)?;
+
     let has_any_geo = params.lat.is_some() || params.lng.is_some() || params.radius.is_some();
     let has_all_geo = params.lat.is_some() && params.lng.is_some() && params.radius.is_some();
     if has_any_geo && !has_all_geo {
@@ -184,6 +195,67 @@ async fn search_etablissements(
         facettes,
         next_cursor,
     }))
+}
+
+/// If `address` is set, geocode it and fill in lat/lng/radius.
+/// Returns the params unchanged when address is absent.
+fn resolve_geocoding(
+    params: EtablissementSearchParams,
+    context: &Context,
+) -> Result<EtablissementSearchParams, Error> {
+    let Some(address) = params.address.clone() else {
+        return Ok(params);
+    };
+
+    #[cfg(not(feature = "geocoding"))]
+    {
+        let _ = (address, context);
+        return Err(Error::InvalidSearchParams {
+            message: "geocoding support is not compiled in this build".to_string(),
+        });
+    }
+
+    #[cfg(feature = "geocoding")]
+    {
+        let mut params = params;
+        let Some(ref geocoder) = context.geocoder else {
+            return Err(Error::InvalidSearchParams {
+                message: "geocoding index not loaded — start the server with --geocoding-index-path"
+                    .to_string(),
+            });
+        };
+
+        let min_score = params.geocoding_min_score.unwrap_or(DEFAULT_GEOCODING_MIN_SCORE);
+        let results = geocoder.search(&address, geocoder_core::SearchOpts::default());
+        let best = results.into_iter().find(|r| r.score >= min_score);
+
+        match best {
+            None => {
+                // No result above threshold → radius=0 ensures empty DB results
+                params.lat = Some(0.0);
+                params.lng = Some(0.0);
+                params.radius = Some(0.0);
+            }
+            Some(result) => {
+                let lat = result.doc.get("lat").and_then(|v| v.as_f64());
+                let lon = result.doc.get("lon").and_then(|v| v.as_f64());
+                match (lat, lon) {
+                    (Some(lat), Some(lon)) => {
+                        params.lat = Some(lat);
+                        params.lng = Some(lon);
+                        params.radius = Some(params.radius.unwrap_or(DEFAULT_GEOCODING_RADIUS));
+                    }
+                    _ => {
+                        return Err(Error::InvalidSearchParams {
+                            message: "geocoding result has no coordinates".to_string(),
+                        });
+                    }
+                }
+            }
+        }
+
+        Ok(params)
+    }
 }
 
 pub fn router() -> OpenApiRouter<Arc<Context>> {

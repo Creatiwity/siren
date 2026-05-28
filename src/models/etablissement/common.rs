@@ -159,7 +159,12 @@ pub enum EtatAdministratif {
     F,
 }
 
-#[derive(Debug, Default, Deserialize, IntoParams)]
+#[cfg(feature = "geocoding")]
+pub const DEFAULT_GEOCODING_RADIUS: f64 = 500.0;
+#[cfg(feature = "geocoding")]
+pub const DEFAULT_GEOCODING_MIN_SCORE: f32 = 0.5;
+
+#[derive(Debug, Default, Clone, Deserialize, IntoParams)]
 pub struct EtablissementSearchParams {
     pub q: Option<String>,
     /// Plain-text commune label ("paris", "saint etienne", "marseile"), resolved
@@ -202,6 +207,11 @@ pub struct EtablissementSearchParams {
     /// Resume position returned by `next_cursor`. Requires `sort=siret`, excludes
     /// `offset`, and walks past the 10,000-result offset ceiling.
     pub cursor: Option<String>,
+    /// Free-text address to geocode. Mutually exclusive with lat/lng.
+    pub address: Option<String>,
+    /// Minimum geocoding score to accept a result (default: 0.5).
+    #[cfg(feature = "geocoding")]
+    pub geocoding_min_score: Option<f32>,
 }
 
 #[derive(Debug, QueryableByName, Serialize, ToSchema)]
