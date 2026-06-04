@@ -1,6 +1,6 @@
 [package]
 name = "sirene"
-version = "6.4.3"
+version = "6.4.4"
 authors = ["Julien Blatecky <julien.blatecky@creatiwity.net>"]
 edition = "2024"
 
@@ -71,8 +71,8 @@ zip = "8.6"
 
 [profile.release]
 incremental = false
-lto = "thin"           # ThinLTO pour réduire la taille binaire sans sacrifier les perfs
-codegen-units = 1      # Meilleure optimisation (mais compilation plus lente)
+lto = "thin"        # ThinLTO pour réduire la taille binaire sans sacrifier les perfs
+codegen-units = 1   # Meilleure optimisation (mais compilation plus lente)
 
 [target.x86_64-unknown-linux-musl]
 rustflags = ["-Ctarget-cpu=native", "-Ctarget-feature=+avx2,+bmi2"]
