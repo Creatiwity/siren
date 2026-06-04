@@ -1,5 +1,5 @@
 apiVersion: v2
-name: app
+name: siren
 description: A Helm chart for Siren
 
 # A chart can be either an 'application' or a 'library' chart.
@@ -21,4 +21,4 @@ version: 1.0.0
 # incremented each time you make changes to the application. Versions are not expected to
 # follow Semantic Versioning. They should reflect the version the application is using.
 # It is recommended to use it with quotes.
-appVersion: "v6.4.3"
+appVersion: "v6.4.4"
