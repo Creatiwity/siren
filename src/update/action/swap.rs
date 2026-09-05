@@ -55,16 +55,26 @@ impl Action for SwapAction {
         let model = group_type.get_updatable_model();
 
         if !self.force {
-            let count = model.count(connectors).await? as f64;
             let count_staging = model.count_staging(connectors).await? as f64;
 
-            let max_count_staging = count * 1.01;
-            let min_count_staging = count * 0.99;
+            if group_type == GroupType::SirenDoublons {
+                // The volume of siren doublons varies too much from month to month for the
+                // ±1% check below to be meaningful, so we only make sure at least one row
+                // was loaded in staging.
+                if count_staging == 0.0 {
+                    return Err(Error::SwapStoppedNoDataLoaded { group_type });
+                }
+            } else {
+                let count = model.count(connectors).await? as f64;
 
-            if count != 0.0
-                && (count_staging < min_count_staging || max_count_staging < count_staging)
-            {
-                return Err(Error::SwapStoppedTooMuchDifference { group_type });
+                let max_count_staging = count * 1.01;
+                let min_count_staging = count * 0.99;
+
+                if count != 0.0
+                    && (count_staging < min_count_staging || max_count_staging < count_staging)
+                {
+                    return Err(Error::SwapStoppedTooMuchDifference { group_type });
+                }
             }
         }
 
