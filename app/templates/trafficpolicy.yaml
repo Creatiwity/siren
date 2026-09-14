@@ -1,0 +1,38 @@
+{{/* Puts the /v3 route behind an external authorization service, which resolves
+     the caller's api key and injects the identity and tier headers the API sees.
+
+     The GatewayExtension it references is not created here: it belongs next to
+     the ext auth service itself, so that service's backendRef stays
+     same-namespace and needs no ReferenceGrant. Naming it across namespaces from
+     here is allowed under kgateway's default PERMISSIVE reference-grant mode,
+     which gates backendRef and secretRef but not extensionRef. Under STRICT it
+     additionally needs a ReferenceGrant, in the extension's namespace, for this
+     namespace.
+
+     Only the /v3 route is covered. /scalar, /admin and the health check are on
+     the other HTTPRoute and stay reachable without an api key. */}}
+{{- if .Values.extAuth.enabled -}}
+{{- if not .Values.gateway.enabled -}}
+{{- fail "extAuth.enabled requires gateway.enabled: there is no HTTPRoute to attach to" -}}
+{{- end -}}
+{{- if not .Values.extAuth.extensionRef.name -}}
+{{- fail "extAuth.enabled requires extAuth.extensionRef.name: the GatewayExtension describing the auth service" -}}
+{{- end -}}
+apiVersion: gateway.kgateway.dev/v1alpha1
+kind: TrafficPolicy
+metadata:
+  name: {{ include "app.fullname" . }}
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: {{ include "app.fullname" . }}-api
+  extAuth:
+    extensionRef:
+      name: {{ .Values.extAuth.extensionRef.name }}
+      {{- with .Values.extAuth.extensionRef.namespace }}
+      namespace: {{ . }}
+      {{- end }}
+{{- end }}

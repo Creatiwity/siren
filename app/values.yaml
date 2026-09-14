@@ -72,6 +72,37 @@ ingress:
   #    hosts:
   #      - siren-api.local
 
+# Gateway API routing, as an alternative to the Ingress above. Never enable both
+# for the same host while either carries a certificate annotation.
+gateway:
+  enabled: false
+  # Annotations on the ListenerSet, e.g. cert-manager.io/cluster-issuer.
+  annotations: {}
+  # The Gateway this ListenerSet attaches to. Required when enabled.
+  parentRef:
+    name: ""
+    # Defaults to the release namespace when empty.
+    namespace: ""
+  hosts:
+    - host: siren-api.local
+  # Pins the TLS secret per host. Defaults to "<fullname>-tls" when unset.
+  tls: []
+  #  - secretName: siren-api-tls
+  #    hosts:
+  #      - siren-api.local
+
+# extAuth -- Puts the /v3 route behind an external authorization service, which
+# resolves the caller's api key and injects its identity and tier. /scalar,
+# /admin and the health check are on a separate route and stay open.
+# The GatewayExtension named here is created by the chart that owns the auth
+# service, not by this one.
+extAuth:
+  enabled: false
+  extensionRef:
+    name: ""
+    # Defaults to the release namespace when empty.
+    namespace: ""
+
 resources: {}
   # We usually recommend not to specify default resources and to leave this as a conscious
   # choice for the user. This also increases chances charts run on environments with little
