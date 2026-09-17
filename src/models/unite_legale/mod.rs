@@ -33,6 +33,7 @@ pub async fn get(connection: &mut Connection, siren: &str) -> Result<UniteLegale
 struct SearchPlan<'a> {
     text: search::TextMatch<'a>,
     facets: &'a [String],
+    cursor: Option<&'a str>,
     sort: UniteLegaleSortField,
     direction: SortDirection,
     limit: i64,
@@ -43,8 +44,25 @@ pub async fn search(
     connection: &mut Connection,
     params: &UniteLegaleSearchParams,
 ) -> Result<UniteLegaleSearchOutput, Error> {
-    let limit = params.limit.unwrap_or(20).clamp(1, 100);
-    let offset = params.offset.unwrap_or(0).clamp(0, 10_000);
+    let cursor = params
+        .cursor
+        .as_deref()
+        .map(str::trim)
+        .filter(|cursor| !cursor.is_empty())
+        .and_then(search::decode_cursor);
+
+    // Primary-key order costs a bounded index walk per page, so it can afford
+    // wider pages than offset pagination.
+    let max_limit = match params.sort {
+        Some(UniteLegaleSortField::Siren) => search::CURSOR_LIMIT_MAX,
+        _ => 100,
+    };
+    let limit = params.limit.unwrap_or(20).clamp(1, max_limit);
+    let offset = if cursor.is_some() {
+        0
+    } else {
+        params.offset.unwrap_or(0).clamp(0, 10_000)
+    };
 
     let q = params
         .q
@@ -57,7 +75,11 @@ pub async fn search(
     } else {
         UniteLegaleSortField::DateCreation
     });
-    let direction = params.direction.unwrap_or(SortDirection::Desc);
+    let direction = params.direction.unwrap_or(match sort {
+        // Export order follows the primary key.
+        UniteLegaleSortField::Siren => SortDirection::Asc,
+        _ => SortDirection::Desc,
+    });
 
     let facets =
         search::requested_facets(params.facette.as_deref(), search::UNITE_LEGALE_FACET_FIELDS);
@@ -73,6 +95,7 @@ pub async fn search(
             None => search::TextMatch::None,
         },
         facets: &facets,
+        cursor: cursor.as_deref(),
         sort,
         direction,
         limit,
@@ -196,6 +219,17 @@ async fn execute(
         params.date_debut_max,
     );
 
+    // Keyset resume: a plain bound on the primary key, served by its index. The
+    // cursor was already validated as a digit string.
+    if let Some(cursor) = plan.cursor {
+        binder.keyset(
+            &mut conditions,
+            "u.siren",
+            matches!(plan.direction, SortDirection::Asc),
+            cursor,
+        );
+    }
+
     let dir = match plan.direction {
         SortDirection::Asc => "ASC",
         SortDirection::Desc => "DESC",
@@ -204,6 +238,7 @@ async fn execute(
         UniteLegaleSortField::Relevance => format!("score {dir}"),
         UniteLegaleSortField::DateCreation => format!("u.date_creation {dir} NULLS LAST"),
         UniteLegaleSortField::DateDebut => format!("u.date_debut {dir} NULLS LAST"),
+        UniteLegaleSortField::Siren => format!("u.siren {dir}"),
     };
 
     let where_clause = if conditions.is_empty() {
@@ -239,6 +274,15 @@ async fn execute(
     )
     .await;
 
+    // A full page suggests more to come. Only primary-key order is total and
+    // stable enough to resume from.
+    let next_cursor = match plan.sort {
+        UniteLegaleSortField::Siren if results.len() as i64 == plan.limit => results
+            .last()
+            .map(|last| search::encode_cursor(&last.siren)),
+        _ => None,
+    };
+
     Ok(UniteLegaleSearchOutput {
         results,
         total,
@@ -249,6 +293,7 @@ async fn execute(
         direction: plan.direction,
         suggestion: None,
         facettes,
+        next_cursor,
     })
 }
 

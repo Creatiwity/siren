@@ -141,6 +141,9 @@ pub enum EtablissementSortField {
     DateDebut,
     Distance,
     Relevance,
+    /// Primary-key order, the only sort accepting `cursor`: the only one where
+    /// keyset resume is both exact and index-served, at constant cost per page.
+    Siret,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, ToSchema)]
@@ -196,6 +199,9 @@ pub struct EtablissementSearchParams {
     pub direction: Option<SortDirection>,
     pub limit: Option<i64>,
     pub offset: Option<i64>,
+    /// Resume position returned by `next_cursor`. Requires `sort=siret`, excludes
+    /// `offset`, and walks past the 10,000-result offset ceiling.
+    pub cursor: Option<String>,
 }
 
 #[derive(Debug, QueryableByName, Serialize, ToSchema)]
@@ -243,6 +249,7 @@ pub struct EtablissementSearchOutput {
     pub direction: SortDirection,
     pub suggestion: Option<String>,
     pub facettes: Facets,
+    pub next_cursor: Option<String>,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -264,6 +271,10 @@ pub struct EtablissementSearchResponse {
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     #[schema(value_type = Object)]
     pub facettes: Facets,
+    /// Position to pass as `cursor` for the next page. Absent on the last page,
+    /// or when the sort does not support cursor resume.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub next_cursor: Option<String>,
 }
 
 #[derive(Debug, Serialize, ToSchema)]

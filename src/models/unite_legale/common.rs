@@ -94,6 +94,8 @@ pub enum UniteLegaleSortField {
     DateCreation,
     DateDebut,
     Relevance,
+    /// Primary-key order, the only sort accepting `cursor`.
+    Siren,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, ToSchema)]
@@ -142,6 +144,9 @@ pub struct UniteLegaleSearchParams {
     pub direction: Option<SortDirection>,
     pub limit: Option<i64>,
     pub offset: Option<i64>,
+    /// Resume position returned by `next_cursor`. Requires `sort=siren` and
+    /// excludes `offset`.
+    pub cursor: Option<String>,
 }
 
 #[derive(Debug, QueryableByName, Serialize, ToSchema)]
@@ -180,6 +185,7 @@ pub struct UniteLegaleSearchOutput {
     pub direction: SortDirection,
     pub suggestion: Option<String>,
     pub facettes: Facets,
+    pub next_cursor: Option<String>,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -201,6 +207,9 @@ pub struct UniteLegaleSearchResponse {
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     #[schema(value_type = Object)]
     pub facettes: Facets,
+    /// Position to pass as `cursor` for the next page.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub next_cursor: Option<String>,
 }
 
 #[derive(Debug, Serialize, ToSchema)]

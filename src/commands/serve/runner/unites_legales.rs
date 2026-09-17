@@ -93,6 +93,12 @@ async fn search_unites_legales(
             params.facette.as_deref(),
             models::search::UNITE_LEGALE_FACET_FIELDS,
         ),
+        models::search::check_cursor(
+            params.cursor.as_deref(),
+            matches!(params.sort, Some(UniteLegaleSortField::Siren)),
+            "siren",
+            params.offset,
+        ),
     ] {
         check.map_err(|message| Error::InvalidSearchParams { message })?;
     }
@@ -120,6 +126,7 @@ async fn search_unites_legales(
         direction,
         suggestion,
         facettes,
+        next_cursor,
     } = output;
 
     Ok(Json(UniteLegaleSearchResponse {
@@ -147,6 +154,7 @@ async fn search_unites_legales(
         direction,
         suggestion,
         facettes,
+        next_cursor,
     }))
 }
 

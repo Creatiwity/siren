@@ -6,9 +6,9 @@ use diesel::sql_query;
 use diesel::sql_types::Text;
 use diesel_async::RunQueryDsl;
 
-use crate::models::etablissement::common::EtablissementSearchParams;
+use crate::models::etablissement::common::{EtablissementSearchParams, EtablissementSortField};
 use crate::models::search;
-use crate::models::unite_legale::common::UniteLegaleSearchParams;
+use crate::models::unite_legale::common::{UniteLegaleSearchParams, UniteLegaleSortField};
 use crate::models::{etablissement, unite_legale};
 use crate::tests::require_database;
 
@@ -520,4 +520,176 @@ async fn unite_legale_faute_de_frappe() {
             .contains("carrefour")),
         "la correction doit ramener CARREFOUR"
     );
+}
+
+#[tokio::test]
+async fn curseur_parcourt_sans_trou_ni_doublon() {
+    let mut connection = require_database!();
+
+    // Three cursor pages must reconstitute exactly the same sequence as the same
+    // range read in one go.
+    let reference = EtablissementSearchParams {
+        sort: Some(EtablissementSortField::Siret),
+        limit: Some(30),
+        ..etablissement_params()
+    };
+    let reference = etablissement::search(&mut connection, &reference)
+        .await
+        .unwrap();
+    let expected: Vec<String> = reference.results.iter().map(|r| r.siret.clone()).collect();
+    assert_eq!(expected.len(), 30);
+
+    let mut collected: Vec<String> = Vec::new();
+    let mut cursor: Option<String> = None;
+    for _ in 0..3 {
+        let page = EtablissementSearchParams {
+            sort: Some(EtablissementSortField::Siret),
+            limit: Some(10),
+            cursor: cursor.clone(),
+            ..etablissement_params()
+        };
+        let page = etablissement::search(&mut connection, &page).await.unwrap();
+        collected.extend(page.results.iter().map(|r| r.siret.clone()));
+        cursor = page.next_cursor;
+        assert!(
+            cursor.is_some(),
+            "une page pleine doit annoncer la suivante"
+        );
+    }
+
+    assert_eq!(collected, expected);
+}
+
+#[tokio::test]
+async fn curseur_respecte_les_filtres() {
+    let mut connection = require_database!();
+
+    let first = EtablissementSearchParams {
+        commune: Some("paris".to_string()),
+        sort: Some(EtablissementSortField::Siret),
+        limit: Some(10),
+        ..etablissement_params()
+    };
+    let first = etablissement::search(&mut connection, &first)
+        .await
+        .unwrap();
+    assert_eq!(first.results.len(), 10);
+
+    let second = EtablissementSearchParams {
+        commune: Some("paris".to_string()),
+        sort: Some(EtablissementSortField::Siret),
+        limit: Some(10),
+        cursor: first.next_cursor.clone(),
+        ..etablissement_params()
+    };
+    let second = etablissement::search(&mut connection, &second)
+        .await
+        .unwrap();
+
+    assert!(
+        second.results.iter().all(|r| r
+            .libelle_commune
+            .as_deref()
+            .unwrap_or_default()
+            .to_lowercase()
+            .contains("paris")),
+        "le filtre doit continuer de s'appliquer apres reprise"
+    );
+    let last_of_first = first.results.last().unwrap().siret.clone();
+    assert!(
+        second.results.iter().all(|r| r.siret > last_of_first),
+        "aucune ligne deja rendue ne doit reapparaitre"
+    );
+}
+
+#[tokio::test]
+async fn curseur_va_au_dela_du_plafond_de_decalage() {
+    let mut connection = require_database!();
+
+    // 10,000 is the `offset` ceiling, crossed here in pages of 1,000.
+    let mut cursor: Option<String> = None;
+    let mut seen = 0usize;
+    for _ in 0..12 {
+        let page = EtablissementSearchParams {
+            sort: Some(EtablissementSortField::Siret),
+            limit: Some(1_000),
+            cursor: cursor.clone(),
+            ..etablissement_params()
+        };
+        let page = etablissement::search(&mut connection, &page).await.unwrap();
+        seen += page.results.len();
+        cursor = page.next_cursor;
+    }
+
+    assert!(
+        seen > 10_000,
+        "le curseur doit depasser le plafond de offset, vu {seen}"
+    );
+}
+
+#[tokio::test]
+async fn curseur_absent_sur_la_derniere_page() {
+    let mut connection = require_database!();
+
+    let params = EtablissementSearchParams {
+        q: Some("boulangerie du village".to_string()),
+        sort: Some(EtablissementSortField::Siret),
+        limit: Some(100),
+        ..etablissement_params()
+    };
+    let output = etablissement::search(&mut connection, &params)
+        .await
+        .unwrap();
+
+    assert!(output.results.len() < 100, "page incomplete attendue");
+    assert!(
+        output.next_cursor.is_none(),
+        "une page incomplete ne doit pas annoncer de suite"
+    );
+}
+
+#[tokio::test]
+async fn curseur_ignore_sur_les_autres_tris() {
+    let mut connection = require_database!();
+
+    // The 400 lives in the HTTP runner; at model level a non-resumable sort must
+    // simply not emit a cursor.
+    let params = EtablissementSearchParams {
+        q: Some("carrefour".to_string()),
+        limit: Some(20),
+        ..etablissement_params()
+    };
+    let output = etablissement::search(&mut connection, &params)
+        .await
+        .unwrap();
+
+    assert!(!output.results.is_empty());
+    assert!(output.next_cursor.is_none());
+}
+
+#[tokio::test]
+async fn curseur_unite_legale() {
+    let mut connection = require_database!();
+
+    let first = UniteLegaleSearchParams {
+        sort: Some(UniteLegaleSortField::Siren),
+        limit: Some(10),
+        ..unite_legale_params()
+    };
+    let first = unite_legale::search(&mut connection, &first).await.unwrap();
+    assert_eq!(first.results.len(), 10);
+    assert!(first.next_cursor.is_some());
+
+    let second = UniteLegaleSearchParams {
+        sort: Some(UniteLegaleSortField::Siren),
+        limit: Some(10),
+        cursor: first.next_cursor.clone(),
+        ..unite_legale_params()
+    };
+    let second = unite_legale::search(&mut connection, &second)
+        .await
+        .unwrap();
+
+    let last_of_first = first.results.last().unwrap().siren.clone();
+    assert!(second.results.iter().all(|r| r.siren > last_of_first));
 }
