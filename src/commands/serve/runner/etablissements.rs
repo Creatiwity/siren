@@ -5,8 +5,8 @@ use super::common::{
 use super::error::Error;
 use crate::models;
 use crate::models::etablissement::common::{
-    EtablissementSearchParams, EtablissementSearchResponse, EtablissementSearchResultResponse,
-    EtablissementSortField,
+    EtablissementSearchOutput, EtablissementSearchParams, EtablissementSearchResponse,
+    EtablissementSearchResultResponse, EtablissementSortField,
 };
 use crate::models::etablissement::error::Error as EtablissementModelError;
 use axum::{
@@ -104,6 +104,24 @@ async fn search_etablissements(
         });
     }
 
+    // The same three rules are stated once in `models::search`; the model layer
+    // degrades gracefully instead, the HTTP layer prefers to say so.
+    for check in [
+        models::search::check_query_length(params.q.as_deref()),
+        models::search::check_facets(
+            params.facette.as_deref(),
+            models::search::ETABLISSEMENT_FACET_FIELDS,
+        ),
+        models::search::check_cursor(
+            params.cursor.as_deref(),
+            matches!(params.sort, Some(EtablissementSortField::Siret)),
+            "siret",
+            params.offset,
+        ),
+    ] {
+        check.map_err(|message| Error::InvalidSearchParams { message })?;
+    }
+
     match params.sort {
         Some(EtablissementSortField::Distance) if !has_all_geo => {
             return Err(Error::InvalidSearchParams {
@@ -122,11 +140,21 @@ async fn search_etablissements(
     let mut connection = connectors.local.pool.get().await?;
 
     let output = models::etablissement::search(&mut connection, &params).await?;
-    let total = output.total;
+    let EtablissementSearchOutput {
+        results,
+        total,
+        total_capped,
+        limit,
+        offset,
+        sort,
+        direction,
+        suggestion,
+        facettes,
+        next_cursor,
+    } = output;
 
     Ok(Json(EtablissementSearchResponse {
-        etablissements: output
-            .results
+        etablissements: results
             .into_iter()
             .map(|r| EtablissementSearchResultResponse {
                 siret: r.siret,
@@ -147,10 +175,14 @@ async fn search_etablissements(
             })
             .collect(),
         total,
-        limit: output.limit,
-        offset: output.offset,
-        sort: output.sort,
-        direction: output.direction,
+        total_capped,
+        limit,
+        offset,
+        sort,
+        direction,
+        suggestion,
+        facettes,
+        next_cursor,
     }))
 }
 

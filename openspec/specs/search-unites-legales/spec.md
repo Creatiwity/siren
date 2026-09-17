@@ -10,8 +10,19 @@ The system SHALL allow searching legal units by text query on denomination via t
 #### Scenario: Text search on denomination
 
 - **WHEN** a GET request is made to `/v3/unites_legales?q=creati`
-- **THEN** the system returns legal units whose `search_denomination` matches the query using BM25 ngram search
+- **THEN** the system returns legal units whose `denomination` or `denomination_usuelle_1..3` matches the query using PostgreSQL full-text search
 - **AND** each result includes a `score` field with the text relevance score
+
+#### Scenario: Query shorter than three characters
+
+- **WHEN** a GET request is made to `/v3/unites_legales?q=le`
+- **THEN** the system responds with a 400 error indicating that `q` must be at least 3 characters long
+
+#### Scenario: Suggestion on empty results
+
+- **WHEN** a text search returns no legal unit and a close term exists in the corpus
+- **THEN** the response includes a `suggestion` field with the reformulated query
+- **AND** the `suggestion` field is absent when the search returns at least one result
 
 #### Scenario: No text query provided
 
@@ -66,12 +77,12 @@ The system SHALL allow sorting search results via `sort` and `direction` query p
 #### Scenario: Sort by relevance
 
 - **WHEN** a GET request is made to `/v3/unites_legales?q=creati&sort=relevance`
-- **THEN** results are sorted by BM25 text relevance score descending (most relevant first)
+- **THEN** results are sorted by full-text relevance score descending (most relevant first)
 
 #### Scenario: Sort by relevance ascending
 
 - **WHEN** a GET request is made to `/v3/unites_legales?q=creati&sort=relevance&direction=asc`
-- **THEN** results are sorted by BM25 text relevance score ascending (least relevant first)
+- **THEN** results are sorted by full-text relevance score ascending (least relevant first)
 
 #### Scenario: Sort by date_creation
 
@@ -108,6 +119,43 @@ The system SHALL allow sorting search results via `sort` and `direction` query p
 - **WHEN** a GET request is made to `/v3/unites_legales?sort=relevance` without a `q` parameter
 - **THEN** the system responds with a 400 error
 
+### Requirement: Filter unites legales by multiple values and exclusions
+
+The system SHALL accept comma-separated values on `activite_principale`, `categorie_juridique` and `categorie_entreprise`, and their `_not` counterparts for exclusion. Unités whose field is null are kept by an exclusion.
+
+#### Scenario: Several legal categories
+
+- **WHEN** a GET request is made to `/v3/unites_legales?categorie_juridique=5710,5499`
+- **THEN** only legal units matching one of the two are returned
+
+#### Scenario: Exclude an activity
+
+- **WHEN** a GET request is made to `/v3/unites_legales?activite_principale_not=62.01Z`
+- **THEN** no returned legal unit has that activity
+
+### Requirement: Filter unites legales by date range
+
+The system SHALL allow bounding `date_creation` and `date_debut` via `date_creation_min`, `date_creation_max`, `date_debut_min` and `date_debut_max`. The pre-existing exact-match parameters `date_creation` and `date_debut` remain accepted.
+
+#### Scenario: Bounded range
+
+- **WHEN** a GET request is made to `/v3/unites_legales?date_creation_min=2024-01-01&date_creation_max=2024-12-31`
+- **THEN** only legal units created within that range are returned
+
+### Requirement: Facet unite legale search results
+
+The system SHALL compute value counts for the fields listed in `facette`, over the same capped subset used for `total`. Allowed fields are `etat_administratif`, `activite_principale`, `categorie_juridique` and `categorie_entreprise`.
+
+#### Scenario: Request facets
+
+- **WHEN** a GET request is made to `/v3/unites_legales?q=carrefour&facette=categorie_juridique`
+- **THEN** the response contains a `facettes` object with the counts per legal category
+
+#### Scenario: Unknown facet field
+
+- **WHEN** a GET request is made to `/v3/unites_legales?facette=siren`
+- **THEN** the system responds with a 400 error listing the allowed fields
+
 ### Requirement: Paginate unite legale search results
 
 The system SHALL support pagination via `limit` and `offset` query parameters.
@@ -131,6 +179,21 @@ The system SHALL support pagination via `limit` and `offset` query parameters.
 
 - **WHEN** a GET request is made to `/v3/unites_legales?offset=20000`
 - **THEN** the system caps the offset to 10000
+
+### Requirement: Paginate unites legales by cursor
+
+The system SHALL support keyset pagination via an opaque `cursor` parameter, requiring `sort=siren`, mutually exclusive with `offset`, allowing pages of up to 1 000 results.
+
+#### Scenario: Traverse with a cursor
+
+- **WHEN** a GET request is made to `/v3/unites_legales?sort=siren&limit=1000`
+- **THEN** the response includes `next_cursor`
+- **AND** replaying the request with that `cursor` returns the following results, with neither gap nor repetition
+
+#### Scenario: Cursor requires the primary-key sort
+
+- **WHEN** a GET request combines `cursor` with any sort other than `siren`
+- **THEN** the system responds with a 400 error
 
 ### Requirement: Search response format for unites legales
 

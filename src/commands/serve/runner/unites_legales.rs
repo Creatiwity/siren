@@ -2,8 +2,8 @@ use super::common::{Context, UniteLegaleInnerResponse, UniteLegaleResponse};
 use super::error::Error;
 use crate::models;
 use crate::models::unite_legale::common::{
-    UniteLegaleSearchParams, UniteLegaleSearchResponse, UniteLegaleSearchResultResponse,
-    UniteLegaleSortField,
+    UniteLegaleSearchOutput, UniteLegaleSearchParams, UniteLegaleSearchResponse,
+    UniteLegaleSearchResultResponse, UniteLegaleSortField,
 };
 use crate::models::unite_legale::error::Error as UniteLegaleModelError;
 use axum::{
@@ -85,6 +85,24 @@ async fn search_unites_legales(
     State(context): State<Arc<Context>>,
     Query(params): Query<UniteLegaleSearchParams>,
 ) -> Result<Json<UniteLegaleSearchResponse>, Error> {
+    // The same three rules are stated once in `models::search`; the model layer
+    // degrades gracefully instead, the HTTP layer prefers to say so.
+    for check in [
+        models::search::check_query_length(params.q.as_deref()),
+        models::search::check_facets(
+            params.facette.as_deref(),
+            models::search::UNITE_LEGALE_FACET_FIELDS,
+        ),
+        models::search::check_cursor(
+            params.cursor.as_deref(),
+            matches!(params.sort, Some(UniteLegaleSortField::Siren)),
+            "siren",
+            params.offset,
+        ),
+    ] {
+        check.map_err(|message| Error::InvalidSearchParams { message })?;
+    }
+
     match params.sort {
         Some(UniteLegaleSortField::Relevance) if params.q.is_none() => {
             return Err(Error::InvalidSearchParams {
@@ -98,11 +116,21 @@ async fn search_unites_legales(
     let mut connection = connectors.local.pool.get().await?;
 
     let output = models::unite_legale::search(&mut connection, &params).await?;
-    let total = output.total;
+    let UniteLegaleSearchOutput {
+        results,
+        total,
+        total_capped,
+        limit,
+        offset,
+        sort,
+        direction,
+        suggestion,
+        facettes,
+        next_cursor,
+    } = output;
 
     Ok(Json(UniteLegaleSearchResponse {
-        unites_legales: output
-            .results
+        unites_legales: results
             .into_iter()
             .map(|r| UniteLegaleSearchResultResponse {
                 siren: r.siren,
@@ -119,10 +147,14 @@ async fn search_unites_legales(
             })
             .collect(),
         total,
-        limit: output.limit,
-        offset: output.offset,
-        sort: output.sort,
-        direction: output.direction,
+        total_capped,
+        limit,
+        offset,
+        sort,
+        direction,
+        suggestion,
+        facettes,
+        next_cursor,
     }))
 }
 

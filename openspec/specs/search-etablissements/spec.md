@@ -5,24 +5,61 @@ TBD - created by archiving change 2026-02-06-add-search-endpoints. Update Purpos
 ## Requirements
 ### Requirement: Search etablissements with text query
 
-The system SHALL allow searching establishments by text query on denomination and commune name via the `q` query parameter on `GET /v3/etablissements`.
+The system SHALL allow searching establishments by text query on denomination and enseigne fields via the `q` query parameter on `GET /v3/etablissements`. Commune names are NOT part of the text index; they are addressed by the dedicated `commune` parameter.
 
 #### Scenario: Text search on denomination
 
 - **WHEN** a GET request is made to `/v3/etablissements?q=creati`
-- **THEN** the system returns establishments whose `search_denomination` matches the query using BM25 ngram search
+- **THEN** the system returns establishments whose `denomination_usuelle`, `enseigne_1`, `enseigne_2` or `enseigne_3` matches the query using PostgreSQL full-text search
 - **AND** each result includes a `score` field with the text relevance score
 
-#### Scenario: Text search on commune name
+#### Scenario: Multiple words are combined with AND
 
-- **WHEN** a GET request is made to `/v3/etablissements?q=paris`
-- **THEN** the system also matches against `libelle_commune` using BM25 ngram search
+- **WHEN** a GET request is made to `/v3/etablissements?q=boulangerie+du+village`
+- **THEN** only establishments matching every significant term are returned
+
+#### Scenario: Query shorter than three characters
+
+- **WHEN** a GET request is made to `/v3/etablissements?q=le`
+- **THEN** the system responds with a 400 error indicating that `q` must be at least 3 characters long
 
 #### Scenario: No text query provided
 
 - **WHEN** a GET request is made to `/v3/etablissements` without a `q` parameter
 - **THEN** the system returns establishments without text filtering
 - **AND** the `score` field is absent from results
+
+### Requirement: Tolerate misspellings in text queries
+
+The system SHALL tolerate misspelled query terms without losing exact matches.
+
+#### Scenario: Misspelled term is augmented, never replaced
+
+- **WHEN** a GET request is made to `/v3/etablissements?q=carefour`
+- **THEN** the system searches for both the typed term and the corrected term
+- **AND** establishments literally named `carefour` are still returned alongside `CARREFOUR`
+
+#### Scenario: Rare but correct name is preserved
+
+- **WHEN** a GET request is made with a rare legitimate name that resembles a more frequent word
+- **THEN** the system still returns the establishments matching the typed name
+
+#### Scenario: Suggestion on empty results
+
+- **WHEN** a text search returns no establishment and a close term exists in the corpus
+- **THEN** the response includes a `suggestion` field with the reformulated query
+- **AND** the `suggestion` field is absent when the search returns at least one result
+
+#### Scenario: Trigram fallback
+
+- **WHEN** a text search returns no establishment through full-text search
+- **THEN** the system retries once with trigram similarity before returning an empty result set
+
+#### Scenario: Phonetic correction
+
+- **WHEN** a GET request is made to `/v3/etablissements?q=filipe`
+- **THEN** the system also searches for the phonetically equivalent corpus term `philippe`
+- **AND** the phonetic source is consulted only when trigram similarity yields no candidate
 
 ### Requirement: Filter etablissements by field values
 
@@ -64,6 +101,97 @@ The system SHALL allow filtering establishments by exact field values via query 
 - **THEN** the system applies all filters together (AND logic)
 - **AND** only establishments matching all criteria are returned
 
+### Requirement: Filter etablissements by multiple values
+
+The system SHALL accept several comma-separated values on `code_postal`, `code_commune`, `siren` and `activite_principale`, and SHALL return establishments matching any of them.
+
+#### Scenario: Several postal codes
+
+- **WHEN** a GET request is made to `/v3/etablissements?code_postal=75001,75002`
+- **THEN** only establishments whose postal code is one of the two are returned
+
+#### Scenario: Single value stays valid
+
+- **WHEN** a GET request is made to `/v3/etablissements?code_postal=75001`
+- **THEN** the behaviour is unchanged from the single-value form
+
+### Requirement: Exclude etablissements by field values
+
+The system SHALL allow excluding values via `code_postal_not`, `code_commune_not` and `activite_principale_not`. Establishments whose field is null are kept: excluding a value is not a statement about unknown values.
+
+#### Scenario: Exclude an activity
+
+- **WHEN** a GET request is made to `/v3/etablissements?q=boulangerie&activite_principale_not=10.71C`
+- **THEN** no returned establishment has `activite_principale = '10.71C'`
+
+#### Scenario: Null values survive exclusion
+
+- **WHEN** an exclusion filter is applied
+- **THEN** establishments with no value for that field are still returned
+
+### Requirement: Filter etablissements by date range
+
+The system SHALL allow bounding `date_creation` and `date_debut` via `date_creation_min`, `date_creation_max`, `date_debut_min` and `date_debut_max`. Both bounds are inclusive and each is optional.
+
+#### Scenario: Bounded range
+
+- **WHEN** a GET request is made to `/v3/etablissements?date_creation_min=2024-01-01&date_creation_max=2024-12-31`
+- **THEN** only establishments created within that range are returned
+
+#### Scenario: Open-ended range
+
+- **WHEN** a GET request is made to `/v3/etablissements?date_creation_min=2024-01-01`
+- **THEN** only establishments created on or after that date are returned
+
+### Requirement: Facet etablissement search results
+
+The system SHALL compute value counts for the fields listed in the `facette` query parameter, over the same capped subset used for `total`. Allowed fields are `etat_administratif`, `code_postal`, `code_commune`, `activite_principale` and `etablissement_siege`.
+
+#### Scenario: Request facets
+
+- **WHEN** a GET request is made to `/v3/etablissements?q=boulangerie&facette=activite_principale,code_commune`
+- **THEN** the response contains a `facettes` object with one entry per requested field
+- **AND** each entry lists values sorted by descending count
+
+#### Scenario: Facets are absent when not requested
+
+- **WHEN** a GET request is made without `facette`
+- **THEN** the response contains no `facettes` field
+
+#### Scenario: Unknown facet field
+
+- **WHEN** a GET request is made to `/v3/etablissements?facette=siret`
+- **THEN** the system responds with a 400 error listing the allowed fields
+
+### Requirement: Filter etablissements by commune name
+
+The system SHALL allow filtering establishments by plain-text commune name via the `commune` query parameter. The name is resolved against a commune dimension, accent- and case-insensitively, matching each typed word as a prefix of any word of the commune name, with a fallback tolerant to misspellings.
+
+#### Scenario: Filter by commune name
+
+- **WHEN** a GET request is made to `/v3/etablissements?commune=paris`
+- **THEN** establishments located in a commune having a word starting with `paris` are returned — every Paris arrondissement, and also `LE TOUQUET-PARIS-PLAGE`
+
+#### Scenario: Match on any word of the commune name
+
+- **WHEN** a GET request is made to `/v3/etablissements?commune=etienne`
+- **THEN** establishments in `SAINT-ETIENNE` and other communes containing that word are returned
+
+#### Scenario: Misspelled commune name
+
+- **WHEN** a GET request is made to `/v3/etablissements?commune=marseile`
+- **THEN** the system falls back to trigram similarity and returns establishments in `MARSEILLE`
+
+#### Scenario: Unknown commune name
+
+- **WHEN** a GET request is made to `/v3/etablissements?commune=zzzzzz`
+- **THEN** the response contains an empty `etablissements` array and `total` is 0
+
+#### Scenario: Combine commune with a text query
+
+- **WHEN** a GET request is made to `/v3/etablissements?commune=paris&q=boulangerie`
+- **THEN** only establishments matching both the commune and the text query are returned
+
 ### Requirement: Geographic search on etablissements
 
 The system SHALL allow filtering establishments within a geographic radius from a reference point.
@@ -102,12 +230,12 @@ The system SHALL allow sorting search results via `sort` and `direction` query p
 #### Scenario: Sort by relevance
 
 - **WHEN** a GET request is made to `/v3/etablissements?q=creati&sort=relevance`
-- **THEN** results are sorted by BM25 text relevance score descending (most relevant first)
+- **THEN** results are sorted by full-text relevance score descending (most relevant first)
 
 #### Scenario: Sort by relevance ascending
 
 - **WHEN** a GET request is made to `/v3/etablissements?q=creati&sort=relevance&direction=asc`
-- **THEN** results are sorted by BM25 text relevance score ascending (least relevant first)
+- **THEN** results are sorted by full-text relevance score ascending (least relevant first)
 
 #### Scenario: Sort by date_creation
 
@@ -173,6 +301,41 @@ The system SHALL support pagination via `limit` and `offset` query parameters.
 - **WHEN** a GET request is made to `/v3/etablissements?offset=20000`
 - **THEN** the system caps the offset to 10000
 
+### Requirement: Paginate etablissements by cursor
+
+The system SHALL support keyset pagination via an opaque `cursor` parameter, to traverse result sets beyond the 10 000 ceiling that `offset` enforces. Cursor pagination requires `sort=siret`, the only total and stable order backed by an index; it is mutually exclusive with `offset`, and allows pages of up to 1 000 results.
+
+#### Scenario: Traverse with a cursor
+
+- **WHEN** a GET request is made to `/v3/etablissements?sort=siret&limit=1000`
+- **THEN** the response includes `next_cursor`
+- **AND** replaying the request with that `cursor` returns the following results, with neither gap nor repetition
+
+#### Scenario: Last page
+
+- **WHEN** a cursor page returns fewer results than `limit`
+- **THEN** `next_cursor` is absent
+
+#### Scenario: Filters are preserved
+
+- **WHEN** a cursor request carries the same filters as the request that produced it
+- **THEN** the filters keep applying to the resumed page
+
+#### Scenario: Cursor requires the primary-key sort
+
+- **WHEN** a GET request combines `cursor` with any sort other than `siret`
+- **THEN** the system responds with a 400 error
+
+#### Scenario: Cursor excludes offset
+
+- **WHEN** a GET request provides both `cursor` and `offset`
+- **THEN** the system responds with a 400 error
+
+#### Scenario: Malformed cursor
+
+- **WHEN** a GET request provides a `cursor` that does not decode to a primary key
+- **THEN** the system responds with a 400 error rather than silently returning the first page
+
 ### Requirement: Search response format for etablissements
 
 The system SHALL return search results in a structured response with metadata.
@@ -184,6 +347,9 @@ The system SHALL return search results in a structured response with metadata.
 - **AND** the response includes `total` with the total count of matching results
 - **AND** the response includes `limit` and `offset` reflecting the applied pagination
 - **AND** the response includes `sort` and `direction` reflecting the resolved sort field and direction
+- **AND** the response includes `suggestion` only when the result set is empty and a close term exists
+- **AND** the response includes `total_capped`, `true` when `total` reached its ceiling
+- **AND** the response includes `next_cursor` only when paginating by cursor and a next page exists
 
 #### Scenario: Empty search results
 

@@ -295,7 +295,154 @@ Ce script (transactionnel) :
 6. Recrée les tables de staging pour hériter des nouveaux index et colonnes
 7. Désactive l'extension `pg_search`
 
-Les nouvelles installations n'ont pas besoin de ce script : les migrations Diesel utilisent directement `pg_trgm`.
+Les nouvelles installations n'ont pas besoin de ce script : les migrations Diesel
+utilisent directement `pg_trgm`. La migration `2026-09-15-120000_search_fts_commune`
+prend ensuite le relais et supprime `search_denomination`.
+
+## Recherche
+
+La recherche texte (`?q=`) repose sur le **full-text search natif de PostgreSQL**
+(`tsvector` / `tsquery`, configuration `french`), sans aucune extension. Trois
+mécanismes l'entourent :
+
+- **Correction de la requête.** `search_lexicon` contient le vocabulaire du
+  corpus avec sa fréquence documentaire. `public.search_query(q, source)` corrige
+  les mots suspects en s'appuyant sur les trigrammes puis sur la distance de
+  Levenshtein, et renvoie une `tsquery` **augmentée** : le mot saisi est conservé
+  et complété par `| correction`, jamais remplacé. Un nom rare et légitime reste
+  donc toujours trouvable.
+- **Repli trigramme.** Si le FTS ne ramène rien, la requête est rejouée une fois
+  avec `word_similarity`. Cela couvre les transpositions et la correspondance
+  infixe, au prix d'un index GIN supplémentaire. Ce chemin ne s'exécute jamais sur
+  une recherche qui aboutit.
+- **Correction phonétique.** Quand le trigramme ne propose aucun candidat, le
+  lexique est interrogé sur une clé phonétique (`metaphone` précédé du retrait
+  du `h` initial, muet en français). C'est ce qui relie `filipe` à `philippe`,
+  que la distance d'édition seule ne rapproche pas.
+- **Longueur minimale.** `q` doit faire au moins 3 caractères, sinon l'API répond
+  400. En dessous, aucune structure d'index n'est exploitable.
+
+`libelle_commune` ne fait **pas** partie du texte indexé. Les communes sont
+adressées par le paramètre `?commune=` en clair (`paris`, `saint etienne`,
+`marseile`), résolu via la table de dimension `commune_dim` : correspondance par
+préfixe sur chaque mot, repli trigramme tolérant aux fautes, puis filtrage sur
+`code_commune`.
+
+### Filtrer, exclure, borner
+
+Les filtres de liste acceptent plusieurs valeurs séparées par des virgules, et
+disposent tous d'un jumeau `_not` pour l'exclusion :
+
+```
+?code_postal=75001,75002
+?activite_principale=10.71C,47.24Z
+?activite_principale_not=10.71C
+```
+
+Une exclusion conserve les lignes dont le champ est nul : « pas 10.71C » ne dit
+rien des activités inconnues.
+
+Les dates se bornent avec `_min` / `_max`, chacun facultatif et inclusif :
+
+```
+?date_creation_min=2024-01-01&date_creation_max=2024-12-31
+?date_debut_min=2024-01-01
+```
+
+### Facettes
+
+`?facette=activite_principale,code_commune` renvoie les effectifs par valeur,
+calculés sur le même sous-ensemble borné que `total` — donc sans coût notable
+(6,5 ms mesurés). Les champs autorisés sont listés dans la documentation
+OpenAPI ; tout autre champ donne un 400 plutôt qu'un silence.
+
+```json
+{
+  "facettes": {
+    "activite_principale": [
+      { "valeur": "10.71C", "nombre": 7314 },
+      { "valeur": "10.71A", "nombre": 380 }
+    ]
+  }
+}
+```
+
+### Comptage
+
+`total` est plafonné à 10 000 : au-delà, le compte exact coûterait un parcours
+complet. `total_capped` vaut `true` quand ce plafond est atteint, pour que le
+client distingue « exactement 10 000 » de « au moins 10 000 ».
+
+### Pagination
+
+Par défaut, `limit` (20, max 100) et `offset` (max 10 000). Au-delà de ce
+plafond, la pagination par curseur :
+
+```
+GET /v3/etablissements?sort=siret&limit=1000
+→ { "etablissements": [...], "next_cursor": "MDA1NTgwMTIxMDAxMDA" }
+
+GET /v3/etablissements?sort=siret&limit=1000&cursor=MDA1NTgwMTIxMDAxMDA
+```
+
+`next_cursor` est absent sur la dernière page. Le curseur n'encode que la
+dernière clé primaire rendue : il n'est valide que rejoué avec les mêmes
+filtres. Un curseur illisible donne un 400, jamais un retour silencieux à la
+première page.
+
+Elle exige `sort=siret` (ou `sort=siren`) et s'exclut avec `offset`. Ce n'est
+pas une restriction arbitraire :
+
+- sur **pertinence** ou **distance**, la reprise par clé n'accélérerait rien —
+  le score et la distance se recalculent ligne à ligne, il n'y a aucun parcours
+  à raccourcir ;
+- sur une **date**, elle exigerait un index composé : mesuré, le groupe d'ex
+  æquo le plus dense compte 583 632 lignes et une reprise y coûte 38,8 s sans
+  lui ;
+- sur la **clé primaire**, l'index existe déjà et le coût par page est constant
+  — 57 ms par page de 1 000 lignes, mesuré sur un parcours de 20 000 lignes.
+
+C'est aussi la sémantique de l'API Insee, dont le tri par défaut est sur le
+siren.
+
+### Maintenance des données annexes
+
+Elles sont rafraîchies automatiquement par le workflow de mise à jour :
+
+- après le **swap du stock mensuel** : `public.search_refresh_full(source)`
+  reconstruit le lexique et `commune_dim`, puis relance `ANALYZE`. Sans ce
+  dernier, la table qui vient d'être renommée n'a pas de statistiques
+  représentatives et le planificateur repart en *seq scan* ;
+- après la **synchro quotidienne Insee** :
+  `public.search_refresh_incremental(source, since)` ne reparcourt que les lignes
+  touchées depuis `since` et fusionne leur vocabulaire.
+
+Aucune des deux opérations ne bloque les lectures : mesurées sous charge, elles
+laissent la latence de recherche inchangée (médiane 8,9 ms pendant une
+reconstruction complète de 78 s, contre 8,7 ms au repos, zéro attente de
+verrou).
+
+### Tests
+
+```bash
+cargo test                                          # tests unitaires seuls
+SIRENE_TEST_DATABASE_URL=… cargo test               # + tests d'intégration
+```
+
+Les tests d'intégration se mettent en sommeil sans `SIRENE_TEST_DATABASE_URL` ;
+la variable est volontairement distincte de `DATABASE_URL` pour qu'un
+`cargo test` ne puisse pas toucher la base de développement par accident.
+
+Deux garde-fous encadrent la recherche :
+
+- un test unitaire vérifie que l'expression construite par `src/models/search.rs`
+  figure mot pour mot dans le DDL des index ;
+- un test d'intégration lit le plan d'exécution et vérifie que PostgreSQL choisit
+  bien l'index.
+
+Ensemble, ils ferment la porte à une recherche qui repasserait silencieusement
+en *seq scan* — le mode de panne le plus coûteux et le moins visible de cette
+architecture.
 
 ## Development
 

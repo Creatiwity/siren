@@ -3,6 +3,7 @@ pub mod error;
 
 use super::common::{Error as UpdatableError, UpdatableModel, copy_remote_zipped_csv};
 use super::schema::etablissement::dsl;
+use super::search;
 use crate::connectors::{Connectors, local::Connection};
 use crate::update::utils::remote_file::RemoteFile;
 use async_trait::async_trait;
@@ -15,9 +16,9 @@ use diesel::pg::upsert::excluded;
 use diesel::pg::{CopyFormat, CopyHeader};
 use diesel::prelude::*;
 use diesel::sql_query;
-use diesel::sql_types::{BigInt, Bool, Float8, Text};
 use diesel_async::{AsyncConnection, RunQueryDsl};
 use error::Error;
+use tracing::info;
 
 pub async fn get(connection: &mut Connection, siret: &str) -> Result<Etablissement, Error> {
     dsl::etablissement
@@ -52,307 +53,386 @@ pub async fn get_siege_with_siren(
         .map_err(|error| error.into())
 }
 
-const SEARCH_TOTAL_CAP: i64 = 10_000;
-
-#[derive(QueryableByName)]
-struct RowCount {
-    #[diesel(sql_type = BigInt)]
-    count: i64,
+/// Resolved parameters of one search execution.
+struct SearchPlan<'a> {
+    text: search::TextMatch<'a>,
+    commune_codes: Option<&'a [String]>,
+    facets: &'a [String],
+    cursor: Option<&'a str>,
+    sort: EtablissementSortField,
+    direction: SortDirection,
+    limit: i64,
+    offset: i64,
 }
 
 pub async fn search(
     connection: &mut Connection,
     params: &EtablissementSearchParams,
 ) -> Result<EtablissementSearchOutput, Error> {
-    let has_geo = params.lat.is_some() && params.lng.is_some() && params.radius.is_some();
-    let has_q = params.q.is_some();
+    let cursor = params
+        .cursor
+        .as_deref()
+        .map(str::trim)
+        .filter(|cursor| !cursor.is_empty())
+        .and_then(search::decode_cursor);
 
-    let limit = params.limit.unwrap_or(20).clamp(1, 100);
-    let offset = params.offset.unwrap_or(0).clamp(0, 10_000);
-
-    // Precompute q param index: geo binds lng+lat ($1,$2) before q
-    let q_param_index: Option<u32> = if has_q {
-        Some(if has_geo { 3 } else { 1 })
+    // Primary-key order costs a bounded index walk per page, so it can afford
+    // wider pages than offset pagination.
+    let max_limit = match params.sort {
+        Some(EtablissementSortField::Siret) => search::CURSOR_LIMIT_MAX,
+        _ => 100,
+    };
+    let limit = params.limit.unwrap_or(20).clamp(1, max_limit);
+    let offset = if cursor.is_some() {
+        0
     } else {
-        None
+        params.offset.unwrap_or(0).clamp(0, 10_000)
     };
 
-    // Build SELECT columns
-    let mut select_columns = vec![
-        "e.siret".to_string(),
-        "e.siren".to_string(),
-        "e.etat_administratif".to_string(),
-        "e.date_creation".to_string(),
-        "e.denomination_usuelle".to_string(),
-        "e.enseigne_1".to_string(),
-        "e.enseigne_2".to_string(),
-        "e.enseigne_3".to_string(),
-        "e.code_postal".to_string(),
-        "e.libelle_commune".to_string(),
-        "e.activite_principale".to_string(),
-        "e.etablissement_siege".to_string(),
-        "e.position".to_string(),
-    ];
+    let q = params
+        .q
+        .as_deref()
+        .map(str::trim)
+        .filter(|q| q.chars().count() >= search::MIN_QUERY_LENGTH);
 
-    if has_geo {
-        select_columns.push("ST_Distance(e.position, ref_point.pt) AS meter_distance".to_string());
-    } else {
-        select_columns.push("NULL::float8 AS meter_distance".to_string());
-    }
-
-    if let Some(qi) = q_param_index {
-        select_columns.push(format!(
-            "word_similarity(lower(immutable_unaccent(${qi})), e.search_denomination) AS score"
-        ));
-    } else {
-        select_columns.push("NULL::real AS score".to_string());
-    }
-
-    // Build FROM clause
-    let mut from_parts = vec!["etablissement e".to_string()];
-    let mut param_index = 1u32;
-
-    if has_geo {
-        from_parts.push(format!(
-            "(SELECT ST_SetSRID(ST_MakePoint(${}, ${}), 4326)::geography AS pt) ref_point",
-            param_index,
-            param_index + 1
-        ));
-        param_index += 2;
-        // radius param will be used in WHERE
-    }
-
-    // Build WHERE conditions
-    let mut conditions: Vec<String> = Vec::new();
-
-    // Text search
-    if has_q {
-        conditions.push(format!(
-            "lower(immutable_unaccent(${param_index})) <% e.search_denomination"
-        ));
-        param_index += 1;
-    }
-
-    // Geo filter
-    let radius_param_index;
-    if has_geo {
-        radius_param_index = Some(param_index);
-        conditions.push(format!(
-            "ST_DWithin(e.position, ref_point.pt, ${param_index})"
-        ));
-        param_index += 1;
-    } else {
-        radius_param_index = None;
-    }
-
-    // Field filters
-    let mut field_param_indices: Vec<(String, u32)> = Vec::new();
-
-    if let Some(ref _v) = params.etat_administratif {
-        conditions.push(format!("e.etat_administratif = ${param_index}"));
-        field_param_indices.push(("etat_administratif".to_string(), param_index));
-        param_index += 1;
-    }
-    if let Some(ref _v) = params.code_postal {
-        conditions.push(format!("e.code_postal = ${param_index}"));
-        field_param_indices.push(("code_postal".to_string(), param_index));
-        param_index += 1;
-    }
-    if let Some(ref _v) = params.siren {
-        conditions.push(format!("e.siren = ${param_index}"));
-        field_param_indices.push(("siren".to_string(), param_index));
-        param_index += 1;
-    }
-    if let Some(ref _v) = params.code_commune {
-        conditions.push(format!("e.code_commune = ${param_index}"));
-        field_param_indices.push(("code_commune".to_string(), param_index));
-        param_index += 1;
-    }
-    if let Some(ref _v) = params.activite_principale {
-        conditions.push(format!("e.activite_principale = ${param_index}"));
-        field_param_indices.push(("activite_principale".to_string(), param_index));
-        param_index += 1;
-    }
-    if let Some(ref _v) = params.etablissement_siege {
-        conditions.push(format!("e.etablissement_siege = ${param_index}"));
-        field_param_indices.push(("etablissement_siege".to_string(), param_index));
-        param_index += 1;
-    }
-
-    let _ = param_index; // suppress unused warning
-
-    // Build ORDER BY
-    let sort_field = params.sort.unwrap_or(if has_q {
+    let sort = params.sort.unwrap_or(if q.is_some() {
         EtablissementSortField::Relevance
     } else {
         EtablissementSortField::DateCreation
     });
 
-    let resolved_dir = params.direction.unwrap_or(match sort_field {
-        EtablissementSortField::Distance => SortDirection::Asc,
+    let direction = params.direction.unwrap_or(match sort {
+        // Nearest first, and export order follows the primary key.
+        EtablissementSortField::Distance | EtablissementSortField::Siret => SortDirection::Asc,
         _ => SortDirection::Desc,
     });
 
-    let order_by = match (sort_field, resolved_dir) {
-        (EtablissementSortField::Distance, SortDirection::Desc) => {
-            "e.position <-> ref_point.pt DESC"
-        }
-        (EtablissementSortField::Distance, SortDirection::Asc) => "e.position <-> ref_point.pt ASC",
-        (EtablissementSortField::Relevance, SortDirection::Asc) => "score ASC",
-        (EtablissementSortField::Relevance, SortDirection::Desc) => "score DESC",
-        (EtablissementSortField::DateCreation, SortDirection::Asc) => {
-            "e.date_creation ASC NULLS LAST"
-        }
-        (EtablissementSortField::DateCreation, SortDirection::Desc) => {
-            "e.date_creation DESC NULLS LAST"
-        }
-        (EtablissementSortField::DateDebut, SortDirection::Asc) => "e.date_debut ASC NULLS LAST",
-        (EtablissementSortField::DateDebut, SortDirection::Desc) => "e.date_debut DESC NULLS LAST",
-    };
-
-    // Assemble query
-    let where_clause = if conditions.is_empty() {
-        String::new()
-    } else {
-        format!("WHERE {}", conditions.join(" AND "))
-    };
-
-    let sql = format!(
-        "SELECT {} FROM {} {} ORDER BY {} LIMIT {} OFFSET {}",
-        select_columns.join(", "),
-        from_parts.join(", "),
-        where_clause,
-        order_by,
-        limit,
-        offset
+    let facets = search::requested_facets(
+        params.facette.as_deref(),
+        search::ETABLISSEMENT_FACET_FIELDS,
     );
 
-    // Bind parameters in order
-    let mut query = sql_query(&sql).into_boxed();
-
-    if has_geo {
-        query = query
-            .bind::<Float8, _>(params.lng.unwrap())
-            .bind::<Float8, _>(params.lat.unwrap());
-    }
-
-    if let Some(ref q) = params.q {
-        query = query.bind::<Text, _>(q);
-    }
-
-    if has_geo {
-        let _ = radius_param_index;
-        query = query.bind::<Float8, _>(params.radius.unwrap());
-    }
-
-    // Bind field filters in order
-    for (field_name, _) in &field_param_indices {
-        match field_name.as_str() {
-            "etat_administratif" => {
-                let val = match params.etat_administratif.unwrap() {
-                    common::EtatAdministratif::A => "A",
-                    common::EtatAdministratif::F => "F",
-                };
-                query = query.bind::<Text, _>(val);
+    // A commune label matching nothing can yield nothing: no point querying the
+    // large table.
+    let commune_codes = match params
+        .commune
+        .as_deref()
+        .map(str::trim)
+        .filter(|commune| !commune.is_empty())
+    {
+        Some(commune) => {
+            let codes = search::resolve_commune(connection, commune).await?;
+            if codes.is_empty() {
+                return Ok(EtablissementSearchOutput {
+                    results: Vec::new(),
+                    total: 0,
+                    total_capped: false,
+                    limit,
+                    offset,
+                    sort,
+                    direction,
+                    suggestion: None,
+                    facettes: search::Facets::new(),
+                    next_cursor: None,
+                });
             }
-            "code_postal" => {
-                query = query.bind::<Text, _>(params.code_postal.as_ref().unwrap());
-            }
-            "siren" => {
-                query = query.bind::<Text, _>(params.siren.as_ref().unwrap());
-            }
-            "code_commune" => {
-                query = query.bind::<Text, _>(params.code_commune.as_ref().unwrap());
-            }
-            "activite_principale" => {
-                query = query.bind::<Text, _>(params.activite_principale.as_ref().unwrap());
-            }
-            "etablissement_siege" => {
-                query = query.bind::<Bool, _>(params.etablissement_siege.unwrap());
-            }
-            _ => {}
+            Some(codes)
         }
+        None => None,
+    };
+
+    let parsed = match q {
+        Some(q) => Some(search::parse_query(connection, q, search::SOURCE_ETABLISSEMENT).await?),
+        None => None,
+    };
+
+    let mut plan = SearchPlan {
+        text: match parsed.as_ref().and_then(|parsed| parsed.tsquery.as_deref()) {
+            Some(tsquery) => search::TextMatch::FullText(tsquery),
+            None => search::TextMatch::None,
+        },
+        commune_codes: commune_codes.as_deref(),
+        facets: &facets,
+        cursor: cursor.as_deref(),
+        sort,
+        direction,
+        limit,
+        offset,
+    };
+
+    let mut output = execute(connection, params, &plan).await?;
+
+    // Covers what lexicon correction cannot: transpositions and infix matches.
+    // Restricted to the first page — an empty page further in means the caller
+    // paged past the end, not that the search found nothing, and retrying there
+    // would scan the whole table for results that already exist.
+    if output.results.is_empty()
+        && offset == 0
+        && let Some(q) = q
+    {
+        info!(
+            target: "sirene::search",
+            source = search::SOURCE_ETABLISSEMENT,
+            query_length = q.chars().count(),
+            "repli trigramme declenche"
+        );
+
+        plan.text = search::TextMatch::Trigram(q);
+        output = execute(connection, params, &plan).await?;
     }
 
-    let results = query
+    // Offered systematically, the suggestion would be wrong for ~45% of rare but
+    // correct names, so it only surfaces when the search found nothing.
+    if output.results.is_empty() {
+        output.suggestion = parsed.and_then(|parsed| parsed.suggestion);
+    }
+
+    Ok(output)
+}
+
+async fn execute(
+    connection: &mut Connection,
+    params: &EtablissementSearchParams,
+    plan: &SearchPlan<'_>,
+) -> Result<EtablissementSearchOutput, Error> {
+    let mut binder = search::Binder::new();
+    let mut conditions: Vec<String> = Vec::new();
+
+    // Declared first so the expression is constant at planning time, which the
+    // GiST KNN walk requires.
+    let reference_point = match (params.lng, params.lat, params.radius) {
+        (Some(lng), Some(lat), Some(radius)) => {
+            let lng = binder.push(search::Bind::Float8(lng));
+            let lat = binder.push(search::Bind::Float8(lat));
+            let point = format!("ST_SetSRID(ST_MakePoint({lng}, {lat}), 4326)::geography");
+            let radius = binder.push(search::Bind::Float8(radius));
+            conditions.push(format!("ST_DWithin(e.position, {point}, {radius})"));
+            Some(point)
+        }
+        _ => None,
+    };
+
+    let columns = search::ETABLISSEMENT_SEARCH_COLUMNS;
+    let score = match plan.text {
+        search::TextMatch::None => "NULL::real".to_string(),
+        search::TextMatch::FullText(tsquery) => {
+            let vector = search::search_vector(Some("e"), columns);
+            let placeholder = binder.push(search::Bind::TsQuery(tsquery.to_string()));
+            conditions.push(format!("{vector} @@ {placeholder}::tsquery"));
+            format!("ts_rank_cd({vector}, {placeholder}::tsquery)")
+        }
+        search::TextMatch::Trigram(q) => {
+            let trigram = search::search_trigram(Some("e"), columns);
+            let placeholder = binder.text(q);
+            let needle = format!("lower(public.immutable_unaccent({placeholder}))");
+            conditions.push(format!("{needle} <% {trigram}"));
+            format!("word_similarity({needle}, {trigram})")
+        }
+    };
+
+    let distance = match &reference_point {
+        Some(point) => format!("ST_Distance(e.position, {point})"),
+        None => "NULL::float8".to_string(),
+    };
+
+    // Kept out of `conditions` until the query shape is chosen: the lateral form
+    // replaces it with a join, and recovering that by matching generated SQL
+    // would silently break the day the predicate is spelled differently.
+    let commune = plan.commune_codes.map(|codes| {
+        let placeholder = binder.push(search::Bind::TextArray(codes.to_vec()));
+        (
+            placeholder.clone(),
+            format!("e.code_commune = ANY({placeholder})"),
+        )
+    });
+
+    if let Some(value) = params.etat_administratif {
+        let placeholder = binder.text(match value {
+            common::EtatAdministratif::A => "A",
+            common::EtatAdministratif::F => "F",
+        });
+        conditions.push(format!("e.etat_administratif = {placeholder}"));
+    }
+    if let Some(value) = params.etablissement_siege {
+        let placeholder = binder.push(search::Bind::Bool(value));
+        conditions.push(format!("e.etablissement_siege = {placeholder}"));
+    }
+
+    binder.filter_in(
+        &mut conditions,
+        "e.code_postal",
+        params.code_postal.as_deref(),
+    );
+    binder.filter_in(&mut conditions, "e.siren", params.siren.as_deref());
+    binder.filter_in(
+        &mut conditions,
+        "e.code_commune",
+        params.code_commune.as_deref(),
+    );
+    binder.filter_in(
+        &mut conditions,
+        "e.activite_principale",
+        params.activite_principale.as_deref(),
+    );
+
+    binder.filter_not_in(
+        &mut conditions,
+        "e.code_postal",
+        params.code_postal_not.as_deref(),
+    );
+    binder.filter_not_in(
+        &mut conditions,
+        "e.code_commune",
+        params.code_commune_not.as_deref(),
+    );
+    binder.filter_not_in(
+        &mut conditions,
+        "e.activite_principale",
+        params.activite_principale_not.as_deref(),
+    );
+
+    binder.range(
+        &mut conditions,
+        "e.date_creation",
+        params.date_creation_min,
+        params.date_creation_max,
+    );
+    binder.range(
+        &mut conditions,
+        "e.date_debut",
+        params.date_debut_min,
+        params.date_debut_max,
+    );
+
+    // Keyset resume: a plain bound on the primary key, served by its index. The
+    // cursor was already validated as a digit string.
+    if let Some(cursor) = plan.cursor {
+        binder.keyset(
+            &mut conditions,
+            "e.siret",
+            matches!(plan.direction, SortDirection::Asc),
+            cursor,
+        );
+    }
+
+    let order_by = order_by_clause(plan.sort, plan.direction, reference_point.as_deref());
+
+    // Filtering by commune without a text filter means sorting millions of rows:
+    // `code_commune = ANY(...)` cannot yield index order. A top-N per commune,
+    // merged afterwards, takes 1.5 ms where the plain form took 22 s.
+    let lateral = matches!(
+        (&commune, &plan.text, &reference_point),
+        (Some(_), search::TextMatch::None, None)
+    );
+
+    let projection = format!(
+        "e.siret, e.siren, e.etat_administratif, e.date_creation, e.denomination_usuelle, \
+         e.enseigne_1, e.enseigne_2, e.enseigne_3, e.code_postal, e.libelle_commune, \
+         e.activite_principale, e.etablissement_siege, e.position, \
+         {distance} AS meter_distance, {score} AS score"
+    );
+
+    let sql = match (&commune, lateral) {
+        (Some((placeholder, _)), true) => {
+            let mut inner = vec!["e.code_commune = codes.code_commune".to_string()];
+            inner.extend(conditions.iter().cloned());
+
+            format!(
+                "SELECT {projection} FROM unnest({placeholder}) AS codes(code_commune) \
+                 CROSS JOIN LATERAL ( \
+                   SELECT * FROM etablissement e WHERE {} ORDER BY {order_by} LIMIT {} \
+                 ) e \
+                 ORDER BY {order_by} LIMIT {} OFFSET {}",
+                inner.join(" AND "),
+                plan.limit + plan.offset,
+                plan.limit,
+                plan.offset
+            )
+        }
+        _ => format!(
+            "SELECT {projection} FROM etablissement e {} \
+             ORDER BY {order_by} LIMIT {} OFFSET {}",
+            where_clause(&conditions, commune.as_ref()),
+            plan.limit,
+            plan.offset
+        ),
+    };
+
+    let results = binder
+        .apply(sql_query(sql).into_boxed())
         .load::<EtablissementSearchResult>(connection)
         .await
-        .map_err(|e| -> Error { e.into() })?;
+        .map_err(|error| -> Error { error.into() })?;
 
-    let count_sql = format!(
-        "SELECT count(*) AS count FROM (SELECT 1 FROM {} {} LIMIT {}) _sub",
-        from_parts.join(", "),
-        where_clause,
-        SEARCH_TOTAL_CAP + 1
-    );
-    let mut count_query = sql_query(&count_sql).into_boxed();
-    if has_geo {
-        count_query = count_query
-            .bind::<Float8, _>(params.lng.unwrap())
-            .bind::<Float8, _>(params.lat.unwrap());
-    }
-    if let Some(ref q) = params.q {
-        count_query = count_query.bind::<Text, _>(q);
-    }
-    if has_geo {
-        count_query = count_query.bind::<Float8, _>(params.radius.unwrap());
-    }
-    for (field_name, _) in &field_param_indices {
-        match field_name.as_str() {
-            "etat_administratif" => {
-                let val = match params.etat_administratif.unwrap() {
-                    common::EtatAdministratif::A => "A",
-                    common::EtatAdministratif::F => "F",
-                };
-                count_query = count_query.bind::<Text, _>(val);
-            }
-            "code_postal" => {
-                count_query = count_query.bind::<Text, _>(params.code_postal.as_ref().unwrap());
-            }
-            "siren" => {
-                count_query = count_query.bind::<Text, _>(params.siren.as_ref().unwrap());
-            }
-            "code_commune" => {
-                count_query = count_query.bind::<Text, _>(params.code_commune.as_ref().unwrap());
-            }
-            "activite_principale" => {
-                count_query =
-                    count_query.bind::<Text, _>(params.activite_principale.as_ref().unwrap());
-            }
-            "etablissement_siege" => {
-                count_query = count_query.bind::<Bool, _>(params.etablissement_siege.unwrap());
-            }
-            _ => {}
-        }
-    }
+    // The count and the facets always take the plain form, lateral or not.
+    let filters = where_clause(&conditions, commune.as_ref());
+    let (total, total_capped) =
+        search::capped_total(connection, &binder, "etablissement", "e", &filters).await;
+    let facettes = search::compute_facets(
+        connection,
+        &binder,
+        "etablissement",
+        "e",
+        &filters,
+        plan.facets,
+    )
+    .await;
 
-    let total = if has_q {
-        connection
-            .transaction(async |conn| {
-                diesel::sql_query("SET LOCAL enable_seqscan = off")
-                    .execute(conn)
-                    .await?;
-                count_query.get_result::<RowCount>(conn).await
-            })
-            .await
-            .map(|r| r.count.min(SEARCH_TOTAL_CAP))
-            .unwrap_or(0)
-    } else {
-        count_query
-            .get_result::<RowCount>(connection)
-            .await
-            .map(|r| r.count.min(SEARCH_TOTAL_CAP))
-            .unwrap_or(0)
+    // A full page suggests more to come. Only primary-key order is total and
+    // stable enough to resume from.
+    let next_cursor = match plan.sort {
+        EtablissementSortField::Siret if results.len() as i64 == plan.limit => results
+            .last()
+            .map(|last| search::encode_cursor(&last.siret)),
+        _ => None,
     };
 
     Ok(EtablissementSearchOutput {
         results,
         total,
-        limit,
-        offset,
-        sort: sort_field,
-        direction: resolved_dir,
+        total_capped,
+        limit: plan.limit,
+        offset: plan.offset,
+        sort: plan.sort,
+        direction: plan.direction,
+        suggestion: None,
+        facettes,
+        next_cursor,
     })
+}
+
+fn where_clause(conditions: &[String], commune: Option<&(String, String)>) -> String {
+    let mut all: Vec<&str> = conditions.iter().map(String::as_str).collect();
+    if let Some((_, condition)) = commune {
+        all.push(condition);
+    }
+    if all.is_empty() {
+        String::new()
+    } else {
+        format!("WHERE {}", all.join(" AND "))
+    }
+}
+
+fn order_by_clause(
+    sort: EtablissementSortField,
+    direction: SortDirection,
+    reference_point: Option<&str>,
+) -> String {
+    let dir = match direction {
+        SortDirection::Asc => "ASC",
+        SortDirection::Desc => "DESC",
+    };
+
+    match sort {
+        EtablissementSortField::Distance => match reference_point {
+            Some(point) => format!("e.position <-> {point} {dir}"),
+            None => format!("e.date_creation {dir} NULLS LAST"),
+        },
+        EtablissementSortField::Relevance => format!("score {dir}"),
+        EtablissementSortField::DateCreation => format!("e.date_creation {dir} NULLS LAST"),
+        EtablissementSortField::DateDebut => format!("e.date_debut {dir} NULLS LAST"),
+        EtablissementSortField::Siret => format!("e.siret {dir}"),
+    }
 }
 
 pub struct EtablissementModel {}
@@ -394,78 +474,84 @@ impl UpdatableModel for EtablissementModel {
                 diesel::pg::PgConnection::establish(&connectors.local.database_url)
                     .map_err(|_| UpdatableError::SyncConnectionFailed)?;
 
-            SyncRunQueryDsl::execute(
-                diesel::sql_query("TRUNCATE etablissement_staging"),
+            super::common::load_staging_without_indexes(
                 &mut connection,
-            )
-            .map_err(|e| UpdatableError::Database { source: e })?;
+                "etablissement_staging",
+                |connection| {
+                    SyncRunQueryDsl::execute(
+                        diesel::sql_query("TRUNCATE etablissement_staging"),
+                        connection,
+                    )
+                    .map_err(|e| UpdatableError::Database { source: e })?;
 
-            let copy_query = diesel::copy_from(dsl::etablissement_staging)
-                .from_raw_data(
-                    (
-                        dsl::siren,
-                        dsl::nic,
-                        dsl::siret,
-                        dsl::statut_diffusion,
-                        dsl::date_creation,
-                        dsl::tranche_effectifs,
-                        dsl::annee_effectifs,
-                        dsl::activite_principale_registre_metiers,
-                        dsl::date_dernier_traitement,
-                        dsl::etablissement_siege,
-                        dsl::nombre_periodes,
-                        dsl::complement_adresse,
-                        dsl::numero_voie,
-                        dsl::indice_repetition,
-                        dsl::dernier_numero_voie,
-                        dsl::indice_repetition_dernier_numero_voie,
-                        dsl::type_voie,
-                        dsl::libelle_voie,
-                        dsl::code_postal,
-                        dsl::libelle_commune,
-                        dsl::libelle_commune_etranger,
-                        dsl::distribution_speciale,
-                        dsl::code_commune,
-                        dsl::code_cedex,
-                        dsl::libelle_cedex,
-                        dsl::code_pays_etranger,
-                        dsl::libelle_pays_etranger,
-                        dsl::identifiant_adresse,
-                        dsl::coordonnee_lambert_x,
-                        dsl::coordonnee_lambert_y,
-                        dsl::complement_adresse2,
-                        dsl::numero_voie_2,
-                        dsl::indice_repetition_2,
-                        dsl::type_voie_2,
-                        dsl::libelle_voie_2,
-                        dsl::code_postal_2,
-                        dsl::libelle_commune_2,
-                        dsl::libelle_commune_etranger_2,
-                        dsl::distribution_speciale_2,
-                        dsl::code_commune_2,
-                        dsl::code_cedex_2,
-                        dsl::libelle_cedex_2,
-                        dsl::code_pays_etranger_2,
-                        dsl::libelle_pays_etranger_2,
-                        dsl::date_debut,
-                        dsl::etat_administratif,
-                        dsl::enseigne_1,
-                        dsl::enseigne_2,
-                        dsl::enseigne_3,
-                        dsl::denomination_usuelle,
-                        dsl::activite_principale,
-                        dsl::nomenclature_activite_principale,
-                        dsl::caractere_employeur,
-                        dsl::activite_principale_naf25,
-                    ),
-                    |write| copy_remote_zipped_csv(remote_file.to_reader(), write),
-                )
-                .with_delimiter(',')
-                .with_format(CopyFormat::Csv)
-                .with_header(CopyHeader::Set(true));
-            SyncExecuteCopy::execute(copy_query, &mut connection)
-                .map(|count| count > 0)
-                .map_err(|e| UpdatableError::Database { source: e })
+                    let copy_query = diesel::copy_from(dsl::etablissement_staging)
+                        .from_raw_data(
+                            (
+                                dsl::siren,
+                                dsl::nic,
+                                dsl::siret,
+                                dsl::statut_diffusion,
+                                dsl::date_creation,
+                                dsl::tranche_effectifs,
+                                dsl::annee_effectifs,
+                                dsl::activite_principale_registre_metiers,
+                                dsl::date_dernier_traitement,
+                                dsl::etablissement_siege,
+                                dsl::nombre_periodes,
+                                dsl::complement_adresse,
+                                dsl::numero_voie,
+                                dsl::indice_repetition,
+                                dsl::dernier_numero_voie,
+                                dsl::indice_repetition_dernier_numero_voie,
+                                dsl::type_voie,
+                                dsl::libelle_voie,
+                                dsl::code_postal,
+                                dsl::libelle_commune,
+                                dsl::libelle_commune_etranger,
+                                dsl::distribution_speciale,
+                                dsl::code_commune,
+                                dsl::code_cedex,
+                                dsl::libelle_cedex,
+                                dsl::code_pays_etranger,
+                                dsl::libelle_pays_etranger,
+                                dsl::identifiant_adresse,
+                                dsl::coordonnee_lambert_x,
+                                dsl::coordonnee_lambert_y,
+                                dsl::complement_adresse2,
+                                dsl::numero_voie_2,
+                                dsl::indice_repetition_2,
+                                dsl::type_voie_2,
+                                dsl::libelle_voie_2,
+                                dsl::code_postal_2,
+                                dsl::libelle_commune_2,
+                                dsl::libelle_commune_etranger_2,
+                                dsl::distribution_speciale_2,
+                                dsl::code_commune_2,
+                                dsl::code_cedex_2,
+                                dsl::libelle_cedex_2,
+                                dsl::code_pays_etranger_2,
+                                dsl::libelle_pays_etranger_2,
+                                dsl::date_debut,
+                                dsl::etat_administratif,
+                                dsl::enseigne_1,
+                                dsl::enseigne_2,
+                                dsl::enseigne_3,
+                                dsl::denomination_usuelle,
+                                dsl::activite_principale,
+                                dsl::nomenclature_activite_principale,
+                                dsl::caractere_employeur,
+                                dsl::activite_principale_naf25,
+                            ),
+                            |write| copy_remote_zipped_csv(remote_file.to_reader(), write),
+                        )
+                        .with_delimiter(',')
+                        .with_format(CopyFormat::Csv)
+                        .with_header(CopyHeader::Set(true));
+                    SyncExecuteCopy::execute(copy_query, connection)
+                        .map(|count| count > 0)
+                        .map_err(|e| UpdatableError::Database { source: e })
+                },
+            )
         })
     }
 
@@ -619,5 +705,9 @@ impl UpdatableModel for EtablissementModel {
             .await?;
 
         Ok((next_cursor, updated_count))
+    }
+
+    fn search_source(&self) -> Option<&'static str> {
+        Some(search::SOURCE_ETABLISSEMENT)
     }
 }
