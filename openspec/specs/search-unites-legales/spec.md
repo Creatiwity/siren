@@ -119,6 +119,43 @@ The system SHALL allow sorting search results via `sort` and `direction` query p
 - **WHEN** a GET request is made to `/v3/unites_legales?sort=relevance` without a `q` parameter
 - **THEN** the system responds with a 400 error
 
+### Requirement: Filter unites legales by multiple values and exclusions
+
+The system SHALL accept comma-separated values on `activite_principale`, `categorie_juridique` and `categorie_entreprise`, and their `_not` counterparts for exclusion. Unités whose field is null are kept by an exclusion.
+
+#### Scenario: Several legal categories
+
+- **WHEN** a GET request is made to `/v3/unites_legales?categorie_juridique=5710,5499`
+- **THEN** only legal units matching one of the two are returned
+
+#### Scenario: Exclude an activity
+
+- **WHEN** a GET request is made to `/v3/unites_legales?activite_principale_not=62.01Z`
+- **THEN** no returned legal unit has that activity
+
+### Requirement: Filter unites legales by date range
+
+The system SHALL allow bounding `date_creation` and `date_debut` via `date_creation_min`, `date_creation_max`, `date_debut_min` and `date_debut_max`. The pre-existing exact-match parameters `date_creation` and `date_debut` remain accepted.
+
+#### Scenario: Bounded range
+
+- **WHEN** a GET request is made to `/v3/unites_legales?date_creation_min=2024-01-01&date_creation_max=2024-12-31`
+- **THEN** only legal units created within that range are returned
+
+### Requirement: Facet unite legale search results
+
+The system SHALL compute value counts for the fields listed in `facette`, over the same capped subset used for `total`. Allowed fields are `etat_administratif`, `activite_principale`, `categorie_juridique` and `categorie_entreprise`.
+
+#### Scenario: Request facets
+
+- **WHEN** a GET request is made to `/v3/unites_legales?q=carrefour&facette=categorie_juridique`
+- **THEN** the response contains a `facettes` object with the counts per legal category
+
+#### Scenario: Unknown facet field
+
+- **WHEN** a GET request is made to `/v3/unites_legales?facette=siren`
+- **THEN** the system responds with a 400 error listing the allowed fields
+
 ### Requirement: Paginate unite legale search results
 
 The system SHALL support pagination via `limit` and `offset` query parameters.

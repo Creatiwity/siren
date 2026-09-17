@@ -1,34 +1,35 @@
-//! Briques communes aux recherches `etablissement` et `unite_legale`.
+//! Shared building blocks for the `etablissement` and `unite_legale` searches.
 //!
-//! Le matching repose sur le FTS natif PostgreSQL (`tsvector`/`tsquery`), la
-//! tolerance aux fautes sur une correction de la *requete* via le lexique du
-//! corpus (`search_lexicon`), et un repli trigramme declenche uniquement quand
-//! le FTS ne ramene rien.
+//! Matching uses native PostgreSQL full-text search. Typo tolerance corrects the
+//! *query* against the corpus lexicon rather than fuzzy-matching the corpus, and
+//! a trigram pass runs only when full-text search returns nothing.
+
+use std::collections::BTreeMap;
 
 use chrono::NaiveDate;
 use diesel::pg::Pg;
 use diesel::query_builder::{BoxedSqlQuery, SqlQuery};
-use diesel::sql_types::{BigInt, Bool, Date, Float8, Nullable, Text};
+use diesel::sql_types::{Array, BigInt, Bool, Date, Float8, Nullable, Text};
 use diesel::{QueryableByName, sql_query};
 use diesel_async::RunQueryDsl;
+use serde::Serialize;
+use utoipa::ToSchema;
 
 use crate::connectors::local::Connection;
 
-/// Longueur minimale d'une requete texte. En dessous, le trigramme comme le
-/// FTS renvoient des volumes ingerables et la correction n'a aucun sens
-/// (tous les mots de trois lettres sont a distance 1 les uns des autres).
+/// Below this, no index structure is selective enough and correction is
+/// meaningless: every three-letter word is one edit away from every other.
 pub const MIN_QUERY_LENGTH: usize = 3;
 
-/// Plafond du comptage total : au dela, `total` est renvoye plafonne plutot
-/// que de parcourir l'integralite des correspondances.
+/// Counting stops here rather than walking every match; `total_capped` reports
+/// whether the ceiling was hit.
 pub const SEARCH_TOTAL_CAP: i64 = 10_000;
 
-/// Identifiants de source utilises par `search_lexicon.source` et par les
-/// fonctions SQL `search_query` / `search_refresh_*`.
+pub const FACET_VALUES_LIMIT: i64 = 20;
+
 pub const SOURCE_ETABLISSEMENT: &str = "etablissement";
 pub const SOURCE_UNITE_LEGALE: &str = "unite_legale";
 
-/// Colonnes composant le texte recherchable de chaque table.
 pub const ETABLISSEMENT_SEARCH_COLUMNS: &[&str] = &[
     "denomination_usuelle",
     "enseigne_1",
@@ -42,50 +43,71 @@ pub const UNITE_LEGALE_SEARCH_COLUMNS: &[&str] = &[
     "denomination_usuelle_3",
 ];
 
-/// Concatenation normalisee des colonnes de nom.
+/// Facetable fields. These names are interpolated into SQL, so user input must
+/// never reach a query without passing through this whitelist.
+pub const ETABLISSEMENT_FACET_FIELDS: &[&str] = &[
+    "etat_administratif",
+    "code_postal",
+    "code_commune",
+    "activite_principale",
+    "etablissement_siege",
+];
+pub const UNITE_LEGALE_FACET_FIELDS: &[&str] = &[
+    "etat_administratif",
+    "activite_principale",
+    "categorie_juridique",
+    "categorie_entreprise",
+];
+
+/// How the text query is matched.
+pub enum TextMatch<'a> {
+    None,
+    /// Native full-text search. Nominal path.
+    FullText(&'a str),
+    /// Trigram fallback, only when full-text search returns nothing.
+    Trigram(&'a str),
+}
+
+/// Must stay byte-identical to the expression indexes created by migration
+/// `2026-09-15-120000_search_fts_commune`. Any divergence silently disables the
+/// GIN indexes — no error, just sequential scans. Locked by the tests below.
 ///
-/// ATTENTION : cette expression doit rester strictement identique a celle des
-/// index d'expression crees par la migration `2026-09-15-120000_search_fts_commune`.
-/// Toute divergence (un espace, un `coalesce` en plus) rend les index GIN
-/// inutilisables sans aucune erreur visible — seulement des seq scans.
-fn search_text(alias: &str, columns: &[&str]) -> String {
+/// `alias` is `None` for the DDL form (bare columns), `Some("e")` for queries.
+fn search_text(alias: Option<&str>, columns: &[&str]) -> String {
+    let prefix = alias.map(|a| format!("{a}.")).unwrap_or_default();
     let parts: Vec<String> = columns
         .iter()
-        .map(|column| format!("coalesce({alias}.{column}, '')"))
+        .map(|column| format!("coalesce({prefix}{column}, '')"))
         .collect();
 
     format!("public.immutable_unaccent({})", parts.join(" || ' ' || "))
 }
 
-/// Expression `tsvector` indexee (index principal).
-pub fn search_vector(alias: &str, columns: &[&str]) -> String {
+pub fn search_vector(alias: Option<&str>, columns: &[&str]) -> String {
     format!(
         "to_tsvector('french'::regconfig, {})",
         search_text(alias, columns)
     )
 }
 
-/// Expression texte normalisee indexee en trigrammes (index de repli).
-pub fn search_trigram(alias: &str, columns: &[&str]) -> String {
+pub fn search_trigram(alias: Option<&str>, columns: &[&str]) -> String {
     format!("lower({})", search_text(alias, columns))
 }
 
-/// Resultat de l'analyse d'une requete texte par `public.search_query`.
 #[derive(Debug, QueryableByName)]
 pub struct ParsedQuery {
-    /// Forme texte de la `tsquery`, a re-caster en `::tsquery` cote requete.
-    /// `None` quand la saisie ne contient aucun mot exploitable.
+    /// Text form, to be cast back with `::tsquery`. `None` when the input holds
+    /// no usable word.
     #[diesel(sql_type = Nullable<Text>)]
     pub tsquery: Option<String>,
-    /// Reformulation proposee, non nulle uniquement si au moins un mot a ete
-    /// juge fautif. A n'exposer que si la recherche initiale ne ramene rien.
+    /// Set only when a word was judged misspelled. Exposed to clients only when
+    /// the search returns nothing.
     #[diesel(sql_type = Nullable<Text>)]
     pub suggestion: Option<String>,
 }
 
-/// Analyse la saisie utilisateur : construit la `tsquery` augmentee (chaque mot
-/// suspect est complete par `| correction`, jamais remplace) et la suggestion
-/// affichable.
+/// Builds the augmented `tsquery`: a suspect word is completed with
+/// `| correction`, never replaced, so an exact match can never be lost.
 pub async fn parse_query(
     connection: &mut Connection,
     q: &str,
@@ -98,14 +120,13 @@ pub async fn parse_query(
         .await
 }
 
-/// Resout un libelle de commune en liste de `code_commune`.
 pub async fn resolve_commune(
     connection: &mut Connection,
     commune: &str,
 ) -> Result<Vec<String>, diesel::result::Error> {
     #[derive(QueryableByName)]
     struct Codes {
-        #[diesel(sql_type = diesel::sql_types::Array<Text>)]
+        #[diesel(sql_type = Array<Text>)]
         codes: Vec<String>,
     }
 
@@ -122,7 +143,84 @@ pub struct RowCount {
     pub count: i64,
 }
 
-/// Valeur liee a un placeholder `$n`.
+#[derive(Debug, Serialize, ToSchema)]
+pub struct FacetValue {
+    pub valeur: String,
+    pub nombre: i64,
+}
+
+pub type Facets = BTreeMap<String, Vec<FacetValue>>;
+
+#[derive(QueryableByName)]
+struct FacetRow {
+    #[diesel(sql_type = Text)]
+    champ: String,
+    #[diesel(sql_type = Text)]
+    valeur: String,
+    #[diesel(sql_type = BigInt)]
+    nombre: i64,
+}
+
+pub fn split_values(raw: &str) -> Vec<String> {
+    raw.split(',')
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
+        .collect()
+}
+
+/// Whitelisted requested fields, deduplicated, in request order.
+pub fn requested_facets(raw: Option<&str>, allowed: &[&str]) -> Vec<String> {
+    let Some(raw) = raw else {
+        return Vec::new();
+    };
+
+    let mut fields: Vec<String> = Vec::new();
+    for field in split_values(raw) {
+        if allowed.contains(&field.as_str()) && !fields.contains(&field) {
+            fields.push(field);
+        }
+    }
+    fields
+}
+
+/// Rejects a text query too short to be served by any index. The model degrades
+/// gracefully instead; the HTTP layer prefers to say so.
+pub fn check_query_length(q: Option<&str>) -> Result<(), String> {
+    match q.map(str::trim) {
+        Some(q) if q.chars().count() < MIN_QUERY_LENGTH => Err(format!(
+            "q must be at least {MIN_QUERY_LENGTH} characters long"
+        )),
+        _ => Ok(()),
+    }
+}
+
+/// Rejects a facet field outside the whitelist: ignoring it would leave the
+/// client waiting for counts that never come.
+pub fn check_facets(raw: Option<&str>, allowed: &[&str]) -> Result<(), String> {
+    let unknown = unknown_facets(raw, allowed);
+    if unknown.is_empty() {
+        return Ok(());
+    }
+    Err(format!(
+        "unknown facette field(s): {}. Allowed: {}",
+        unknown.join(", "),
+        allowed.join(", ")
+    ))
+}
+
+/// Requested fields outside the whitelist, so they can be refused rather than
+/// silently dropped.
+pub fn unknown_facets(raw: Option<&str>, allowed: &[&str]) -> Vec<String> {
+    raw.map(|raw| {
+        split_values(raw)
+            .into_iter()
+            .filter(|field| !allowed.contains(&field.as_str()))
+            .collect()
+    })
+    .unwrap_or_default()
+}
+
 #[derive(Debug, Clone)]
 pub enum Bind {
     Text(String),
@@ -133,11 +231,8 @@ pub enum Bind {
     TextArray(Vec<String>),
 }
 
-/// Accumulateur de parametres lies.
-///
-/// Remplace les vecteurs paralleles « nom de champ / index de parametre » de
-/// l'ancienne implementation, ou l'ordre des `bind()` devait etre rejoue a
-/// l'identique dans la requete principale *et* dans la requete de comptage.
+/// Collects bound values so the same ordering is replayed across the result,
+/// count and facet queries without keeping parallel vectors in sync by hand.
 #[derive(Debug, Default)]
 pub struct Binder {
     binds: Vec<Bind>,
@@ -148,7 +243,6 @@ impl Binder {
         Self::default()
     }
 
-    /// Enregistre une valeur et renvoie le placeholder correspondant.
     pub fn push(&mut self, bind: Bind) -> String {
         self.binds.push(bind);
         format!("${}", self.binds.len())
@@ -158,7 +252,53 @@ impl Binder {
         self.push(Bind::Text(value.into()))
     }
 
-    /// Applique les valeurs, dans l'ordre d'enregistrement, a une requete brute.
+    pub fn any_of(&mut self, column: &str, values: Vec<String>) -> String {
+        let placeholder = self.push(Bind::TextArray(values));
+        format!("{column} = ANY({placeholder})")
+    }
+
+    /// Rows whose column is NULL are kept: "not 62.01Z" includes "unknown
+    /// activity".
+    pub fn none_of(&mut self, column: &str, values: Vec<String>) -> String {
+        let placeholder = self.push(Bind::TextArray(values));
+        format!("({column} IS NULL OR {column} <> ALL({placeholder}))")
+    }
+
+    /// Adds an inclusion filter, if the parameter carries any value.
+    pub fn filter_in(&mut self, conditions: &mut Vec<String>, column: &str, raw: Option<&str>) {
+        let values = raw.map(split_values).unwrap_or_default();
+        if !values.is_empty() {
+            conditions.push(self.any_of(column, values));
+        }
+    }
+
+    /// Adds an exclusion filter, if the parameter carries any value.
+    pub fn filter_not_in(&mut self, conditions: &mut Vec<String>, column: &str, raw: Option<&str>) {
+        let values = raw.map(split_values).unwrap_or_default();
+        if !values.is_empty() {
+            conditions.push(self.none_of(column, values));
+        }
+    }
+
+    /// Adds the bounds that are present, each one optional.
+    pub fn range(
+        &mut self,
+        conditions: &mut Vec<String>,
+        column: &str,
+        min: Option<NaiveDate>,
+        max: Option<NaiveDate>,
+    ) {
+        if let Some(min) = min {
+            let placeholder = self.push(Bind::Date(min));
+            conditions.push(format!("{column} >= {placeholder}"));
+        }
+        if let Some(max) = max {
+            let placeholder = self.push(Bind::Date(max));
+            conditions.push(format!("{column} <= {placeholder}"));
+        }
+    }
+
+    /// Applies the values in registration order.
     pub fn apply<'a>(
         &self,
         query: BoxedSqlQuery<'a, Pg, SqlQuery>,
@@ -169,9 +309,227 @@ impl Binder {
             Bind::Float8(value) => query.bind::<Float8, _>(*value),
             Bind::Date(value) => query.bind::<Date, _>(*value),
             Bind::TsQuery(value) => query.bind::<Text, _>(value.clone()),
-            Bind::TextArray(values) => {
-                query.bind::<diesel::sql_types::Array<Text>, _>(values.clone())
-            }
+            Bind::TextArray(values) => query.bind::<Array<Text>, _>(values.clone()),
         })
+    }
+}
+
+/// Returns `(total, capped)`. Ordering is irrelevant here, so the plain form
+/// works even when the main query goes through a lateral join.
+pub async fn capped_total(
+    connection: &mut Connection,
+    binder: &Binder,
+    table: &str,
+    alias: &str,
+    where_clause: &str,
+) -> (i64, bool) {
+    let sql = format!(
+        "SELECT count(*) AS count FROM (SELECT 1 FROM {table} {alias} {where_clause} LIMIT {}) _sub",
+        SEARCH_TOTAL_CAP + 1
+    );
+
+    binder
+        .apply(sql_query(sql).into_boxed())
+        .get_result::<RowCount>(connection)
+        .await
+        .map(|row| {
+            let capped = row.count > SEARCH_TOTAL_CAP;
+            (row.count.min(SEARCH_TOTAL_CAP), capped)
+        })
+        .unwrap_or((0, false))
+}
+
+/// Computed over the same bounded subset as the count, in a single round trip
+/// whatever the number of fields. Field names must come from
+/// [`requested_facets`], hence from the whitelist.
+pub async fn compute_facets(
+    connection: &mut Connection,
+    binder: &Binder,
+    table: &str,
+    alias: &str,
+    where_clause: &str,
+    fields: &[String],
+) -> Facets {
+    if fields.is_empty() {
+        return Facets::new();
+    }
+
+    let projection: Vec<String> = fields
+        .iter()
+        .map(|field| format!("{alias}.{field}"))
+        .collect();
+
+    let counts: Vec<String> = fields
+        .iter()
+        .map(|field| {
+            format!(
+                "(SELECT '{field}' AS champ, {field}::text AS valeur, count(*) AS nombre \
+                  FROM candidats WHERE {field} IS NOT NULL GROUP BY 2 \
+                  ORDER BY nombre DESC, valeur LIMIT {FACET_VALUES_LIMIT})"
+            )
+        })
+        .collect();
+
+    let sql = format!(
+        "WITH candidats AS (SELECT {} FROM {table} {alias} {where_clause} LIMIT {}) \
+         SELECT champ, valeur, nombre FROM ({}) comptes ORDER BY champ, nombre DESC, valeur",
+        projection.join(", "),
+        SEARCH_TOTAL_CAP,
+        counts.join(" UNION ALL ")
+    );
+
+    let rows = binder
+        .apply(sql_query(sql).into_boxed())
+        .load::<FacetRow>(connection)
+        .await
+        .unwrap_or_default();
+
+    let mut facets = Facets::new();
+    for field in fields {
+        facets.insert(field.clone(), Vec::new());
+    }
+    for row in rows {
+        facets.entry(row.champ).or_default().push(FacetValue {
+            valeur: row.valeur,
+            nombre: row.nombre,
+        });
+    }
+    facets
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Drops whitespace outside quoted literals, so the SQL formatting is
+    /// irrelevant but the `' '` separator between columns still counts.
+    ///
+    /// Removing whitespace unconditionally would erase that separator too, and
+    /// the comparison would then accept a migration concatenating the columns
+    /// with nothing in between.
+    /// Comment lines are dropped first: an apostrophe in prose would otherwise
+    /// flip the quoting state and desynchronise everything after it.
+    fn normalized(value: &str) -> String {
+        let mut out = String::with_capacity(value.len());
+        let mut in_literal = false;
+
+        for line in value.lines() {
+            if line.trim_start().starts_with("--") {
+                continue;
+            }
+            for character in line.chars() {
+                if character == '\'' {
+                    in_literal = !in_literal;
+                }
+                if in_literal || !character.is_whitespace() {
+                    out.push(character);
+                }
+            }
+        }
+        out
+    }
+
+    const SEARCH_MIGRATION: &str =
+        include_str!("../../migrations/2026-09-15-120000_search_fts_commune/up.sql");
+
+    #[test]
+    fn expressions_fts_identiques_au_ddl() {
+        let migration = normalized(SEARCH_MIGRATION);
+
+        for columns in [ETABLISSEMENT_SEARCH_COLUMNS, UNITE_LEGALE_SEARCH_COLUMNS] {
+            let expression = normalized(&search_vector(None, columns));
+            assert!(
+                migration.contains(&expression),
+                "tsvector expression missing from the migration: {expression}"
+            );
+        }
+    }
+
+    #[test]
+    fn expressions_trigramme_identiques_au_ddl() {
+        let migration = normalized(SEARCH_MIGRATION);
+
+        for columns in [ETABLISSEMENT_SEARCH_COLUMNS, UNITE_LEGALE_SEARCH_COLUMNS] {
+            let expression = normalized(&search_trigram(None, columns));
+            assert!(
+                migration.contains(&expression),
+                "trigram expression missing from the migration: {expression}"
+            );
+        }
+    }
+
+    /// The same column list also feeds `search_refresh_full` and
+    /// `search_refresh_incremental`, which build the correction lexicon. Those
+    /// two copies were guarded by nothing: a divergence there would silently
+    /// build the lexicon from different columns than the index, and typo
+    /// correction would target the wrong vocabulary.
+    #[test]
+    fn colonnes_identiques_dans_les_fonctions_de_rafraichissement() {
+        // Scoped to the two refresh functions, so the two index definitions
+        // above them are not what makes this pass.
+        let refreshes = normalized(
+            &SEARCH_MIGRATION[SEARCH_MIGRATION
+                .find("FUNCTION public.search_refresh_full")
+                .expect("search_refresh_full missing from the migration")..],
+        );
+
+        for columns in [ETABLISSEMENT_SEARCH_COLUMNS, UNITE_LEGALE_SEARCH_COLUMNS] {
+            // The refresh functions concatenate the same columns, applying
+            // `immutable_unaccent` themselves.
+            let concatenation = normalized(
+                &columns
+                    .iter()
+                    .map(|column| format!("coalesce({column},'')"))
+                    .collect::<Vec<_>>()
+                    .join("||' '||"),
+            );
+            assert_eq!(
+                refreshes.matches(&concatenation).count(),
+                2,
+                "both refresh functions must build the lexicon from: {concatenation}"
+            );
+        }
+    }
+
+    #[test]
+    fn alias_prefixe_les_colonnes() {
+        let expression = search_vector(Some("e"), ETABLISSEMENT_SEARCH_COLUMNS);
+        assert!(expression.contains("coalesce(e.denomination_usuelle, '')"));
+        assert!(!expression.contains("coalesce(denomination_usuelle, '')"));
+    }
+
+    #[test]
+    fn decoupage_multi_valeurs() {
+        assert_eq!(split_values("a, b ,c"), vec!["a", "b", "c"]);
+        assert_eq!(split_values(" , ,"), Vec::<String>::new());
+        assert_eq!(split_values("62.01Z"), vec!["62.01Z"]);
+    }
+
+    #[test]
+    fn facettes_filtrees_par_liste_blanche() {
+        let allowed = ETABLISSEMENT_FACET_FIELDS;
+        assert_eq!(
+            requested_facets(Some("code_commune,activite_principale"), allowed),
+            vec!["code_commune", "activite_principale"]
+        );
+        assert_eq!(
+            requested_facets(Some("code_postal,code_postal"), allowed),
+            vec!["code_postal"]
+        );
+        assert!(requested_facets(Some("siret; DROP TABLE etablissement"), allowed).is_empty());
+        assert_eq!(
+            unknown_facets(Some("code_postal,inconnu"), allowed),
+            vec!["inconnu"]
+        );
+    }
+
+    #[test]
+    fn negation_conserve_les_valeurs_nulles() {
+        let mut binder = Binder::new();
+        let condition = binder.none_of("e.activite_principale", vec!["62.01Z".to_string()]);
+        assert_eq!(
+            condition,
+            "(e.activite_principale IS NULL OR e.activite_principale <> ALL($1))"
+        );
     }
 }

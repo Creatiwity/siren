@@ -81,7 +81,16 @@ Schema managed via Diesel migrations in `migrations/`. Run `diesel migration run
 - Text index: GIN expression index on `to_tsvector('french', immutable_unaccent(<denomination + enseignes>))`. The expression lives in `src/models/search.rs` and **must** stay byte-identical to the migration, otherwise the index is silently bypassed.
 - `libelle_commune` is deliberately NOT part of the text index. Communes are addressed by the `commune` parameter, resolved through `commune_dim`.
 - `search_lexicon` holds the corpus vocabulary with document frequencies; `public.search_query(q, source)` turns a raw query into an augmented `tsquery` (`word | correction`, never a replacement) plus a display suggestion.
-- `public.search_refresh_full(source)` rebuilds the lexicon, the commune dimension and the statistics; it runs after each stock swap. `public.search_refresh_incremental(source, since)` merges only the rows touched by the daily Insee sync.
+- `public.search_refresh_full(source)` rebuilds the lexicon, the commune dimension and the statistics; it runs after each stock swap. `public.search_refresh_incremental(source, since)` merges only the rows touched by the daily Insee sync. Neither blocks reads.
+- Typo correction has two candidate sources, consulted in order: trigram similarity re-ranked by Levenshtein, then — only if that yields nothing — the phonetic key `public.phonetic_fr` (metaphone after stripping the silent leading `h`).
+- List filters accept comma-separated values and have a `_not` twin; dates are bounded with `_min` / `_max`. Facets (`facette=`) are computed over the same capped subset as `total`, from a whitelist — never from raw user input.
+- Bulk loads into `*_staging` drop the non-constraint indexes first and rebuild them from the catalogue definitions afterwards, inside a transaction (see `models::common::load_staging_without_indexes`). Measured 2.6x faster on 1M rows.
+
+### Tests
+
+`cargo test` runs the unit tests alone. Set `SIRENE_TEST_DATABASE_URL` (deliberately distinct from `DATABASE_URL`) to also run the integration suite against a real database.
+
+Two guards protect the search from silently degrading into a sequential scan: a unit test asserts the expression built in `src/models/search.rs` appears verbatim in the index DDL, and an integration test reads the query plan to confirm PostgreSQL picks the index.
 
 ## Environment Variables
 
