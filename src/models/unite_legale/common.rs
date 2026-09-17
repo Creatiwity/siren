@@ -155,6 +155,7 @@ pub struct UniteLegaleSearchOutput {
     pub offset: i64,
     pub sort: UniteLegaleSortField,
     pub direction: SortDirection,
+    pub suggestion: Option<String>,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -165,6 +166,10 @@ pub struct UniteLegaleSearchResponse {
     pub offset: i64,
     pub sort: UniteLegaleSortField,
     pub direction: SortDirection,
+    /// Reformulation proposee, presente uniquement quand la recherche ne
+    /// renvoie aucun resultat et qu'un mot proche existe dans le corpus.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub suggestion: Option<String>,
 }
 
 #[derive(Debug, Serialize, ToSchema)]

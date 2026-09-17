@@ -3,6 +3,7 @@ pub mod error;
 
 use super::common::{Error as UpdatableError, UpdatableModel, copy_remote_zipped_csv};
 use super::schema::unite_legale::dsl;
+use super::search;
 use crate::connectors::{Connectors, local::Connection};
 use crate::update::utils::remote_file::RemoteFile;
 use async_trait::async_trait;
@@ -15,7 +16,7 @@ use diesel::pg::upsert::excluded;
 use diesel::pg::{CopyFormat, CopyHeader};
 use diesel::prelude::*;
 use diesel::sql_query;
-use diesel::sql_types::{BigInt, Date, Text};
+use diesel::sql_types::{Text, Timestamp};
 use diesel_async::{AsyncConnection, RunQueryDsl};
 use error::Error;
 
@@ -28,117 +29,142 @@ pub async fn get(connection: &mut Connection, siren: &str) -> Result<UniteLegale
         .map_err(|error| error.into())
 }
 
-const SEARCH_TOTAL_CAP: i64 = 10_000;
-
-#[derive(QueryableByName)]
-struct RowCount {
-    #[diesel(sql_type = BigInt)]
-    count: i64,
+/// Mode de correspondance textuelle applique a la requete.
+enum TextMatch<'a> {
+    None,
+    /// FTS natif : `tsvector @@ tsquery`. Chemin nominal.
+    FullText(&'a str),
+    /// Repli trigramme, declenche uniquement quand le FTS ne ramene rien.
+    Trigram(&'a str),
 }
 
 pub async fn search(
     connection: &mut Connection,
     params: &UniteLegaleSearchParams,
 ) -> Result<UniteLegaleSearchOutput, Error> {
-    let has_q = params.q.is_some();
-
     let limit = params.limit.unwrap_or(20).clamp(1, 100);
     let offset = params.offset.unwrap_or(0).clamp(0, 10_000);
 
-    // Build SELECT columns
-    let mut select_columns = vec![
-        "u.siren".to_string(),
-        "u.etat_administratif".to_string(),
-        "u.date_creation".to_string(),
-        "u.denomination".to_string(),
-        "u.denomination_usuelle_1".to_string(),
-        "u.denomination_usuelle_2".to_string(),
-        "u.denomination_usuelle_3".to_string(),
-        "u.activite_principale".to_string(),
-        "u.categorie_juridique".to_string(),
-        "u.categorie_entreprise".to_string(),
-    ];
+    let q = params
+        .q
+        .as_deref()
+        .map(str::trim)
+        .filter(|q| q.chars().count() >= search::MIN_QUERY_LENGTH);
 
-    if has_q {
-        select_columns.push(
-            "word_similarity(lower(immutable_unaccent($1)), u.search_denomination) AS score"
-                .to_string(),
-        );
-    } else {
-        select_columns.push("NULL::real AS score".to_string());
-    }
-
-    // Build WHERE conditions
-    let mut conditions: Vec<String> = Vec::new();
-    let mut param_index = 1u32;
-
-    // Text search
-    if has_q {
-        conditions.push(format!(
-            "lower(immutable_unaccent(${param_index})) <% u.search_denomination"
-        ));
-        param_index += 1;
-    }
-
-    // Field filters
-    let mut field_param_indices: Vec<(String, u32)> = Vec::new();
-
-    if let Some(ref _v) = params.etat_administratif {
-        conditions.push(format!("u.etat_administratif = ${param_index}"));
-        field_param_indices.push(("etat_administratif".to_string(), param_index));
-        param_index += 1;
-    }
-    if let Some(ref _v) = params.activite_principale {
-        conditions.push(format!("u.activite_principale = ${param_index}"));
-        field_param_indices.push(("activite_principale".to_string(), param_index));
-        param_index += 1;
-    }
-    if let Some(ref _v) = params.categorie_juridique {
-        conditions.push(format!("u.categorie_juridique = ${param_index}"));
-        field_param_indices.push(("categorie_juridique".to_string(), param_index));
-        param_index += 1;
-    }
-    if let Some(ref _v) = params.categorie_entreprise {
-        conditions.push(format!("u.categorie_entreprise = ${param_index}"));
-        field_param_indices.push(("categorie_entreprise".to_string(), param_index));
-        param_index += 1;
-    }
-    if let Some(ref _v) = params.date_creation {
-        conditions.push(format!("u.date_creation = ${param_index}"));
-        field_param_indices.push(("date_creation".to_string(), param_index));
-        param_index += 1;
-    }
-    if let Some(ref _v) = params.date_debut {
-        conditions.push(format!("u.date_debut = ${param_index}"));
-        field_param_indices.push(("date_debut".to_string(), param_index));
-        param_index += 1;
-    }
-
-    let _ = param_index; // suppress unused warning
-
-    // Build ORDER BY
-    let sort_field = params.sort.unwrap_or(if has_q {
+    let sort = params.sort.unwrap_or(if q.is_some() {
         UniteLegaleSortField::Relevance
     } else {
         UniteLegaleSortField::DateCreation
     });
+    let direction = params.direction.unwrap_or(SortDirection::Desc);
 
-    let resolved_dir = params.direction.unwrap_or(SortDirection::Desc);
-
-    let order_by = match (sort_field, resolved_dir) {
-        (UniteLegaleSortField::Relevance, SortDirection::Asc) => "score ASC",
-        (UniteLegaleSortField::Relevance, SortDirection::Desc) => "score DESC",
-        (UniteLegaleSortField::DateCreation, SortDirection::Asc) => {
-            "u.date_creation ASC NULLS LAST"
-        }
-        (UniteLegaleSortField::DateCreation, SortDirection::Desc) => {
-            "u.date_creation DESC NULLS LAST"
-        }
-        (UniteLegaleSortField::DateDebut, SortDirection::Asc) => "u.date_debut ASC NULLS LAST",
-        (UniteLegaleSortField::DateDebut, SortDirection::Desc) => "u.date_debut DESC NULLS LAST",
+    // Analyse de la saisie : tsquery augmentee (chaque mot suspect est complete
+    // par `| correction`, jamais remplace) et reformulation proposee.
+    let parsed = match q {
+        Some(q) => Some(search::parse_query(connection, q, search::SOURCE_UNITE_LEGALE).await?),
+        None => None,
     };
 
-    // Assemble query
+    let text = match parsed.as_ref().and_then(|parsed| parsed.tsquery.as_deref()) {
+        Some(tsquery) => TextMatch::FullText(tsquery),
+        None => TextMatch::None,
+    };
+
+    let mut output = execute(connection, params, &text, sort, direction, limit, offset).await?;
+
+    // Repli trigramme : couvre ce que la correction par lexique ne rattrape pas
+    // (transpositions, correspondance infixe). Jamais sur le chemin chaud.
+    if output.results.is_empty()
+        && let Some(q) = q
+    {
+        output = execute(
+            connection,
+            params,
+            &TextMatch::Trigram(q),
+            sort,
+            direction,
+            limit,
+            offset,
+        )
+        .await?;
+    }
+
+    if output.results.is_empty() {
+        output.suggestion = parsed.and_then(|parsed| parsed.suggestion);
+    }
+
+    Ok(output)
+}
+
+async fn execute(
+    connection: &mut Connection,
+    params: &UniteLegaleSearchParams,
+    text: &TextMatch<'_>,
+    sort: UniteLegaleSortField,
+    direction: SortDirection,
+    limit: i64,
+    offset: i64,
+) -> Result<UniteLegaleSearchOutput, Error> {
+    let mut binder = search::Binder::new();
+
+    let vector = search::search_vector("u", search::UNITE_LEGALE_SEARCH_COLUMNS);
+    let trigram = search::search_trigram("u", search::UNITE_LEGALE_SEARCH_COLUMNS);
+
+    let mut conditions: Vec<String> = Vec::new();
+
+    let score = match text {
+        TextMatch::None => "NULL::real".to_string(),
+        TextMatch::FullText(tsquery) => {
+            let placeholder = binder.push(search::Bind::TsQuery(tsquery.to_string()));
+            conditions.push(format!("{vector} @@ {placeholder}::tsquery"));
+            format!("ts_rank_cd({vector}, {placeholder}::tsquery)")
+        }
+        TextMatch::Trigram(q) => {
+            let placeholder = binder.text(*q);
+            let needle = format!("lower(public.immutable_unaccent({placeholder}))");
+            conditions.push(format!("{needle} <% {trigram}"));
+            format!("word_similarity({needle}, {trigram})")
+        }
+    };
+
+    if let Some(value) = params.etat_administratif {
+        let placeholder = binder.text(match value {
+            common::EtatAdministratif::A => "A",
+            common::EtatAdministratif::F => "F",
+        });
+        conditions.push(format!("u.etat_administratif = {placeholder}"));
+    }
+    if let Some(value) = params.activite_principale.as_deref() {
+        let placeholder = binder.text(value);
+        conditions.push(format!("u.activite_principale = {placeholder}"));
+    }
+    if let Some(value) = params.categorie_juridique.as_deref() {
+        let placeholder = binder.text(value);
+        conditions.push(format!("u.categorie_juridique = {placeholder}"));
+    }
+    if let Some(value) = params.categorie_entreprise.as_deref() {
+        let placeholder = binder.text(value);
+        conditions.push(format!("u.categorie_entreprise = {placeholder}"));
+    }
+    if let Some(value) = params.date_creation {
+        let placeholder = binder.push(search::Bind::Date(value));
+        conditions.push(format!("u.date_creation = {placeholder}"));
+    }
+    if let Some(value) = params.date_debut {
+        let placeholder = binder.push(search::Bind::Date(value));
+        conditions.push(format!("u.date_debut = {placeholder}"));
+    }
+
+    let dir = match direction {
+        SortDirection::Asc => "ASC",
+        SortDirection::Desc => "DESC",
+    };
+    let order_by = match sort {
+        UniteLegaleSortField::Relevance => format!("score {dir}"),
+        UniteLegaleSortField::DateCreation => format!("u.date_creation {dir} NULLS LAST"),
+        UniteLegaleSortField::DateDebut => format!("u.date_debut {dir} NULLS LAST"),
+    };
+
     let where_clause = if conditions.is_empty() {
         String::new()
     } else {
@@ -146,120 +172,39 @@ pub async fn search(
     };
 
     let sql = format!(
-        "SELECT {} FROM unite_legale u {} ORDER BY {} LIMIT {} OFFSET {}",
-        select_columns.join(", "),
-        where_clause,
-        order_by,
-        limit,
-        offset
+        "SELECT u.siren, u.etat_administratif, u.date_creation, u.denomination, \
+         u.denomination_usuelle_1, u.denomination_usuelle_2, u.denomination_usuelle_3, \
+         u.activite_principale, u.categorie_juridique, u.categorie_entreprise, \
+         {score} AS score \
+         FROM unite_legale u {where_clause} ORDER BY {order_by} LIMIT {limit} OFFSET {offset}"
     );
 
-    // Bind parameters in order
-    let mut query = sql_query(&sql).into_boxed();
-
-    if let Some(ref q) = params.q {
-        query = query.bind::<Text, _>(q);
-    }
-
-    for (field_name, _) in &field_param_indices {
-        match field_name.as_str() {
-            "etat_administratif" => {
-                let val = match params.etat_administratif.unwrap() {
-                    common::EtatAdministratif::A => "A",
-                    common::EtatAdministratif::F => "F",
-                };
-                query = query.bind::<Text, _>(val);
-            }
-            "activite_principale" => {
-                query = query.bind::<Text, _>(params.activite_principale.as_ref().unwrap());
-            }
-            "categorie_juridique" => {
-                query = query.bind::<Text, _>(params.categorie_juridique.as_ref().unwrap());
-            }
-            "categorie_entreprise" => {
-                query = query.bind::<Text, _>(params.categorie_entreprise.as_ref().unwrap());
-            }
-            "date_creation" => {
-                query = query.bind::<Date, _>(params.date_creation.unwrap());
-            }
-            "date_debut" => {
-                query = query.bind::<Date, _>(params.date_debut.unwrap());
-            }
-            _ => {}
-        }
-    }
-
-    let results = query
+    let results = binder
+        .apply(sql_query(sql).into_boxed())
         .load::<UniteLegaleSearchResult>(connection)
         .await
-        .map_err(|e| -> Error { e.into() })?;
+        .map_err(|error| -> Error { error.into() })?;
 
     let count_sql = format!(
-        "SELECT count(*) AS count FROM (SELECT 1 FROM unite_legale u {} LIMIT {}) _sub",
-        where_clause,
-        SEARCH_TOTAL_CAP + 1
+        "SELECT count(*) AS count FROM (SELECT 1 FROM unite_legale u {where_clause} LIMIT {}) _sub",
+        search::SEARCH_TOTAL_CAP + 1
     );
-    let mut count_query = sql_query(&count_sql).into_boxed();
-    if let Some(ref q) = params.q {
-        count_query = count_query.bind::<Text, _>(q);
-    }
-    for (field_name, _) in &field_param_indices {
-        match field_name.as_str() {
-            "etat_administratif" => {
-                let val = match params.etat_administratif.unwrap() {
-                    common::EtatAdministratif::A => "A",
-                    common::EtatAdministratif::F => "F",
-                };
-                count_query = count_query.bind::<Text, _>(val);
-            }
-            "activite_principale" => {
-                count_query =
-                    count_query.bind::<Text, _>(params.activite_principale.as_ref().unwrap());
-            }
-            "categorie_juridique" => {
-                count_query =
-                    count_query.bind::<Text, _>(params.categorie_juridique.as_ref().unwrap());
-            }
-            "categorie_entreprise" => {
-                count_query =
-                    count_query.bind::<Text, _>(params.categorie_entreprise.as_ref().unwrap());
-            }
-            "date_creation" => {
-                count_query = count_query.bind::<Date, _>(params.date_creation.unwrap());
-            }
-            "date_debut" => {
-                count_query = count_query.bind::<Date, _>(params.date_debut.unwrap());
-            }
-            _ => {}
-        }
-    }
 
-    let total = if has_q {
-        connection
-            .transaction(async |conn| {
-                diesel::sql_query("SET LOCAL enable_seqscan = off")
-                    .execute(conn)
-                    .await?;
-                count_query.get_result::<RowCount>(conn).await
-            })
-            .await
-            .map(|r| r.count.min(SEARCH_TOTAL_CAP))
-            .unwrap_or(0)
-    } else {
-        count_query
-            .get_result::<RowCount>(connection)
-            .await
-            .map(|r| r.count.min(SEARCH_TOTAL_CAP))
-            .unwrap_or(0)
-    };
+    let total = binder
+        .apply(sql_query(count_sql).into_boxed())
+        .get_result::<search::RowCount>(connection)
+        .await
+        .map(|row| row.count.min(search::SEARCH_TOTAL_CAP))
+        .unwrap_or(0);
 
     Ok(UniteLegaleSearchOutput {
         results,
         total,
         limit,
         offset,
-        sort: sort_field,
-        direction: resolved_dir,
+        sort,
+        direction,
+        suggestion: None,
     })
 }
 
@@ -487,5 +432,56 @@ impl UpdatableModel for UniteLegaleModel {
             .await?;
 
         Ok((next_cursor, updated_count))
+    }
+
+    fn search_source(&self) -> Option<&'static str> {
+        Some(search::SOURCE_UNITE_LEGALE)
+    }
+
+    async fn refresh_search_metadata(
+        &self,
+        connectors: &Connectors,
+        since: Option<NaiveDateTime>,
+    ) -> Result<(), UpdatableError> {
+        let Some(source) = self.search_source() else {
+            return Ok(());
+        };
+
+        let mut connection = connectors.local.pool.get().await?;
+
+        match since {
+            Some(since) => {
+                sql_query("SELECT public.search_refresh_incremental($1, $2)")
+                    .bind::<Text, _>(source)
+                    .bind::<Timestamp, _>(since)
+                    .execute(&mut connection)
+                    .await?;
+            }
+            None => {
+                sql_query("SELECT public.search_refresh_full($1)")
+                    .bind::<Text, _>(source)
+                    .execute(&mut connection)
+                    .await?;
+
+                // Sans statistiques fraiches, le planificateur retombe sur des
+                // estimations par defaut et choisit des seq scans sur les
+                // predicats GIN. Le RENAME du swap laisse la table sans stats
+                // representatives : il faut les recalculer explicitement.
+                sql_query("ANALYZE unite_legale")
+                    .execute(&mut connection)
+                    .await?;
+
+                // La reconstruction remplace l'integralite des lignes de la
+                // source et laisse autant de tuples morts derriere elle
+                // (1,37 M mesures pour etablissement). VACUUM les recupere sans
+                // bloquer lectures ni ecritures — contrairement a VACUUM FULL,
+                // a ne jamais utiliser ici.
+                sql_query("VACUUM (ANALYZE) search_lexicon")
+                    .execute(&mut connection)
+                    .await?;
+            }
+        }
+
+        Ok(())
     }
 }

@@ -295,7 +295,46 @@ Ce script (transactionnel) :
 6. Recrée les tables de staging pour hériter des nouveaux index et colonnes
 7. Désactive l'extension `pg_search`
 
-Les nouvelles installations n'ont pas besoin de ce script : les migrations Diesel utilisent directement `pg_trgm`.
+Les nouvelles installations n'ont pas besoin de ce script : les migrations Diesel
+utilisent directement `pg_trgm`. La migration `2026-09-15-120000_search_fts_commune`
+prend ensuite le relais et supprime `search_denomination`.
+
+## Recherche
+
+La recherche texte (`?q=`) repose sur le **full-text search natif de PostgreSQL**
+(`tsvector` / `tsquery`, configuration `french`), sans aucune extension. Trois
+mécanismes l'entourent :
+
+- **Correction de la requête.** `search_lexicon` contient le vocabulaire du
+  corpus avec sa fréquence documentaire. `public.search_query(q, source)` corrige
+  les mots suspects en s'appuyant sur les trigrammes puis sur la distance de
+  Levenshtein, et renvoie une `tsquery` **augmentée** : le mot saisi est conservé
+  et complété par `| correction`, jamais remplacé. Un nom rare et légitime reste
+  donc toujours trouvable.
+- **Repli trigramme.** Si le FTS ne ramène rien, la requête est rejouée une fois
+  avec `word_similarity`. Cela couvre les transpositions et la correspondance
+  infixe, au prix d'un index GIN supplémentaire. Ce chemin ne s'exécute jamais sur
+  une recherche qui aboutit.
+- **Longueur minimale.** `q` doit faire au moins 3 caractères, sinon l'API répond
+  400. En dessous, aucune structure d'index n'est exploitable.
+
+`libelle_commune` ne fait **pas** partie du texte indexé. Les communes sont
+adressées par le paramètre `?commune=` en clair (`paris`, `saint etienne`,
+`marseile`), résolu via la table de dimension `commune_dim` : correspondance par
+préfixe sur chaque mot, repli trigramme tolérant aux fautes, puis filtrage sur
+`code_commune`.
+
+### Maintenance des données annexes
+
+Elles sont rafraîchies automatiquement par le workflow de mise à jour :
+
+- après le **swap du stock mensuel** : `public.search_refresh_full(source)`
+  reconstruit le lexique et `commune_dim`, puis relance `ANALYZE`. Sans ce
+  dernier, la table qui vient d'être renommée n'a pas de statistiques
+  représentatives et le planificateur repart en *seq scan* ;
+- après la **synchro quotidienne Insee** :
+  `public.search_refresh_incremental(source, since)` ne reparcourt que les lignes
+  touchées depuis `since` et fusionne leur vocabulaire.
 
 ## Development
 

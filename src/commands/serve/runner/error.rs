@@ -83,11 +83,16 @@ impl IntoResponse for Error {
             error!("[InternalServerError] {}", message);
         }
 
-        Json(ErrorResponse {
-            code: status.as_u16(),
-            message,
-        })
-        .into_response()
+        // Le statut doit porter sur la reponse HTTP, pas seulement dans le
+        // corps : sans ce tuple, toute erreur ressortait en 200.
+        (
+            status,
+            Json(ErrorResponse {
+                code: status.as_u16(),
+                message,
+            }),
+        )
+            .into_response()
     }
 }
 

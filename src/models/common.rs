@@ -34,6 +34,28 @@ pub trait UpdatableModel: Sync + Send {
         start_timestamp: NaiveDateTime,
         cursor: String,
     ) -> Result<(Option<String>, usize), Error>;
+
+    /// Identifiant de la source dans `search_lexicon` / `public.search_query`,
+    /// ou `None` pour les modeles qui n'exposent pas de recherche texte.
+    fn search_source(&self) -> Option<&'static str> {
+        None
+    }
+
+    /// Remet a niveau les donnees annexes de la recherche : lexique de
+    /// correction, dimension des communes, statistiques du planificateur.
+    ///
+    /// `since = None` reconstruit tout (apres le swap du stock mensuel).
+    /// `since = Some(_)` ne fusionne que les lignes touchees depuis cet
+    /// horodatage (apres la synchro quotidienne Insee).
+    ///
+    /// Sans source de recherche, l'operation est un no-op.
+    async fn refresh_search_metadata(
+        &self,
+        _connectors: &Connectors,
+        _since: Option<NaiveDateTime>,
+    ) -> Result<(), Error> {
+        Ok(())
+    }
 }
 
 pub fn copy_remote_zipped_csv(
