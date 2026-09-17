@@ -5,8 +5,8 @@ use super::common::{
 use super::error::Error;
 use crate::models;
 use crate::models::etablissement::common::{
-    EtablissementSearchParams, EtablissementSearchResponse, EtablissementSearchResultResponse,
-    EtablissementSortField,
+    EtablissementSearchOutput, EtablissementSearchParams, EtablissementSearchResponse,
+    EtablissementSearchResultResponse, EtablissementSortField,
 };
 use crate::models::etablissement::error::Error as EtablissementModelError;
 use axum::{
@@ -104,18 +104,16 @@ async fn search_etablissements(
         });
     }
 
-    // En dessous de trois caracteres, ni le FTS ni le trigramme ne sont
-    // exploitables : la requete degenere en parcours complet. On refuse
-    // explicitement plutot que d'ignorer silencieusement le parametre.
-    if let Some(q) = params.q.as_deref().map(str::trim)
-        && q.chars().count() < models::search::MIN_QUERY_LENGTH
-    {
-        return Err(Error::InvalidSearchParams {
-            message: format!(
-                "q must be at least {} characters long",
-                models::search::MIN_QUERY_LENGTH
-            ),
-        });
+    // The same three rules are stated once in `models::search`; the model layer
+    // degrades gracefully instead, the HTTP layer prefers to say so.
+    for check in [
+        models::search::check_query_length(params.q.as_deref()),
+        models::search::check_facets(
+            params.facette.as_deref(),
+            models::search::ETABLISSEMENT_FACET_FIELDS,
+        ),
+    ] {
+        check.map_err(|message| Error::InvalidSearchParams { message })?;
     }
 
     match params.sort {
@@ -136,12 +134,20 @@ async fn search_etablissements(
     let mut connection = connectors.local.pool.get().await?;
 
     let output = models::etablissement::search(&mut connection, &params).await?;
-    let total = output.total;
-    let suggestion = output.suggestion;
+    let EtablissementSearchOutput {
+        results,
+        total,
+        total_capped,
+        limit,
+        offset,
+        sort,
+        direction,
+        suggestion,
+        facettes,
+    } = output;
 
     Ok(Json(EtablissementSearchResponse {
-        etablissements: output
-            .results
+        etablissements: results
             .into_iter()
             .map(|r| EtablissementSearchResultResponse {
                 siret: r.siret,
@@ -162,11 +168,13 @@ async fn search_etablissements(
             })
             .collect(),
         total,
-        limit: output.limit,
-        offset: output.offset,
-        sort: output.sort,
-        direction: output.direction,
+        total_capped,
+        limit,
+        offset,
+        sort,
+        direction,
         suggestion,
+        facettes,
     }))
 }
 

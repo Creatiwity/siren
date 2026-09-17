@@ -55,6 +55,12 @@ The system SHALL tolerate misspelled query terms without losing exact matches.
 - **WHEN** a text search returns no establishment through full-text search
 - **THEN** the system retries once with trigram similarity before returning an empty result set
 
+#### Scenario: Phonetic correction
+
+- **WHEN** a GET request is made to `/v3/etablissements?q=filipe`
+- **THEN** the system also searches for the phonetically equivalent corpus term `philippe`
+- **AND** the phonetic source is consulted only when trigram similarity yields no candidate
+
 ### Requirement: Filter etablissements by field values
 
 The system SHALL allow filtering establishments by exact field values via query parameters.
@@ -95,14 +101,76 @@ The system SHALL allow filtering establishments by exact field values via query 
 - **THEN** the system applies all filters together (AND logic)
 - **AND** only establishments matching all criteria are returned
 
+### Requirement: Filter etablissements by multiple values
+
+The system SHALL accept several comma-separated values on `code_postal`, `code_commune`, `siren` and `activite_principale`, and SHALL return establishments matching any of them.
+
+#### Scenario: Several postal codes
+
+- **WHEN** a GET request is made to `/v3/etablissements?code_postal=75001,75002`
+- **THEN** only establishments whose postal code is one of the two are returned
+
+#### Scenario: Single value stays valid
+
+- **WHEN** a GET request is made to `/v3/etablissements?code_postal=75001`
+- **THEN** the behaviour is unchanged from the single-value form
+
+### Requirement: Exclude etablissements by field values
+
+The system SHALL allow excluding values via `code_postal_not`, `code_commune_not` and `activite_principale_not`. Establishments whose field is null are kept: excluding a value is not a statement about unknown values.
+
+#### Scenario: Exclude an activity
+
+- **WHEN** a GET request is made to `/v3/etablissements?q=boulangerie&activite_principale_not=10.71C`
+- **THEN** no returned establishment has `activite_principale = '10.71C'`
+
+#### Scenario: Null values survive exclusion
+
+- **WHEN** an exclusion filter is applied
+- **THEN** establishments with no value for that field are still returned
+
+### Requirement: Filter etablissements by date range
+
+The system SHALL allow bounding `date_creation` and `date_debut` via `date_creation_min`, `date_creation_max`, `date_debut_min` and `date_debut_max`. Both bounds are inclusive and each is optional.
+
+#### Scenario: Bounded range
+
+- **WHEN** a GET request is made to `/v3/etablissements?date_creation_min=2024-01-01&date_creation_max=2024-12-31`
+- **THEN** only establishments created within that range are returned
+
+#### Scenario: Open-ended range
+
+- **WHEN** a GET request is made to `/v3/etablissements?date_creation_min=2024-01-01`
+- **THEN** only establishments created on or after that date are returned
+
+### Requirement: Facet etablissement search results
+
+The system SHALL compute value counts for the fields listed in the `facette` query parameter, over the same capped subset used for `total`. Allowed fields are `etat_administratif`, `code_postal`, `code_commune`, `activite_principale` and `etablissement_siege`.
+
+#### Scenario: Request facets
+
+- **WHEN** a GET request is made to `/v3/etablissements?q=boulangerie&facette=activite_principale,code_commune`
+- **THEN** the response contains a `facettes` object with one entry per requested field
+- **AND** each entry lists values sorted by descending count
+
+#### Scenario: Facets are absent when not requested
+
+- **WHEN** a GET request is made without `facette`
+- **THEN** the response contains no `facettes` field
+
+#### Scenario: Unknown facet field
+
+- **WHEN** a GET request is made to `/v3/etablissements?facette=siret`
+- **THEN** the system responds with a 400 error listing the allowed fields
+
 ### Requirement: Filter etablissements by commune name
 
-The system SHALL allow filtering establishments by plain-text commune name via the `commune` query parameter. The name is resolved against a commune dimension, accent- and case-insensitively, by prefix on each word, with a fallback tolerant to misspellings.
+The system SHALL allow filtering establishments by plain-text commune name via the `commune` query parameter. The name is resolved against a commune dimension, accent- and case-insensitively, matching each typed word as a prefix of any word of the commune name, with a fallback tolerant to misspellings.
 
 #### Scenario: Filter by commune name
 
 - **WHEN** a GET request is made to `/v3/etablissements?commune=paris`
-- **THEN** only establishments located in a commune whose name starts with `paris` are returned, including every Paris arrondissement
+- **THEN** establishments located in a commune having a word starting with `paris` are returned — every Paris arrondissement, and also `LE TOUQUET-PARIS-PLAGE`
 
 #### Scenario: Match on any word of the commune name
 
@@ -245,6 +313,7 @@ The system SHALL return search results in a structured response with metadata.
 - **AND** the response includes `limit` and `offset` reflecting the applied pagination
 - **AND** the response includes `sort` and `direction` reflecting the resolved sort field and direction
 - **AND** the response includes `suggestion` only when the result set is empty and a close term exists
+- **AND** the response includes `total_capped`, `true` when `total` reached its ceiling
 
 #### Scenario: Empty search results
 

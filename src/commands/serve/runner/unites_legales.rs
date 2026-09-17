@@ -2,8 +2,8 @@ use super::common::{Context, UniteLegaleInnerResponse, UniteLegaleResponse};
 use super::error::Error;
 use crate::models;
 use crate::models::unite_legale::common::{
-    UniteLegaleSearchParams, UniteLegaleSearchResponse, UniteLegaleSearchResultResponse,
-    UniteLegaleSortField,
+    UniteLegaleSearchOutput, UniteLegaleSearchParams, UniteLegaleSearchResponse,
+    UniteLegaleSearchResultResponse, UniteLegaleSortField,
 };
 use crate::models::unite_legale::error::Error as UniteLegaleModelError;
 use axum::{
@@ -85,18 +85,16 @@ async fn search_unites_legales(
     State(context): State<Arc<Context>>,
     Query(params): Query<UniteLegaleSearchParams>,
 ) -> Result<Json<UniteLegaleSearchResponse>, Error> {
-    // En dessous de trois caracteres, ni le FTS ni le trigramme ne sont
-    // exploitables : la requete degenere en parcours complet. On refuse
-    // explicitement plutot que d'ignorer silencieusement le parametre.
-    if let Some(q) = params.q.as_deref().map(str::trim)
-        && q.chars().count() < models::search::MIN_QUERY_LENGTH
-    {
-        return Err(Error::InvalidSearchParams {
-            message: format!(
-                "q must be at least {} characters long",
-                models::search::MIN_QUERY_LENGTH
-            ),
-        });
+    // The same three rules are stated once in `models::search`; the model layer
+    // degrades gracefully instead, the HTTP layer prefers to say so.
+    for check in [
+        models::search::check_query_length(params.q.as_deref()),
+        models::search::check_facets(
+            params.facette.as_deref(),
+            models::search::UNITE_LEGALE_FACET_FIELDS,
+        ),
+    ] {
+        check.map_err(|message| Error::InvalidSearchParams { message })?;
     }
 
     match params.sort {
@@ -112,12 +110,20 @@ async fn search_unites_legales(
     let mut connection = connectors.local.pool.get().await?;
 
     let output = models::unite_legale::search(&mut connection, &params).await?;
-    let total = output.total;
-    let suggestion = output.suggestion;
+    let UniteLegaleSearchOutput {
+        results,
+        total,
+        total_capped,
+        limit,
+        offset,
+        sort,
+        direction,
+        suggestion,
+        facettes,
+    } = output;
 
     Ok(Json(UniteLegaleSearchResponse {
-        unites_legales: output
-            .results
+        unites_legales: results
             .into_iter()
             .map(|r| UniteLegaleSearchResultResponse {
                 siren: r.siren,
@@ -134,11 +140,13 @@ async fn search_unites_legales(
             })
             .collect(),
         total,
-        limit: output.limit,
-        offset: output.offset,
-        sort: output.sort,
-        direction: output.direction,
+        total_capped,
+        limit,
+        offset,
+        sort,
+        direction,
         suggestion,
+        facettes,
     }))
 }
 

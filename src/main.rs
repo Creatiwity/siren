@@ -9,6 +9,8 @@ mod diesel_instrumentation;
 mod models;
 mod sentry_crons;
 mod telemetry;
+#[cfg(test)]
+mod tests;
 mod update;
 
 use connectors::ConnectorsBuilders;

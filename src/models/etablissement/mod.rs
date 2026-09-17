@@ -16,9 +16,9 @@ use diesel::pg::upsert::excluded;
 use diesel::pg::{CopyFormat, CopyHeader};
 use diesel::prelude::*;
 use diesel::sql_query;
-use diesel::sql_types::{Text, Timestamp};
 use diesel_async::{AsyncConnection, RunQueryDsl};
 use error::Error;
+use tracing::info;
 
 pub async fn get(connection: &mut Connection, siret: &str) -> Result<Etablissement, Error> {
     dsl::etablissement
@@ -53,20 +53,11 @@ pub async fn get_siege_with_siren(
         .map_err(|error| error.into())
 }
 
-/// Mode de correspondance textuelle applique a la requete.
-enum TextMatch<'a> {
-    /// Aucun filtre texte.
-    None,
-    /// FTS natif : `tsvector @@ tsquery`. Chemin nominal.
-    FullText(&'a str),
-    /// Repli trigramme, declenche uniquement quand le FTS ne ramene rien.
-    Trigram(&'a str),
-}
-
-/// Parametres resolus d'une execution de recherche.
+/// Resolved parameters of one search execution.
 struct SearchPlan<'a> {
-    text: TextMatch<'a>,
+    text: search::TextMatch<'a>,
     commune_codes: Option<&'a [String]>,
+    facets: &'a [String],
     sort: EtablissementSortField,
     direction: SortDirection,
     limit: i64,
@@ -97,18 +88,13 @@ pub async fn search(
         _ => SortDirection::Desc,
     });
 
-    let empty = |suggestion| EtablissementSearchOutput {
-        results: Vec::new(),
-        total: 0,
-        limit,
-        offset,
-        sort,
-        direction,
-        suggestion,
-    };
+    let facets = search::requested_facets(
+        params.facette.as_deref(),
+        search::ETABLISSEMENT_FACET_FIELDS,
+    );
 
-    // Resolution du libelle de commune en codes INSEE. Un libelle sans
-    // correspondance ne peut rien donner : inutile d'interroger la grande table.
+    // A commune label matching nothing can yield nothing: no point querying the
+    // large table.
     let commune_codes = match params
         .commune
         .as_deref()
@@ -118,63 +104,64 @@ pub async fn search(
         Some(commune) => {
             let codes = search::resolve_commune(connection, commune).await?;
             if codes.is_empty() {
-                return Ok(empty(None));
+                return Ok(EtablissementSearchOutput {
+                    results: Vec::new(),
+                    total: 0,
+                    total_capped: false,
+                    limit,
+                    offset,
+                    sort,
+                    direction,
+                    suggestion: None,
+                    facettes: search::Facets::new(),
+                });
             }
             Some(codes)
         }
         None => None,
     };
 
-    // Analyse de la saisie : tsquery augmentee (chaque mot suspect est complete
-    // par `| correction`, jamais remplace) et reformulation proposee.
     let parsed = match q {
         Some(q) => Some(search::parse_query(connection, q, search::SOURCE_ETABLISSEMENT).await?),
         None => None,
     };
 
-    let text = match parsed.as_ref().and_then(|parsed| parsed.tsquery.as_deref()) {
-        Some(tsquery) => TextMatch::FullText(tsquery),
-        None => TextMatch::None,
+    let mut plan = SearchPlan {
+        text: match parsed.as_ref().and_then(|parsed| parsed.tsquery.as_deref()) {
+            Some(tsquery) => search::TextMatch::FullText(tsquery),
+            None => search::TextMatch::None,
+        },
+        commune_codes: commune_codes.as_deref(),
+        facets: &facets,
+        sort,
+        direction,
+        limit,
+        offset,
     };
 
-    let mut output = execute(
-        connection,
-        params,
-        &SearchPlan {
-            text,
-            commune_codes: commune_codes.as_deref(),
-            sort,
-            direction,
-            limit,
-            offset,
-        },
-    )
-    .await?;
+    let mut output = execute(connection, params, &plan).await?;
 
-    // Repli trigramme : couvre ce que la correction par lexique ne rattrape pas
-    // (transpositions, correspondance infixe). Il ne s'execute que sur les
-    // recherches sans resultat, donc jamais sur le chemin chaud.
+    // Covers what lexicon correction cannot: transpositions and infix matches.
+    // Restricted to the first page — an empty page further in means the caller
+    // paged past the end, not that the search found nothing, and retrying there
+    // would scan the whole table for results that already exist.
     if output.results.is_empty()
+        && offset == 0
         && let Some(q) = q
     {
-        output = execute(
-            connection,
-            params,
-            &SearchPlan {
-                text: TextMatch::Trigram(q),
-                commune_codes: commune_codes.as_deref(),
-                sort,
-                direction,
-                limit,
-                offset,
-            },
-        )
-        .await?;
+        info!(
+            target: "sirene::search",
+            source = search::SOURCE_ETABLISSEMENT,
+            query_length = q.chars().count(),
+            "repli trigramme declenche"
+        );
+
+        plan.text = search::TextMatch::Trigram(q);
+        output = execute(connection, params, &plan).await?;
     }
 
-    // La reformulation n'est exposee que si la recherche reste vide : proposee
-    // systematiquement, elle serait fausse pour ~45 % des noms rares mais
-    // corrects (mesure sur le corpus).
+    // Offered systematically, the suggestion would be wrong for ~45% of rare but
+    // correct names, so it only surfaces when the search found nothing.
     if output.results.is_empty() {
         output.suggestion = parsed.and_then(|parsed| parsed.suggestion);
     }
@@ -187,32 +174,34 @@ async fn execute(
     params: &EtablissementSearchParams,
     plan: &SearchPlan<'_>,
 ) -> Result<EtablissementSearchOutput, Error> {
-    let has_geo = params.lat.is_some() && params.lng.is_some() && params.radius.is_some();
-
     let mut binder = search::Binder::new();
-
-    // Point de reference geographique : declare en premier pour que l'expression
-    // soit constante au moment de la planification, condition du parcours KNN
-    // sur l'index GiST.
-    let reference_point = has_geo.then(|| {
-        let lng = binder.push(search::Bind::Float8(params.lng.unwrap_or_default()));
-        let lat = binder.push(search::Bind::Float8(params.lat.unwrap_or_default()));
-        format!("ST_SetSRID(ST_MakePoint({lng}, {lat}), 4326)::geography")
-    });
-
-    let vector = search::search_vector("e", search::ETABLISSEMENT_SEARCH_COLUMNS);
-    let trigram = search::search_trigram("e", search::ETABLISSEMENT_SEARCH_COLUMNS);
-
     let mut conditions: Vec<String> = Vec::new();
 
+    // Declared first so the expression is constant at planning time, which the
+    // GiST KNN walk requires.
+    let reference_point = match (params.lng, params.lat, params.radius) {
+        (Some(lng), Some(lat), Some(radius)) => {
+            let lng = binder.push(search::Bind::Float8(lng));
+            let lat = binder.push(search::Bind::Float8(lat));
+            let point = format!("ST_SetSRID(ST_MakePoint({lng}, {lat}), 4326)::geography");
+            let radius = binder.push(search::Bind::Float8(radius));
+            conditions.push(format!("ST_DWithin(e.position, {point}, {radius})"));
+            Some(point)
+        }
+        _ => None,
+    };
+
+    let columns = search::ETABLISSEMENT_SEARCH_COLUMNS;
     let score = match plan.text {
-        TextMatch::None => "NULL::real".to_string(),
-        TextMatch::FullText(tsquery) => {
+        search::TextMatch::None => "NULL::real".to_string(),
+        search::TextMatch::FullText(tsquery) => {
+            let vector = search::search_vector(Some("e"), columns);
             let placeholder = binder.push(search::Bind::TsQuery(tsquery.to_string()));
             conditions.push(format!("{vector} @@ {placeholder}::tsquery"));
             format!("ts_rank_cd({vector}, {placeholder}::tsquery)")
         }
-        TextMatch::Trigram(q) => {
+        search::TextMatch::Trigram(q) => {
+            let trigram = search::search_trigram(Some("e"), columns);
             let placeholder = binder.text(q);
             let needle = format!("lower(public.immutable_unaccent({placeholder}))");
             conditions.push(format!("{needle} <% {trigram}"));
@@ -221,23 +210,20 @@ async fn execute(
     };
 
     let distance = match &reference_point {
-        Some(point) => {
-            let radius = binder.push(search::Bind::Float8(params.radius.unwrap_or_default()));
-            conditions.push(format!("ST_DWithin(e.position, {point}, {radius})"));
-            format!("ST_Distance(e.position, {point})")
-        }
+        Some(point) => format!("ST_Distance(e.position, {point})"),
         None => "NULL::float8".to_string(),
     };
 
-    // Filtre commune : la resolution du libelle est deja faite, on ne manipule
-    // plus que des codes INSEE, servis par etablissement_commune_date_idx.
-    let commune_placeholder = plan
-        .commune_codes
-        .map(|codes| binder.push(search::Bind::TextArray(codes.to_vec())));
-
-    if let Some(placeholder) = &commune_placeholder {
-        conditions.push(format!("e.code_commune = ANY({placeholder})"));
-    }
+    // Kept out of `conditions` until the query shape is chosen: the lateral form
+    // replaces it with a join, and recovering that by matching generated SQL
+    // would silently break the day the predicate is spelled differently.
+    let commune = plan.commune_codes.map(|codes| {
+        let placeholder = binder.push(search::Bind::TextArray(codes.to_vec()));
+        (
+            placeholder.clone(),
+            format!("e.code_commune = ANY({placeholder})"),
+        )
+    });
 
     if let Some(value) = params.etat_administratif {
         let placeholder = binder.text(match value {
@@ -246,58 +232,81 @@ async fn execute(
         });
         conditions.push(format!("e.etat_administratif = {placeholder}"));
     }
-    if let Some(value) = params.code_postal.as_deref() {
-        let placeholder = binder.text(value);
-        conditions.push(format!("e.code_postal = {placeholder}"));
-    }
-    if let Some(value) = params.siren.as_deref() {
-        let placeholder = binder.text(value);
-        conditions.push(format!("e.siren = {placeholder}"));
-    }
-    if let Some(value) = params.code_commune.as_deref() {
-        let placeholder = binder.text(value);
-        conditions.push(format!("e.code_commune = {placeholder}"));
-    }
-    if let Some(value) = params.activite_principale.as_deref() {
-        let placeholder = binder.text(value);
-        conditions.push(format!("e.activite_principale = {placeholder}"));
-    }
     if let Some(value) = params.etablissement_siege {
         let placeholder = binder.push(search::Bind::Bool(value));
         conditions.push(format!("e.etablissement_siege = {placeholder}"));
     }
 
+    binder.filter_in(
+        &mut conditions,
+        "e.code_postal",
+        params.code_postal.as_deref(),
+    );
+    binder.filter_in(&mut conditions, "e.siren", params.siren.as_deref());
+    binder.filter_in(
+        &mut conditions,
+        "e.code_commune",
+        params.code_commune.as_deref(),
+    );
+    binder.filter_in(
+        &mut conditions,
+        "e.activite_principale",
+        params.activite_principale.as_deref(),
+    );
+
+    binder.filter_not_in(
+        &mut conditions,
+        "e.code_postal",
+        params.code_postal_not.as_deref(),
+    );
+    binder.filter_not_in(
+        &mut conditions,
+        "e.code_commune",
+        params.code_commune_not.as_deref(),
+    );
+    binder.filter_not_in(
+        &mut conditions,
+        "e.activite_principale",
+        params.activite_principale_not.as_deref(),
+    );
+
+    binder.range(
+        &mut conditions,
+        "e.date_creation",
+        params.date_creation_min,
+        params.date_creation_max,
+    );
+    binder.range(
+        &mut conditions,
+        "e.date_debut",
+        params.date_debut_min,
+        params.date_debut_max,
+    );
+
     let order_by = order_by_clause(plan.sort, plan.direction, reference_point.as_deref());
 
-    let where_clause = if conditions.is_empty() {
-        String::new()
-    } else {
-        format!("WHERE {}", conditions.join(" AND "))
-    };
+    // Filtering by commune without a text filter means sorting millions of rows:
+    // `code_commune = ANY(...)` cannot yield index order. A top-N per commune,
+    // merged afterwards, takes 1.5 ms where the plain form took 22 s.
+    let lateral = matches!(
+        (&commune, &plan.text, &reference_point),
+        (Some(_), search::TextMatch::None, None)
+    );
 
-    let columns = format!(
+    let projection = format!(
         "e.siret, e.siren, e.etat_administratif, e.date_creation, e.denomination_usuelle, \
          e.enseigne_1, e.enseigne_2, e.enseigne_3, e.code_postal, e.libelle_commune, \
          e.activite_principale, e.etablissement_siege, e.position, \
          {distance} AS meter_distance, {score} AS score"
     );
 
-    // Filtrer par commune sans filtre texte revient a trier des millions de
-    // lignes : `code_commune = ANY(...)` ne peut pas rendre l'ordre de l'index.
-    // On passe alors par un top-N par commune, fusionne ensuite (1,5 ms contre
-    // 22 s sur `commune=paris`).
-    let sql = match (&commune_placeholder, &plan.text, has_geo) {
-        (Some(placeholder), TextMatch::None, false) => {
-            let inner_conditions: Vec<&String> = conditions
-                .iter()
-                .filter(|condition| !condition.starts_with("e.code_commune = ANY("))
-                .collect();
-
+    let sql = match (&commune, lateral) {
+        (Some((placeholder, _)), true) => {
             let mut inner = vec!["e.code_commune = codes.code_commune".to_string()];
-            inner.extend(inner_conditions.into_iter().cloned());
+            inner.extend(conditions.iter().cloned());
 
             format!(
-                "SELECT {columns} FROM unnest({placeholder}) AS codes(code_commune) \
+                "SELECT {projection} FROM unnest({placeholder}) AS codes(code_commune) \
                  CROSS JOIN LATERAL ( \
                    SELECT * FROM etablissement e WHERE {} ORDER BY {order_by} LIMIT {} \
                  ) e \
@@ -309,9 +318,11 @@ async fn execute(
             )
         }
         _ => format!(
-            "SELECT {columns} FROM etablissement e {where_clause} \
+            "SELECT {projection} FROM etablissement e {} \
              ORDER BY {order_by} LIMIT {} OFFSET {}",
-            plan.limit, plan.offset
+            where_clause(&conditions, commune.as_ref()),
+            plan.limit,
+            plan.offset
         ),
     };
 
@@ -321,29 +332,43 @@ async fn execute(
         .await
         .map_err(|error| -> Error { error.into() })?;
 
-    // Comptage plafonne : le tri n'est pas necessaire, la forme simple suffit
-    // meme dans le cas commune-sans-texte.
-    let count_sql = format!(
-        "SELECT count(*) AS count FROM (SELECT 1 FROM etablissement e {where_clause} LIMIT {}) _sub",
-        search::SEARCH_TOTAL_CAP + 1
-    );
-
-    let total = binder
-        .apply(sql_query(count_sql).into_boxed())
-        .get_result::<search::RowCount>(connection)
-        .await
-        .map(|row| row.count.min(search::SEARCH_TOTAL_CAP))
-        .unwrap_or(0);
+    // The count and the facets always take the plain form, lateral or not.
+    let filters = where_clause(&conditions, commune.as_ref());
+    let (total, total_capped) =
+        search::capped_total(connection, &binder, "etablissement", "e", &filters).await;
+    let facettes = search::compute_facets(
+        connection,
+        &binder,
+        "etablissement",
+        "e",
+        &filters,
+        plan.facets,
+    )
+    .await;
 
     Ok(EtablissementSearchOutput {
         results,
         total,
+        total_capped,
         limit: plan.limit,
         offset: plan.offset,
         sort: plan.sort,
         direction: plan.direction,
         suggestion: None,
+        facettes,
     })
+}
+
+fn where_clause(conditions: &[String], commune: Option<&(String, String)>) -> String {
+    let mut all: Vec<&str> = conditions.iter().map(String::as_str).collect();
+    if let Some((_, condition)) = commune {
+        all.push(condition);
+    }
+    if all.is_empty() {
+        String::new()
+    } else {
+        format!("WHERE {}", all.join(" AND "))
+    }
 }
 
 fn order_by_clause(
@@ -406,78 +431,84 @@ impl UpdatableModel for EtablissementModel {
                 diesel::pg::PgConnection::establish(&connectors.local.database_url)
                     .map_err(|_| UpdatableError::SyncConnectionFailed)?;
 
-            SyncRunQueryDsl::execute(
-                diesel::sql_query("TRUNCATE etablissement_staging"),
+            super::common::load_staging_without_indexes(
                 &mut connection,
-            )
-            .map_err(|e| UpdatableError::Database { source: e })?;
+                "etablissement_staging",
+                |connection| {
+                    SyncRunQueryDsl::execute(
+                        diesel::sql_query("TRUNCATE etablissement_staging"),
+                        connection,
+                    )
+                    .map_err(|e| UpdatableError::Database { source: e })?;
 
-            let copy_query = diesel::copy_from(dsl::etablissement_staging)
-                .from_raw_data(
-                    (
-                        dsl::siren,
-                        dsl::nic,
-                        dsl::siret,
-                        dsl::statut_diffusion,
-                        dsl::date_creation,
-                        dsl::tranche_effectifs,
-                        dsl::annee_effectifs,
-                        dsl::activite_principale_registre_metiers,
-                        dsl::date_dernier_traitement,
-                        dsl::etablissement_siege,
-                        dsl::nombre_periodes,
-                        dsl::complement_adresse,
-                        dsl::numero_voie,
-                        dsl::indice_repetition,
-                        dsl::dernier_numero_voie,
-                        dsl::indice_repetition_dernier_numero_voie,
-                        dsl::type_voie,
-                        dsl::libelle_voie,
-                        dsl::code_postal,
-                        dsl::libelle_commune,
-                        dsl::libelle_commune_etranger,
-                        dsl::distribution_speciale,
-                        dsl::code_commune,
-                        dsl::code_cedex,
-                        dsl::libelle_cedex,
-                        dsl::code_pays_etranger,
-                        dsl::libelle_pays_etranger,
-                        dsl::identifiant_adresse,
-                        dsl::coordonnee_lambert_x,
-                        dsl::coordonnee_lambert_y,
-                        dsl::complement_adresse2,
-                        dsl::numero_voie_2,
-                        dsl::indice_repetition_2,
-                        dsl::type_voie_2,
-                        dsl::libelle_voie_2,
-                        dsl::code_postal_2,
-                        dsl::libelle_commune_2,
-                        dsl::libelle_commune_etranger_2,
-                        dsl::distribution_speciale_2,
-                        dsl::code_commune_2,
-                        dsl::code_cedex_2,
-                        dsl::libelle_cedex_2,
-                        dsl::code_pays_etranger_2,
-                        dsl::libelle_pays_etranger_2,
-                        dsl::date_debut,
-                        dsl::etat_administratif,
-                        dsl::enseigne_1,
-                        dsl::enseigne_2,
-                        dsl::enseigne_3,
-                        dsl::denomination_usuelle,
-                        dsl::activite_principale,
-                        dsl::nomenclature_activite_principale,
-                        dsl::caractere_employeur,
-                        dsl::activite_principale_naf25,
-                    ),
-                    |write| copy_remote_zipped_csv(remote_file.to_reader(), write),
-                )
-                .with_delimiter(',')
-                .with_format(CopyFormat::Csv)
-                .with_header(CopyHeader::Set(true));
-            SyncExecuteCopy::execute(copy_query, &mut connection)
-                .map(|count| count > 0)
-                .map_err(|e| UpdatableError::Database { source: e })
+                    let copy_query = diesel::copy_from(dsl::etablissement_staging)
+                        .from_raw_data(
+                            (
+                                dsl::siren,
+                                dsl::nic,
+                                dsl::siret,
+                                dsl::statut_diffusion,
+                                dsl::date_creation,
+                                dsl::tranche_effectifs,
+                                dsl::annee_effectifs,
+                                dsl::activite_principale_registre_metiers,
+                                dsl::date_dernier_traitement,
+                                dsl::etablissement_siege,
+                                dsl::nombre_periodes,
+                                dsl::complement_adresse,
+                                dsl::numero_voie,
+                                dsl::indice_repetition,
+                                dsl::dernier_numero_voie,
+                                dsl::indice_repetition_dernier_numero_voie,
+                                dsl::type_voie,
+                                dsl::libelle_voie,
+                                dsl::code_postal,
+                                dsl::libelle_commune,
+                                dsl::libelle_commune_etranger,
+                                dsl::distribution_speciale,
+                                dsl::code_commune,
+                                dsl::code_cedex,
+                                dsl::libelle_cedex,
+                                dsl::code_pays_etranger,
+                                dsl::libelle_pays_etranger,
+                                dsl::identifiant_adresse,
+                                dsl::coordonnee_lambert_x,
+                                dsl::coordonnee_lambert_y,
+                                dsl::complement_adresse2,
+                                dsl::numero_voie_2,
+                                dsl::indice_repetition_2,
+                                dsl::type_voie_2,
+                                dsl::libelle_voie_2,
+                                dsl::code_postal_2,
+                                dsl::libelle_commune_2,
+                                dsl::libelle_commune_etranger_2,
+                                dsl::distribution_speciale_2,
+                                dsl::code_commune_2,
+                                dsl::code_cedex_2,
+                                dsl::libelle_cedex_2,
+                                dsl::code_pays_etranger_2,
+                                dsl::libelle_pays_etranger_2,
+                                dsl::date_debut,
+                                dsl::etat_administratif,
+                                dsl::enseigne_1,
+                                dsl::enseigne_2,
+                                dsl::enseigne_3,
+                                dsl::denomination_usuelle,
+                                dsl::activite_principale,
+                                dsl::nomenclature_activite_principale,
+                                dsl::caractere_employeur,
+                                dsl::activite_principale_naf25,
+                            ),
+                            |write| copy_remote_zipped_csv(remote_file.to_reader(), write),
+                        )
+                        .with_delimiter(',')
+                        .with_format(CopyFormat::Csv)
+                        .with_header(CopyHeader::Set(true));
+                    SyncExecuteCopy::execute(copy_query, connection)
+                        .map(|count| count > 0)
+                        .map_err(|e| UpdatableError::Database { source: e })
+                },
+            )
         })
     }
 
@@ -635,52 +666,5 @@ impl UpdatableModel for EtablissementModel {
 
     fn search_source(&self) -> Option<&'static str> {
         Some(search::SOURCE_ETABLISSEMENT)
-    }
-
-    async fn refresh_search_metadata(
-        &self,
-        connectors: &Connectors,
-        since: Option<NaiveDateTime>,
-    ) -> Result<(), UpdatableError> {
-        let Some(source) = self.search_source() else {
-            return Ok(());
-        };
-
-        let mut connection = connectors.local.pool.get().await?;
-
-        match since {
-            Some(since) => {
-                sql_query("SELECT public.search_refresh_incremental($1, $2)")
-                    .bind::<Text, _>(source)
-                    .bind::<Timestamp, _>(since)
-                    .execute(&mut connection)
-                    .await?;
-            }
-            None => {
-                sql_query("SELECT public.search_refresh_full($1)")
-                    .bind::<Text, _>(source)
-                    .execute(&mut connection)
-                    .await?;
-
-                // Sans statistiques fraiches, le planificateur retombe sur des
-                // estimations par defaut et choisit des seq scans sur les
-                // predicats GIN. Le RENAME du swap laisse la table sans stats
-                // representatives : il faut les recalculer explicitement.
-                sql_query("ANALYZE etablissement")
-                    .execute(&mut connection)
-                    .await?;
-
-                // La reconstruction remplace l'integralite des lignes de la
-                // source et laisse autant de tuples morts derriere elle
-                // (1,37 M mesures pour etablissement). VACUUM les recupere sans
-                // bloquer lectures ni ecritures — contrairement a VACUUM FULL,
-                // a ne jamais utiliser ici.
-                sql_query("VACUUM (ANALYZE) search_lexicon")
-                    .execute(&mut connection)
-                    .await?;
-            }
-        }
-
-        Ok(())
     }
 }

@@ -16,9 +16,9 @@ use diesel::pg::upsert::excluded;
 use diesel::pg::{CopyFormat, CopyHeader};
 use diesel::prelude::*;
 use diesel::sql_query;
-use diesel::sql_types::{Text, Timestamp};
 use diesel_async::{AsyncConnection, RunQueryDsl};
 use error::Error;
+use tracing::info;
 
 pub async fn get(connection: &mut Connection, siren: &str) -> Result<UniteLegale, Error> {
     dsl::unite_legale
@@ -29,13 +29,14 @@ pub async fn get(connection: &mut Connection, siren: &str) -> Result<UniteLegale
         .map_err(|error| error.into())
 }
 
-/// Mode de correspondance textuelle applique a la requete.
-enum TextMatch<'a> {
-    None,
-    /// FTS natif : `tsvector @@ tsquery`. Chemin nominal.
-    FullText(&'a str),
-    /// Repli trigramme, declenche uniquement quand le FTS ne ramene rien.
-    Trigram(&'a str),
+/// Resolved parameters of one search execution.
+struct SearchPlan<'a> {
+    text: search::TextMatch<'a>,
+    facets: &'a [String],
+    sort: UniteLegaleSortField,
+    direction: SortDirection,
+    limit: i64,
+    offset: i64,
 }
 
 pub async fn search(
@@ -58,35 +59,44 @@ pub async fn search(
     });
     let direction = params.direction.unwrap_or(SortDirection::Desc);
 
-    // Analyse de la saisie : tsquery augmentee (chaque mot suspect est complete
-    // par `| correction`, jamais remplace) et reformulation proposee.
+    let facets =
+        search::requested_facets(params.facette.as_deref(), search::UNITE_LEGALE_FACET_FIELDS);
+
     let parsed = match q {
         Some(q) => Some(search::parse_query(connection, q, search::SOURCE_UNITE_LEGALE).await?),
         None => None,
     };
 
-    let text = match parsed.as_ref().and_then(|parsed| parsed.tsquery.as_deref()) {
-        Some(tsquery) => TextMatch::FullText(tsquery),
-        None => TextMatch::None,
+    let mut plan = SearchPlan {
+        text: match parsed.as_ref().and_then(|parsed| parsed.tsquery.as_deref()) {
+            Some(tsquery) => search::TextMatch::FullText(tsquery),
+            None => search::TextMatch::None,
+        },
+        facets: &facets,
+        sort,
+        direction,
+        limit,
+        offset,
     };
 
-    let mut output = execute(connection, params, &text, sort, direction, limit, offset).await?;
+    let mut output = execute(connection, params, &plan).await?;
 
-    // Repli trigramme : couvre ce que la correction par lexique ne rattrape pas
-    // (transpositions, correspondance infixe). Jamais sur le chemin chaud.
+    // Covers what lexicon correction cannot: transpositions and infix matches.
+    // Restricted to the first page — an empty page further in means the caller
+    // paged past the end, not that the search found nothing.
     if output.results.is_empty()
+        && offset == 0
         && let Some(q) = q
     {
-        output = execute(
-            connection,
-            params,
-            &TextMatch::Trigram(q),
-            sort,
-            direction,
-            limit,
-            offset,
-        )
-        .await?;
+        info!(
+            target: "sirene::search",
+            source = search::SOURCE_UNITE_LEGALE,
+            query_length = q.chars().count(),
+            "repli trigramme declenche"
+        );
+
+        plan.text = search::TextMatch::Trigram(q);
+        output = execute(connection, params, &plan).await?;
     }
 
     if output.results.is_empty() {
@@ -99,28 +109,23 @@ pub async fn search(
 async fn execute(
     connection: &mut Connection,
     params: &UniteLegaleSearchParams,
-    text: &TextMatch<'_>,
-    sort: UniteLegaleSortField,
-    direction: SortDirection,
-    limit: i64,
-    offset: i64,
+    plan: &SearchPlan<'_>,
 ) -> Result<UniteLegaleSearchOutput, Error> {
     let mut binder = search::Binder::new();
-
-    let vector = search::search_vector("u", search::UNITE_LEGALE_SEARCH_COLUMNS);
-    let trigram = search::search_trigram("u", search::UNITE_LEGALE_SEARCH_COLUMNS);
-
     let mut conditions: Vec<String> = Vec::new();
 
-    let score = match text {
-        TextMatch::None => "NULL::real".to_string(),
-        TextMatch::FullText(tsquery) => {
+    let columns = search::UNITE_LEGALE_SEARCH_COLUMNS;
+    let score = match plan.text {
+        search::TextMatch::None => "NULL::real".to_string(),
+        search::TextMatch::FullText(tsquery) => {
+            let vector = search::search_vector(Some("u"), columns);
             let placeholder = binder.push(search::Bind::TsQuery(tsquery.to_string()));
             conditions.push(format!("{vector} @@ {placeholder}::tsquery"));
             format!("ts_rank_cd({vector}, {placeholder}::tsquery)")
         }
-        TextMatch::Trigram(q) => {
-            let placeholder = binder.text(*q);
+        search::TextMatch::Trigram(q) => {
+            let trigram = search::search_trigram(Some("u"), columns);
+            let placeholder = binder.text(q);
             let needle = format!("lower(public.immutable_unaccent({placeholder}))");
             conditions.push(format!("{needle} <% {trigram}"));
             format!("word_similarity({needle}, {trigram})")
@@ -134,18 +139,41 @@ async fn execute(
         });
         conditions.push(format!("u.etat_administratif = {placeholder}"));
     }
-    if let Some(value) = params.activite_principale.as_deref() {
-        let placeholder = binder.text(value);
-        conditions.push(format!("u.activite_principale = {placeholder}"));
-    }
-    if let Some(value) = params.categorie_juridique.as_deref() {
-        let placeholder = binder.text(value);
-        conditions.push(format!("u.categorie_juridique = {placeholder}"));
-    }
-    if let Some(value) = params.categorie_entreprise.as_deref() {
-        let placeholder = binder.text(value);
-        conditions.push(format!("u.categorie_entreprise = {placeholder}"));
-    }
+
+    binder.filter_in(
+        &mut conditions,
+        "u.activite_principale",
+        params.activite_principale.as_deref(),
+    );
+    binder.filter_in(
+        &mut conditions,
+        "u.categorie_juridique",
+        params.categorie_juridique.as_deref(),
+    );
+    binder.filter_in(
+        &mut conditions,
+        "u.categorie_entreprise",
+        params.categorie_entreprise.as_deref(),
+    );
+
+    binder.filter_not_in(
+        &mut conditions,
+        "u.activite_principale",
+        params.activite_principale_not.as_deref(),
+    );
+    binder.filter_not_in(
+        &mut conditions,
+        "u.categorie_juridique",
+        params.categorie_juridique_not.as_deref(),
+    );
+    binder.filter_not_in(
+        &mut conditions,
+        "u.categorie_entreprise",
+        params.categorie_entreprise_not.as_deref(),
+    );
+
+    // Exact equality kept for backward compatibility; `_min` / `_max` cover the
+    // same need usably.
     if let Some(value) = params.date_creation {
         let placeholder = binder.push(search::Bind::Date(value));
         conditions.push(format!("u.date_creation = {placeholder}"));
@@ -155,11 +183,24 @@ async fn execute(
         conditions.push(format!("u.date_debut = {placeholder}"));
     }
 
-    let dir = match direction {
+    binder.range(
+        &mut conditions,
+        "u.date_creation",
+        params.date_creation_min,
+        params.date_creation_max,
+    );
+    binder.range(
+        &mut conditions,
+        "u.date_debut",
+        params.date_debut_min,
+        params.date_debut_max,
+    );
+
+    let dir = match plan.direction {
         SortDirection::Asc => "ASC",
         SortDirection::Desc => "DESC",
     };
-    let order_by = match sort {
+    let order_by = match plan.sort {
         UniteLegaleSortField::Relevance => format!("score {dir}"),
         UniteLegaleSortField::DateCreation => format!("u.date_creation {dir} NULLS LAST"),
         UniteLegaleSortField::DateDebut => format!("u.date_debut {dir} NULLS LAST"),
@@ -176,7 +217,8 @@ async fn execute(
          u.denomination_usuelle_1, u.denomination_usuelle_2, u.denomination_usuelle_3, \
          u.activite_principale, u.categorie_juridique, u.categorie_entreprise, \
          {score} AS score \
-         FROM unite_legale u {where_clause} ORDER BY {order_by} LIMIT {limit} OFFSET {offset}"
+         FROM unite_legale u {where_clause} ORDER BY {order_by} LIMIT {} OFFSET {}",
+        plan.limit, plan.offset
     );
 
     let results = binder
@@ -185,26 +227,28 @@ async fn execute(
         .await
         .map_err(|error| -> Error { error.into() })?;
 
-    let count_sql = format!(
-        "SELECT count(*) AS count FROM (SELECT 1 FROM unite_legale u {where_clause} LIMIT {}) _sub",
-        search::SEARCH_TOTAL_CAP + 1
-    );
-
-    let total = binder
-        .apply(sql_query(count_sql).into_boxed())
-        .get_result::<search::RowCount>(connection)
-        .await
-        .map(|row| row.count.min(search::SEARCH_TOTAL_CAP))
-        .unwrap_or(0);
+    let (total, total_capped) =
+        search::capped_total(connection, &binder, "unite_legale", "u", &where_clause).await;
+    let facettes = search::compute_facets(
+        connection,
+        &binder,
+        "unite_legale",
+        "u",
+        &where_clause,
+        plan.facets,
+    )
+    .await;
 
     Ok(UniteLegaleSearchOutput {
         results,
         total,
-        limit,
-        offset,
-        sort,
-        direction,
+        total_capped,
+        limit: plan.limit,
+        offset: plan.offset,
+        sort: plan.sort,
+        direction: plan.direction,
         suggestion: None,
+        facettes,
     })
 }
 
@@ -247,59 +291,65 @@ impl UpdatableModel for UniteLegaleModel {
                 diesel::pg::PgConnection::establish(&connectors.local.database_url)
                     .map_err(|_| UpdatableError::SyncConnectionFailed)?;
 
-            SyncRunQueryDsl::execute(
-                diesel::sql_query("TRUNCATE unite_legale_staging"),
+            super::common::load_staging_without_indexes(
                 &mut connection,
-            )
-            .map_err(|e| UpdatableError::Database { source: e })?;
+                "unite_legale_staging",
+                |connection| {
+                    SyncRunQueryDsl::execute(
+                        diesel::sql_query("TRUNCATE unite_legale_staging"),
+                        connection,
+                    )
+                    .map_err(|e| UpdatableError::Database { source: e })?;
 
-            let copy_query = diesel::copy_from(dsl::unite_legale_staging)
-                .from_raw_data(
-                    (
-                        dsl::siren,
-                        dsl::statut_diffusion,
-                        dsl::unite_purgee,
-                        dsl::date_creation,
-                        dsl::sigle,
-                        dsl::sexe,
-                        dsl::prenom_1,
-                        dsl::prenom_2,
-                        dsl::prenom_3,
-                        dsl::prenom_4,
-                        dsl::prenom_usuel,
-                        dsl::pseudonyme,
-                        dsl::identifiant_association,
-                        dsl::tranche_effectifs,
-                        dsl::annee_effectifs,
-                        dsl::date_dernier_traitement,
-                        dsl::nombre_periodes,
-                        dsl::categorie_entreprise,
-                        dsl::annee_categorie_entreprise,
-                        dsl::date_debut,
-                        dsl::etat_administratif,
-                        dsl::nom,
-                        dsl::nom_usage,
-                        dsl::denomination,
-                        dsl::denomination_usuelle_1,
-                        dsl::denomination_usuelle_2,
-                        dsl::denomination_usuelle_3,
-                        dsl::categorie_juridique,
-                        dsl::activite_principale,
-                        dsl::nomenclature_activite_principale,
-                        dsl::nic_siege,
-                        dsl::economie_sociale_solidaire,
-                        dsl::societe_mission,
-                        dsl::caractere_employeur,
-                        dsl::activite_principale_naf25,
-                    ),
-                    |write| copy_remote_zipped_csv(remote_file.to_reader(), write),
-                )
-                .with_delimiter(',')
-                .with_format(CopyFormat::Csv)
-                .with_header(CopyHeader::Set(true));
-            SyncExecuteCopy::execute(copy_query, &mut connection)
-                .map(|count| count > 0)
-                .map_err(|e| UpdatableError::Database { source: e })
+                    let copy_query = diesel::copy_from(dsl::unite_legale_staging)
+                        .from_raw_data(
+                            (
+                                dsl::siren,
+                                dsl::statut_diffusion,
+                                dsl::unite_purgee,
+                                dsl::date_creation,
+                                dsl::sigle,
+                                dsl::sexe,
+                                dsl::prenom_1,
+                                dsl::prenom_2,
+                                dsl::prenom_3,
+                                dsl::prenom_4,
+                                dsl::prenom_usuel,
+                                dsl::pseudonyme,
+                                dsl::identifiant_association,
+                                dsl::tranche_effectifs,
+                                dsl::annee_effectifs,
+                                dsl::date_dernier_traitement,
+                                dsl::nombre_periodes,
+                                dsl::categorie_entreprise,
+                                dsl::annee_categorie_entreprise,
+                                dsl::date_debut,
+                                dsl::etat_administratif,
+                                dsl::nom,
+                                dsl::nom_usage,
+                                dsl::denomination,
+                                dsl::denomination_usuelle_1,
+                                dsl::denomination_usuelle_2,
+                                dsl::denomination_usuelle_3,
+                                dsl::categorie_juridique,
+                                dsl::activite_principale,
+                                dsl::nomenclature_activite_principale,
+                                dsl::nic_siege,
+                                dsl::economie_sociale_solidaire,
+                                dsl::societe_mission,
+                                dsl::caractere_employeur,
+                                dsl::activite_principale_naf25,
+                            ),
+                            |write| copy_remote_zipped_csv(remote_file.to_reader(), write),
+                        )
+                        .with_delimiter(',')
+                        .with_format(CopyFormat::Csv)
+                        .with_header(CopyHeader::Set(true));
+                    SyncExecuteCopy::execute(copy_query, connection)
+                        .map(|count| count > 0)
+                        .map_err(|e| UpdatableError::Database { source: e })
+                },
+            )
         })
     }
 
@@ -436,52 +486,5 @@ impl UpdatableModel for UniteLegaleModel {
 
     fn search_source(&self) -> Option<&'static str> {
         Some(search::SOURCE_UNITE_LEGALE)
-    }
-
-    async fn refresh_search_metadata(
-        &self,
-        connectors: &Connectors,
-        since: Option<NaiveDateTime>,
-    ) -> Result<(), UpdatableError> {
-        let Some(source) = self.search_source() else {
-            return Ok(());
-        };
-
-        let mut connection = connectors.local.pool.get().await?;
-
-        match since {
-            Some(since) => {
-                sql_query("SELECT public.search_refresh_incremental($1, $2)")
-                    .bind::<Text, _>(source)
-                    .bind::<Timestamp, _>(since)
-                    .execute(&mut connection)
-                    .await?;
-            }
-            None => {
-                sql_query("SELECT public.search_refresh_full($1)")
-                    .bind::<Text, _>(source)
-                    .execute(&mut connection)
-                    .await?;
-
-                // Sans statistiques fraiches, le planificateur retombe sur des
-                // estimations par defaut et choisit des seq scans sur les
-                // predicats GIN. Le RENAME du swap laisse la table sans stats
-                // representatives : il faut les recalculer explicitement.
-                sql_query("ANALYZE unite_legale")
-                    .execute(&mut connection)
-                    .await?;
-
-                // La reconstruction remplace l'integralite des lignes de la
-                // source et laisse autant de tuples morts derriere elle
-                // (1,37 M mesures pour etablissement). VACUUM les recupere sans
-                // bloquer lectures ni ecritures — contrairement a VACUUM FULL,
-                // a ne jamais utiliser ici.
-                sql_query("VACUUM (ANALYZE) search_lexicon")
-                    .execute(&mut connection)
-                    .await?;
-            }
-        }
-
-        Ok(())
     }
 }

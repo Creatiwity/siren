@@ -1,8 +1,10 @@
 use super::super::schema::unite_legale;
+use super::super::search::Facets;
 use chrono::{NaiveDate, NaiveDateTime};
 use diesel::prelude::*;
 use diesel::sql_types::{Float4, Nullable, Text, VarChar};
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use utoipa::{IntoParams, ToSchema};
 
 #[derive(Queryable, Selectable, ToSchema, Serialize, Clone, Debug)]
@@ -107,15 +109,35 @@ pub enum EtatAdministratif {
     F,
 }
 
-#[derive(Debug, Deserialize, IntoParams)]
+#[derive(Debug, Default, Deserialize, IntoParams)]
 pub struct UniteLegaleSearchParams {
     pub q: Option<String>,
     pub etat_administratif: Option<EtatAdministratif>,
+    /// Comma-separated values.
     pub activite_principale: Option<String>,
+    /// Exclusion. Units with no activity are kept.
+    pub activite_principale_not: Option<String>,
+    /// Comma-separated values.
     pub categorie_juridique: Option<String>,
+    /// Exclusion. Units with no legal category are kept.
+    pub categorie_juridique_not: Option<String>,
+    /// Comma-separated values.
     pub categorie_entreprise: Option<String>,
+    /// Exclusion. Units with no company category are kept.
+    pub categorie_entreprise_not: Option<String>,
     pub date_creation: Option<NaiveDate>,
     pub date_debut: Option<NaiveDate>,
+    /// Inclusive lower bound.
+    pub date_creation_min: Option<NaiveDate>,
+    /// Inclusive upper bound.
+    pub date_creation_max: Option<NaiveDate>,
+    /// Inclusive lower bound.
+    pub date_debut_min: Option<NaiveDate>,
+    /// Inclusive upper bound.
+    pub date_debut_max: Option<NaiveDate>,
+    /// Comma-separated fields to facet on: `etat_administratif`,
+    /// `activite_principale`, `categorie_juridique`, `categorie_entreprise`.
+    pub facette: Option<String>,
     pub sort: Option<UniteLegaleSortField>,
     pub direction: Option<SortDirection>,
     pub limit: Option<i64>,
@@ -151,25 +173,34 @@ pub struct UniteLegaleSearchResult {
 pub struct UniteLegaleSearchOutput {
     pub results: Vec<UniteLegaleSearchResult>,
     pub total: i64,
+    pub total_capped: bool,
     pub limit: i64,
     pub offset: i64,
     pub sort: UniteLegaleSortField,
     pub direction: SortDirection,
     pub suggestion: Option<String>,
+    pub facettes: Facets,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct UniteLegaleSearchResponse {
     pub unites_legales: Vec<UniteLegaleSearchResultResponse>,
     pub total: i64,
+    /// `true` when `total` hit its ceiling: there are at least that many
+    /// results, without the exact count being computed.
+    pub total_capped: bool,
     pub limit: i64,
     pub offset: i64,
     pub sort: UniteLegaleSortField,
     pub direction: SortDirection,
-    /// Reformulation proposee, presente uniquement quand la recherche ne
-    /// renvoie aucun resultat et qu'un mot proche existe dans le corpus.
+    /// Present only when the search returns nothing and a close term exists in
+    /// the corpus.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub suggestion: Option<String>,
+    /// Counts per value for each field requested through `facette`.
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    #[schema(value_type = Object)]
+    pub facettes: Facets,
 }
 
 #[derive(Debug, Serialize, ToSchema)]

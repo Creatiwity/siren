@@ -315,6 +315,10 @@ mécanismes l'entourent :
   avec `word_similarity`. Cela couvre les transpositions et la correspondance
   infixe, au prix d'un index GIN supplémentaire. Ce chemin ne s'exécute jamais sur
   une recherche qui aboutit.
+- **Correction phonétique.** Quand le trigramme ne propose aucun candidat, le
+  lexique est interrogé sur une clé phonétique (`metaphone` précédé du retrait
+  du `h` initial, muet en français). C'est ce qui relie `filipe` à `philippe`,
+  que la distance d'édition seule ne rapproche pas.
 - **Longueur minimale.** `q` doit faire au moins 3 caractères, sinon l'API répond
   400. En dessous, aucune structure d'index n'est exploitable.
 
@@ -323,6 +327,51 @@ adressées par le paramètre `?commune=` en clair (`paris`, `saint etienne`,
 `marseile`), résolu via la table de dimension `commune_dim` : correspondance par
 préfixe sur chaque mot, repli trigramme tolérant aux fautes, puis filtrage sur
 `code_commune`.
+
+### Filtrer, exclure, borner
+
+Les filtres de liste acceptent plusieurs valeurs séparées par des virgules, et
+disposent tous d'un jumeau `_not` pour l'exclusion :
+
+```
+?code_postal=75001,75002
+?activite_principale=10.71C,47.24Z
+?activite_principale_not=10.71C
+```
+
+Une exclusion conserve les lignes dont le champ est nul : « pas 10.71C » ne dit
+rien des activités inconnues.
+
+Les dates se bornent avec `_min` / `_max`, chacun facultatif et inclusif :
+
+```
+?date_creation_min=2024-01-01&date_creation_max=2024-12-31
+?date_debut_min=2024-01-01
+```
+
+### Facettes
+
+`?facette=activite_principale,code_commune` renvoie les effectifs par valeur,
+calculés sur le même sous-ensemble borné que `total` — donc sans coût notable
+(6,5 ms mesurés). Les champs autorisés sont listés dans la documentation
+OpenAPI ; tout autre champ donne un 400 plutôt qu'un silence.
+
+```json
+{
+  "facettes": {
+    "activite_principale": [
+      { "valeur": "10.71C", "nombre": 7314 },
+      { "valeur": "10.71A", "nombre": 380 }
+    ]
+  }
+}
+```
+
+### Comptage
+
+`total` est plafonné à 10 000 : au-delà, le compte exact coûterait un parcours
+complet. `total_capped` vaut `true` quand ce plafond est atteint, pour que le
+client distingue « exactement 10 000 » de « au moins 10 000 ».
 
 ### Maintenance des données annexes
 
@@ -335,6 +384,33 @@ Elles sont rafraîchies automatiquement par le workflow de mise à jour :
 - après la **synchro quotidienne Insee** :
   `public.search_refresh_incremental(source, since)` ne reparcourt que les lignes
   touchées depuis `since` et fusionne leur vocabulaire.
+
+Aucune des deux opérations ne bloque les lectures : mesurées sous charge, elles
+laissent la latence de recherche inchangée (médiane 8,9 ms pendant une
+reconstruction complète de 78 s, contre 8,7 ms au repos, zéro attente de
+verrou).
+
+### Tests
+
+```bash
+cargo test                                          # tests unitaires seuls
+SIRENE_TEST_DATABASE_URL=… cargo test               # + tests d'intégration
+```
+
+Les tests d'intégration se mettent en sommeil sans `SIRENE_TEST_DATABASE_URL` ;
+la variable est volontairement distincte de `DATABASE_URL` pour qu'un
+`cargo test` ne puisse pas toucher la base de développement par accident.
+
+Deux garde-fous encadrent la recherche :
+
+- un test unitaire vérifie que l'expression construite par `src/models/search.rs`
+  figure mot pour mot dans le DDL des index ;
+- un test d'intégration lit le plan d'exécution et vérifie que PostgreSQL choisit
+  bien l'index.
+
+Ensemble, ils ferment la porte à une recherche qui repasserait silencieusement
+en *seq scan* — le mode de panne le plus coûteux et le moins visible de cette
+architecture.
 
 ## Development
 

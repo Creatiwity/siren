@@ -2,108 +2,120 @@
 
 Suite de la refonte livrée par la migration `2026-09-15-120000_search_fts_commune`
 (FTS natif PostgreSQL, correction par lexique, repli trigramme, `commune` en
-clair). Ce document liste ce qui reste à faire, par ordre de valeur.
+clair).
 
-Tous les chiffres qui suivent ont été mesurés sur la base complète
-(42,7 M établissements, 29,2 M unités légales), pas estimés.
+Tous les chiffres ont été mesurés sur la base complète (42,7 M établissements,
+29,2 M unités légales), pas estimés.
+
+## État
+
+| Lot | Sujet | État |
+| --- | --- | --- |
+| 1.1 | Garde-fous sur l'usage des index | livré |
+| 1.2 | Tests d'intégration sur les scénarios des specs | livré — 29 tests |
+| 1.3 | Instrumentation du repli trigramme | livré |
+| 2 | Index sur `date_creation` | livré |
+| 3 | Filtrage riche (multi-valeurs, plages, négation) | livré |
+| 4 | Facettes | livré |
+| 5 | `total` plafonné explicite | livré |
+| 6 | Phonétisation dans le lexique | livré, avec une limite connue |
+| 7 | Pagination par curseur | **reporté**, conditionné aux données d'usage |
+| 8.1 | Chargement de staging sans index | livré |
+| 8.2 | `docker-compose.yml` | livré |
 
 ## Hors périmètre
 
-- **Historisation** (`periode()`, `date=` de l'API Insee). C'est un chantier de
-  modèle de données : nos tables ne portent que l'état courant. Écarté
-  volontairement.
+- **Historisation** (`periode()`, `date=` de l'API Insee). Chantier de modèle de
+  données : nos tables ne portent que l'état courant. Écarté volontairement.
 - **`champs=`** (sélection des champs retournés). La projection de recherche fait
   déjà 15 champs ; le gain de charge utile est marginal et rendrait le schéma
   OpenAPI dynamique.
 
 ---
 
-## Lot 1 — Verrouiller l'acquis
+## Lot 1 — Garde-fous
 
-### 1.1 Test anti-régression sur l'usage des index — *priorité 1*
+### 1.1 Dérive entre l'expression indexée et l'expression interrogée
 
-L'expression de `src/models/search.rs` doit rester identique **au caractère
-près** à celle des index d'expression de la migration. Si quelqu'un ajoute une
-colonne au texte recherchable sans toucher la migration (ou l'inverse), rien ne
-casse visiblement : les requêtes repassent en *seq scan* et la recherche passe
-de 20 ms à 20 s, silencieusement.
+C'est le mode de panne le plus coûteux de cette architecture, et le moins
+visible : si l'expression de `src/models/search.rs` diverge de celle du DDL
+(une colonne ajoutée d'un côté seulement), rien ne casse — les requêtes
+repassent simplement en *seq scan* et la recherche passe de 20 ms à 20 s.
 
-Un test qui exécute `EXPLAIN` sur la requête générée et vérifie la présence de
-`Bitmap Index Scan on etablissement_search_fts_idx` attrape la divergence
-immédiatement.
+Deux tests ferment la porte, un à chaque bout de la chaîne :
 
-Effort : petit. C'est le filet de sécurité de tout le reste.
+- `models::search::tests::expressions_fts_identiques_au_ddl` compare
+  l'expression construite en Rust au texte de la migration, aux espaces près.
+  Aucune base requise, s'exécute en quelques microsecondes.
+- `tests::search::index_fts_utilise_sur_etablissement` lit le plan d'exécution
+  réel et vérifie que PostgreSQL choisit bien l'index.
 
-### 1.2 Tests d'intégration sur les scénarios des specs
+Le premier a été validé par sabotage volontaire : ajouter `libelle_commune` aux
+colonnes indexées fait échouer les deux tests d'expression avec un message qui
+nomme précisément la divergence.
 
-Il n'y a aucun test aujourd'hui (`cargo test` → 0 test). Les scénarios sont déjà
-rédigés dans `openspec/specs/search-etablissements/spec.md` et
-`openspec/specs/search-unites-legales/spec.md`. Quelques milliers de lignes de
-fixture suffisent pour la validation fonctionnelle (pas pour la performance).
+### 1.2 Tests d'intégration
 
-Effort : moyen. À mener idéalement en même temps que le lot 3, pour que les
-nouveaux filtres naissent avec leurs tests.
+28 tests, dont 23 adossés à une vraie base, couvrant les scénarios des specs :
+recherche texte, ET implicite entre les mots, correction sans écrasement,
+préservation des noms rares, suggestion seulement sur résultat vide, résolution
+de commune (préfixe, faute de frappe, inconnue), filtres multi-valeurs,
+négation, plages de dates, facettes, plafonnement du total.
+
+```bash
+cargo test                                   # unitaires seuls
+SIRENE_TEST_DATABASE_URL=… cargo test        # + intégration
+```
+
+`SIRENE_TEST_DATABASE_URL` est volontairement distinct de `DATABASE_URL` : un
+`cargo test` ne doit pas pouvoir toucher la base de développement par accident.
+Sans la variable, les tests d'intégration se mettent en sommeil en l'annonçant,
+plutôt que de passer en silence.
 
 ### 1.3 Instrumentation
 
-- Compteur sur le déclenchement du **repli trigramme** (OpenTelemetry et Sentry
-  sont déjà branchés).
-- Relevé périodique de `pg_stat_user_indexes`.
+Le déclenchement du repli trigramme émet un évènement `tracing` sur la cible
+`sirene::search`, avec la source et la longueur de la requête.
 
-Objectif concret : décider dans deux ou trois mois, sur données, si l'on
-supprime les index trigramme (**857 Mo** à eux deux) et si
-`etablissement_filter_idx` (**1 954 Mo**) sert encore. C'est aussi ce relevé qui
-tranchera le lot 7.
-
-Effort : petit.
+Objectif : décider dans deux ou trois mois, sur données, si l'on supprime les
+index trigramme (**857 Mo** à eux deux) et si `etablissement_filter_idx`
+(**1 954 Mo**) sert encore. Ce même relevé tranchera le lot 7.
 
 ---
 
 ## Lot 2 — Index sur `date_creation`
-
-Le meilleur rapport valeur/coût du plan, mesuré :
 
 | requête | avant | après |
 | --- | ---: | ---: |
 | plage de dates triée (année 2024) | 10 885 ms | **0,68 ms** |
 | listing par défaut (tri date, sans filtre) | 3 899 ms | **0,80 ms** |
 
-```sql
-CREATE INDEX etablissement_date_creation_idx
-  ON etablissement (date_creation DESC NULLS LAST);
-```
+**287 Mo, 14,6 s de construction.** Corrige une faiblesse préexistante — le
+listing par défaut sans filtre — et conditionne l'utilisabilité du lot 3. Posé
+aussi sur `unite_legale`.
 
-**287 Mo, 14,6 s de construction.** Corrige une faiblesse préexistante (le
-listing par défaut sans filtre) et conditionne l'utilisabilité du lot 3.
-
-À prévoir aussi sur `unite_legale`, et éventuellement sur `date_debut` si les
-tris sur ce champ sont utilisés.
+Pas d'index sur `date_debut` : à ajouter seulement si les tris sur ce champ
+s'avèrent utilisés, pour ne pas payer 287 Mo de plus sans raison.
 
 ---
 
 ## Lot 3 — Filtrage riche
 
-C'est la valeur réelle derrière la « syntaxe par champ » de l'API Insee
-(`q=denominationUniteLegale:X AND codePostalEtablissement:Y`).
+La valeur réelle derrière la « syntaxe par champ » de l'API Insee, sans en payer
+le prix : **pas de langage de requête à la Lucene** — parseur à maintenir,
+surface d'injection, plans imprévisibles. Des paramètres nommés délivrent le
+même usage pour une fraction du coût.
 
-**Ne pas implémenter un langage de requête à la Lucene** : parseur à écrire et à
-maintenir, surface d'injection à surveiller, plans d'exécution imprévisibles.
-Des paramètres nommés délivrent le même usage pour une fraction du coût et du
-risque.
+- **Multi-valeurs** : `code_postal=75001,75002`, `activite_principale=10.71C,47.24Z`
+- **Exclusion** : `activite_principale_not=`, `code_postal_not=`, `code_commune_not=`
+  (et les trois équivalents sur `unite_legale`). Les lignes dont le champ est nul
+  sont conservées : exclure une valeur ne dit rien des valeurs inconnues.
+- **Plages** : `date_creation_min` / `_max`, `date_debut_min` / `_max`, bornes
+  incluses et chacune facultative.
 
-- **Multi-valeurs** : `activite_principale=10.71C,47.24Z` → `= ANY($n)`.
-  Mesuré, fonctionne sur les index existants.
-- **Plages de dates** : `date_creation_min` / `date_creation_max`, idem pour
-  `date_debut`. 29 ms combiné à `q`, 0,68 ms avec l'index du lot 2.
-- **Négation** : `activite_principale_not=`, ou un préfixe `!` sur la valeur.
-
-Manque le plus criant à corriger au passage : **`etablissement` n'a aujourd'hui
-aucun filtre de date**, et `unite_legale` n'a que l'égalité exacte sur
-`date_creation` / `date_debut`, ce qui est inutilisable en pratique.
-
-Le `Binder` introduit dans `src/models/search.rs` rend l'ajout mécanique.
-
-Effort : moyen.
+Manque comblé au passage : `etablissement` n'avait **aucun** filtre de date, et
+`unite_legale` n'avait que l'égalité exacte, inutilisable en pratique. Les deux
+paramètres exacts restent acceptés pour compatibilité ascendante.
 
 ---
 
@@ -111,115 +123,122 @@ Effort : moyen.
 
 `facette=activite_principale,code_commune` se résout en un `GROUP BY` sur le même
 sous-ensemble borné à 10 000 lignes que le calcul de `total` — donc borné par
-construction.
+construction, et en un seul aller-retour quel que soit le nombre de champs.
 
-Mesuré : **6,5 ms**.
+Mesuré : **6,5 ms** en SQL, 76 ms bout en bout via l'API sur `q=boulangerie`
+avec deux facettes.
 
 ```
-q=boulangerie → 10.71C: 7314 | 10.71A: 380 | 15.8C: 335 | 68.20B: 306 | 47.24Z: 222
-q=carrefour   → 31555: 144  | 59350: 105  | 06088: 92   | 33063: 83   | 75115: 71
+q=boulangerie → activite_principale: 10.71C=7314, 10.71A=380, 15.8C=335
+                code_commune:        06088=93, 67482=49, 44109=48
 ```
 
-C'est ce qui permet de construire une véritable interface de recherche à
-facettes.
-
-Effort : petit à moyen.
+Les champs autorisés sont une liste blanche ; tout autre champ donne un 400 qui
+énumère les valeurs acceptées, plutôt qu'un silence. Un test vérifie qu'une
+tentative d'injection ne franchit pas ce filtre.
 
 ---
 
 ## Lot 5 — `total` plafonné explicite
 
-Un client ne peut pas distinguer « exactement 10 000 résultats » de « au moins
-10 000 ». Ajouter `total_capped: bool` à la réponse.
-
-Effort : trois lignes.
+`total_capped: bool` distingue « exactement 10 000 » de « au moins 10 000 ».
 
 ---
 
 ## Lot 6 — Phonétisation dans le lexique
 
-Couvre le cas que l'API Insee traite (`.phonetisation`) et que nous ne traitons
-pas : « erbusse » → « Herbusse ». La distance d'édition ne peut pas l'attraper,
-la phonétique si.
+Couvre les fautes d'oreille, que la distance d'édition ne rattrape pas.
 
-`fuzzystrmatch` est déjà installé. Ajouter une colonne `dmetaphone(word)` avec un
-btree sur `search_lexicon`, utilisée comme seconde source de candidats quand le
-trigramme n'en produit aucun.
+`public.phonetic_fr` = `metaphone(…, 8)` précédé du retrait du `h` initial, muet
+en français. Le choix mérite d'être justifié, car j'ai d'abord essayé
+`dmetaphone` comme le suggérait le plan initial — mesuré, il est moins bon :
 
-La troncature à 4 caractères de `dmetaphone` — rédhibitoire si on l'appliquait
-aux 42 M de lignes du corpus — est sans conséquence sur les 241 k mots cibles du
-lexique : les collisions produisent simplement des candidats que l'on reclasse
-par fréquence. C'est le bon endroit pour cette technique.
+| mot | `dmetaphone` | `phonetic_fr` |
+| --- | --- | --- |
+| `philippe` / `filipe` | FLP / FLP | FLP / FLP |
+| `boulangerie` / `boulengerie` | PLNK / PLNK | BLNJR / BLNJR |
+| `hotel` / `otel` | HTL / **ATL** | OTL / OTL |
+| `herbusse` / `erbusse` | HRPS / **ARPS** | ERBS / ERBS |
 
-À valider avec le même protocole que la correction actuelle : rappel mesuré par
-type de faute (suppression, insertion, substitution, transposition) et par
-longueur de mot.
+Le code sur 8 caractères réduit aussi les collisions sur un lexique de 137 k
+mots cibles. Colonne générée `search_lexicon.phonetic` + index btree partiel de
+**1,5 Mo**. La source phonétique n'est consultée que si le trigramme n'a produit
+aucun candidat, pour ne pas dégrader la qualité existante.
 
-Effort : petit.
+Résultat mesuré, là où la correction précédente échouait :
+
+```
+filipe      →  philippe      (avant : rien)
+fotographe  →  photographie
+```
+
+**Limite connue** : le cas `erbusse` → `Herbusse` de la documentation Insee ne
+fonctionne pas chez nous, non pas à cause de l'algorithme — `phonetic_fr` les
+regroupe bien — mais parce que `herbusse` n'est pas dans le lexique : c'est un
+patronyme rare, sous le seuil de fréquence `ndoc >= 5` qui définit les cibles de
+correction valides. L'Insee phonétise le corpus entier ; nous phonétisons un
+vocabulaire filtré par fréquence, précisément pour éviter que les fautes
+présentes dans les données ne se légitiment elles-mêmes. C'est un arbitrage
+assumé, pas un oubli.
 
 ---
 
-## Lot 7 — Pagination par curseur
+## Lot 7 — Pagination par curseur — *reporté*
 
-Débloque l'export exhaustif et `commune=paris` au-delà de 10 000 résultats
+Débloquerait l'export exhaustif et `commune=paris` au-delà de 10 000 résultats
 (`offset` est plafonné à 10 000). Keyset sur `(date_creation, siret)`, ou
 `(score, siret)` pour le tri par pertinence en ajoutant `siret` comme départage.
 
-Effort : moyen. **Valeur conditionnelle** : si personne ne pagine au-delà de la
-dixième page, à repousser. L'instrumentation du lot 1.3 tranchera.
+Volontairement non implémenté : le plan le conditionnait aux données d'usage, et
+elles n'existent pas encore. L'instrumentation du lot 1.3 tranchera.
 
 ---
 
 ## Lot 8 — Exploitation
 
-### 8.1 COPY sans index dans le pipeline mensuel
+### 8.1 Chargement de staging sans index
 
-Les 42 M de lignes sont aujourd'hui chargées dans `*_staging` avec pkey, index
-`siren`, index `date_dernier_traitement`, GiST `position` et deux GIN maintenus
-en ligne. Les supprimer avant le COPY et les reconstruire après coûte, mesuré :
+Mesure sur 1 M de lignes d'établissements, 9 index dont deux GIN et un GiST :
 
-| index | reconstruction |
+| stratégie | durée |
 | --- | ---: |
-| GIN FTS | 25 s |
-| GIN trigramme | 21 s |
-| btree commune + date | ~3 min |
-| btree `date_creation` (lot 2) | 15 s |
+| chargement avec tous les index (avant) | 36,9 s |
+| sans aucun index, puis reconstruction totale | 17,9 s |
+| **clé primaire conservée, 8 index retirés** | **14,2 s** |
 
-Très probablement bien inférieur au surcoût actuel du COPY — à chiffrer sur une
-exécution réelle avant de s'engager.
+C'est la troisième qui est livrée : maintenir la clé primaire pendant le
+chargement coûte peu, alors que la reconstruire ensuite coûtait 4,9 s à elle
+seule. **×2,6** sur le chargement mensuel.
+
+Les définitions d'index sont relues dans le catalogue plutôt qu'écrites en dur :
+ce que la migration a créé est exactement ce qui est restauré, sans risque de
+dérive — la même discipline que le lot 1.1. Le tout est dans une transaction :
+un échec en cours de chargement ramène les index, sans quoi un plantage au
+mauvais moment laisserait une table de staging sans index, que le swap
+promouvrait en production. Deux tests couvrent ce chemin, dont celui du retour
+arrière.
 
 ### 8.2 `docker-compose.yml`
 
-Il est sur `postgres:12` sans PostGIS : l'exemple ne démarre pas pour un nouveau
-contributeur.
+Passé de `postgres:12` (sans PostGIS, donc inutilisable) à `postgis/postgis:17-3.5`,
+avec un *healthcheck* et une dépendance `service_healthy`. La clé `version:`,
+obsolète en Compose v2, a été retirée.
 
 ---
 
-## Ordre recommandé
+## Latences après implémentation
 
-1. **1.1 + 2 + 5** — peu d'effort, effet immédiat, et 1.1 protège tout le reste.
-2. **3 + 4** — comblent réellement l'écart fonctionnel avec l'API Insee, et
-   partagent la même plomberie de construction de requête.
-3. **6** — petit, et ferme un manque nommé.
-4. **8** — dès qu'une fenêtre de maintenance est disponible.
-5. **7** — seulement si les données d'usage le justifient.
-6. **1.2** — en continu, de préférence adossé au lot 3.
+API réelle, caches chauds, base complète.
 
----
-
-## Écart résiduel avec l'API Insee, pour mémoire
-
-Ce que l'Insee a et que nous n'aurons toujours pas après ce plan :
-
-- l'historisation (`periode()`, `date=`) — hors périmètre assumé ;
-- la syntaxe booléenne libre dans `q` — remplacée par des paramètres nommés ;
-- le `total` exact — nous restons sur un comptage borné, désormais signalé.
-
-Ce que nous avons et que l'Insee n'a pas :
-
-- la recherche géographique (`lat`/`lng`/`radius`, tri par distance) ;
-- la tolérance aux fautes de frappe sur la dénomination, avec suggestion ;
-- `commune` en clair et tolérant aux fautes ;
-- le tri par pertinence ;
-- aucun quota (l'API Insee est limitée à 30 requêtes/minute) ;
-- les liens de succession et la redirection des SIREN doublons.
+| requête | latence |
+| --- | ---: |
+| listing par défaut (tri date) | 6 ms |
+| `q=boulangerie du village` | 8 ms |
+| `commune=paris` | 25 ms |
+| `q=filipe` (correction phonétique) | 40 ms |
+| `q=carefour` (correction de frappe) | 50 ms |
+| `q=carrefour` | 56 ms |
+| `q=boulangerie&facette=activite_principale,code_commune` | 76 ms |
+| `q=sarl` | 111 ms |
+| géo 1 km, tri distance | 158 ms |
+| plage de dates 2024 | 232 ms |
