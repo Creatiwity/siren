@@ -46,10 +46,9 @@ fn group_type_slug(group_type: SyntheticGroupType) -> &'static str {
 fn parse_dsn(dsn: &str) -> Option<(String, String, String)> {
     let (scheme, rest) = if let Some(r) = dsn.strip_prefix("https://") {
         ("https", r)
-    } else if let Some(r) = dsn.strip_prefix("http://") {
-        ("http", r)
     } else {
-        return None;
+        let r = dsn.strip_prefix("http://")?;
+        ("http", r)
     };
     let at_pos = rest.find('@')?;
     let public_key = rest[..at_pos].to_string();
