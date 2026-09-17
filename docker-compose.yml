@@ -25,9 +25,9 @@ services:
     # unaccent, fuzzystrmatch. Les extensions elles-memes sont creees par les
     # migrations Diesel au demarrage de l'API.
     #
-    # PostgreSQL 17 au minimum : les migrations s'appuient sur des fonctions
-    # schema-qualifiees pour survivre au search_path restreint que la 17
-    # applique aux commandes de maintenance.
+    # Le tag fixe PostgreSQL 17, mais les migrations tournent depuis la 14. Leurs
+    # fonctions sont schema-qualifiees, ce qui les fait survivre au search_path
+    # restreint que la 17 applique aux commandes de maintenance.
     image: postgis/postgis:17-3.5
     container_name: db
     restart: unless-stopped
