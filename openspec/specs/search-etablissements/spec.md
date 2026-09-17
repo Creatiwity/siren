@@ -301,6 +301,41 @@ The system SHALL support pagination via `limit` and `offset` query parameters.
 - **WHEN** a GET request is made to `/v3/etablissements?offset=20000`
 - **THEN** the system caps the offset to 10000
 
+### Requirement: Paginate etablissements by cursor
+
+The system SHALL support keyset pagination via an opaque `cursor` parameter, to traverse result sets beyond the 10 000 ceiling that `offset` enforces. Cursor pagination requires `sort=siret`, the only total and stable order backed by an index; it is mutually exclusive with `offset`, and allows pages of up to 1 000 results.
+
+#### Scenario: Traverse with a cursor
+
+- **WHEN** a GET request is made to `/v3/etablissements?sort=siret&limit=1000`
+- **THEN** the response includes `next_cursor`
+- **AND** replaying the request with that `cursor` returns the following results, with neither gap nor repetition
+
+#### Scenario: Last page
+
+- **WHEN** a cursor page returns fewer results than `limit`
+- **THEN** `next_cursor` is absent
+
+#### Scenario: Filters are preserved
+
+- **WHEN** a cursor request carries the same filters as the request that produced it
+- **THEN** the filters keep applying to the resumed page
+
+#### Scenario: Cursor requires the primary-key sort
+
+- **WHEN** a GET request combines `cursor` with any sort other than `siret`
+- **THEN** the system responds with a 400 error
+
+#### Scenario: Cursor excludes offset
+
+- **WHEN** a GET request provides both `cursor` and `offset`
+- **THEN** the system responds with a 400 error
+
+#### Scenario: Malformed cursor
+
+- **WHEN** a GET request provides a `cursor` that does not decode to a primary key
+- **THEN** the system responds with a 400 error rather than silently returning the first page
+
 ### Requirement: Search response format for etablissements
 
 The system SHALL return search results in a structured response with metadata.
@@ -314,6 +349,7 @@ The system SHALL return search results in a structured response with metadata.
 - **AND** the response includes `sort` and `direction` reflecting the resolved sort field and direction
 - **AND** the response includes `suggestion` only when the result set is empty and a close term exists
 - **AND** the response includes `total_capped`, `true` when `total` reached its ceiling
+- **AND** the response includes `next_cursor` only when paginating by cursor and a next page exists
 
 #### Scenario: Empty search results
 

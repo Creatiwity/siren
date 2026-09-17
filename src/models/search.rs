@@ -143,6 +143,33 @@ pub struct RowCount {
     pub count: i64,
 }
 
+/// Higher than the offset limit: a keyset page costs a bounded index walk,
+/// where `OFFSET n` always pays `n`.
+pub const CURSOR_LIMIT_MAX: i64 = 1_000;
+
+/// Holds the last primary key returned, nothing else: a cursor is only valid
+/// when replayed with the same search parameters.
+pub fn encode_cursor(primary_key: &str) -> String {
+    use base64::Engine as _;
+    base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(primary_key)
+}
+
+/// Returns `None` on an unreadable cursor.
+pub fn decode_cursor(cursor: &str) -> Option<String> {
+    use base64::Engine as _;
+    let decoded = base64::engine::general_purpose::URL_SAFE_NO_PAD
+        .decode(cursor)
+        .ok()?;
+    let value = String::from_utf8(decoded).ok()?;
+
+    // A SIRET or SIREN is digits only. Anything else is forged or corrupted and
+    // is rejected rather than fed into a comparison.
+    (!value.is_empty()
+        && value.len() <= 14
+        && value.chars().all(|character| character.is_ascii_digit()))
+    .then_some(value)
+}
+
 #[derive(Debug, Serialize, ToSchema)]
 pub struct FacetValue {
     pub valeur: String,
@@ -207,6 +234,35 @@ pub fn check_facets(raw: Option<&str>, allowed: &[&str]) -> Result<(), String> {
         unknown.join(", "),
         allowed.join(", ")
     ))
+}
+
+/// Rejects a cursor that cannot be honoured.
+///
+/// Keyset resume only makes sense on primary-key order. On relevance or distance
+/// it would gain nothing — score and distance are recomputed row by row, there is
+/// no walk to shorten. On a date it would need a composite index: the densest tie
+/// group holds 583,632 rows and resuming inside it costs 38.8 s without one.
+pub fn check_cursor(
+    cursor: Option<&str>,
+    primary_key_sort: bool,
+    sort_name: &str,
+    offset: Option<i64>,
+) -> Result<(), String> {
+    let Some(cursor) = cursor else {
+        return Ok(());
+    };
+    if !primary_key_sort {
+        return Err(format!("cursor requires sort={sort_name}"));
+    }
+    if offset.is_some() {
+        return Err("cursor and offset are mutually exclusive".to_string());
+    }
+    // Ignoring an unreadable cursor would return the first page, and a client
+    // looping on `next_cursor` would never notice it is going in circles.
+    if decode_cursor(cursor.trim()).is_none() {
+        return Err("cursor is malformed".to_string());
+    }
+    Ok(())
 }
 
 /// Requested fields outside the whitelist, so they can be refused rather than
@@ -296,6 +352,19 @@ impl Binder {
             let placeholder = self.push(Bind::Date(max));
             conditions.push(format!("{column} <= {placeholder}"));
         }
+    }
+
+    /// Adds a keyset bound on the primary key.
+    pub fn keyset(
+        &mut self,
+        conditions: &mut Vec<String>,
+        column: &str,
+        ascending: bool,
+        cursor: &str,
+    ) {
+        let placeholder = self.text(cursor);
+        let comparison = if ascending { ">" } else { "<" };
+        conditions.push(format!("{column} {comparison} {placeholder}"));
     }
 
     /// Applies the values in registration order.
@@ -521,6 +590,25 @@ mod tests {
             unknown_facets(Some("code_postal,inconnu"), allowed),
             vec!["inconnu"]
         );
+    }
+
+    #[test]
+    fn curseur_aller_retour() {
+        let cursor = encode_cursor("12345678900011");
+        assert_ne!(cursor, "12345678900011", "le curseur doit etre opaque");
+        assert_eq!(decode_cursor(&cursor).as_deref(), Some("12345678900011"));
+    }
+
+    #[test]
+    fn curseur_forge_refuse() {
+        for forged in ["', 'x", "0' OR '1'='1", "", "abc", "123456789000111"] {
+            assert_eq!(
+                decode_cursor(&encode_cursor(forged)),
+                None,
+                "curseur accepte a tort : {forged:?}"
+            );
+        }
+        assert_eq!(decode_cursor("pas du base64 !!"), None);
     }
 
     #[test]

@@ -58,6 +58,7 @@ struct SearchPlan<'a> {
     text: search::TextMatch<'a>,
     commune_codes: Option<&'a [String]>,
     facets: &'a [String],
+    cursor: Option<&'a str>,
     sort: EtablissementSortField,
     direction: SortDirection,
     limit: i64,
@@ -68,8 +69,25 @@ pub async fn search(
     connection: &mut Connection,
     params: &EtablissementSearchParams,
 ) -> Result<EtablissementSearchOutput, Error> {
-    let limit = params.limit.unwrap_or(20).clamp(1, 100);
-    let offset = params.offset.unwrap_or(0).clamp(0, 10_000);
+    let cursor = params
+        .cursor
+        .as_deref()
+        .map(str::trim)
+        .filter(|cursor| !cursor.is_empty())
+        .and_then(search::decode_cursor);
+
+    // Primary-key order costs a bounded index walk per page, so it can afford
+    // wider pages than offset pagination.
+    let max_limit = match params.sort {
+        Some(EtablissementSortField::Siret) => search::CURSOR_LIMIT_MAX,
+        _ => 100,
+    };
+    let limit = params.limit.unwrap_or(20).clamp(1, max_limit);
+    let offset = if cursor.is_some() {
+        0
+    } else {
+        params.offset.unwrap_or(0).clamp(0, 10_000)
+    };
 
     let q = params
         .q
@@ -84,7 +102,8 @@ pub async fn search(
     });
 
     let direction = params.direction.unwrap_or(match sort {
-        EtablissementSortField::Distance => SortDirection::Asc,
+        // Nearest first, and export order follows the primary key.
+        EtablissementSortField::Distance | EtablissementSortField::Siret => SortDirection::Asc,
         _ => SortDirection::Desc,
     });
 
@@ -114,6 +133,7 @@ pub async fn search(
                     direction,
                     suggestion: None,
                     facettes: search::Facets::new(),
+                    next_cursor: None,
                 });
             }
             Some(codes)
@@ -133,6 +153,7 @@ pub async fn search(
         },
         commune_codes: commune_codes.as_deref(),
         facets: &facets,
+        cursor: cursor.as_deref(),
         sort,
         direction,
         limit,
@@ -283,6 +304,17 @@ async fn execute(
         params.date_debut_max,
     );
 
+    // Keyset resume: a plain bound on the primary key, served by its index. The
+    // cursor was already validated as a digit string.
+    if let Some(cursor) = plan.cursor {
+        binder.keyset(
+            &mut conditions,
+            "e.siret",
+            matches!(plan.direction, SortDirection::Asc),
+            cursor,
+        );
+    }
+
     let order_by = order_by_clause(plan.sort, plan.direction, reference_point.as_deref());
 
     // Filtering by commune without a text filter means sorting millions of rows:
@@ -346,6 +378,15 @@ async fn execute(
     )
     .await;
 
+    // A full page suggests more to come. Only primary-key order is total and
+    // stable enough to resume from.
+    let next_cursor = match plan.sort {
+        EtablissementSortField::Siret if results.len() as i64 == plan.limit => results
+            .last()
+            .map(|last| search::encode_cursor(&last.siret)),
+        _ => None,
+    };
+
     Ok(EtablissementSearchOutput {
         results,
         total,
@@ -356,6 +397,7 @@ async fn execute(
         direction: plan.direction,
         suggestion: None,
         facettes,
+        next_cursor,
     })
 }
 
@@ -389,6 +431,7 @@ fn order_by_clause(
         EtablissementSortField::Relevance => format!("score {dir}"),
         EtablissementSortField::DateCreation => format!("e.date_creation {dir} NULLS LAST"),
         EtablissementSortField::DateDebut => format!("e.date_debut {dir} NULLS LAST"),
+        EtablissementSortField::Siret => format!("e.siret {dir}"),
     }
 }
 

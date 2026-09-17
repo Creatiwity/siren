@@ -112,6 +112,12 @@ async fn search_etablissements(
             params.facette.as_deref(),
             models::search::ETABLISSEMENT_FACET_FIELDS,
         ),
+        models::search::check_cursor(
+            params.cursor.as_deref(),
+            matches!(params.sort, Some(EtablissementSortField::Siret)),
+            "siret",
+            params.offset,
+        ),
     ] {
         check.map_err(|message| Error::InvalidSearchParams { message })?;
     }
@@ -144,6 +150,7 @@ async fn search_etablissements(
         direction,
         suggestion,
         facettes,
+        next_cursor,
     } = output;
 
     Ok(Json(EtablissementSearchResponse {
@@ -175,6 +182,7 @@ async fn search_etablissements(
         direction,
         suggestion,
         facettes,
+        next_cursor,
     }))
 }
 

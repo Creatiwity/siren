@@ -3218,6 +3218,7 @@ version = "6.4.4"
 dependencies = [
  "async-trait",
  "axum",
+ "base64",
  "chrono",
  "clap",
  "custom_error",

@@ -373,6 +373,38 @@ OpenAPI ; tout autre champ donne un 400 plutôt qu'un silence.
 complet. `total_capped` vaut `true` quand ce plafond est atteint, pour que le
 client distingue « exactement 10 000 » de « au moins 10 000 ».
 
+### Pagination
+
+Par défaut, `limit` (20, max 100) et `offset` (max 10 000). Au-delà de ce
+plafond, la pagination par curseur :
+
+```
+GET /v3/etablissements?sort=siret&limit=1000
+→ { "etablissements": [...], "next_cursor": "MDA1NTgwMTIxMDAxMDA" }
+
+GET /v3/etablissements?sort=siret&limit=1000&cursor=MDA1NTgwMTIxMDAxMDA
+```
+
+`next_cursor` est absent sur la dernière page. Le curseur n'encode que la
+dernière clé primaire rendue : il n'est valide que rejoué avec les mêmes
+filtres. Un curseur illisible donne un 400, jamais un retour silencieux à la
+première page.
+
+Elle exige `sort=siret` (ou `sort=siren`) et s'exclut avec `offset`. Ce n'est
+pas une restriction arbitraire :
+
+- sur **pertinence** ou **distance**, la reprise par clé n'accélérerait rien —
+  le score et la distance se recalculent ligne à ligne, il n'y a aucun parcours
+  à raccourcir ;
+- sur une **date**, elle exigerait un index composé : mesuré, le groupe d'ex
+  æquo le plus dense compte 583 632 lignes et une reprise y coûte 38,8 s sans
+  lui ;
+- sur la **clé primaire**, l'index existe déjà et le coût par page est constant
+  — 57 ms par page de 1 000 lignes, mesuré sur un parcours de 20 000 lignes.
+
+C'est aussi la sémantique de l'API Insee, dont le tri par défaut est sur le
+siren.
+
 ### Maintenance des données annexes
 
 Elles sont rafraîchies automatiquement par le workflow de mise à jour :

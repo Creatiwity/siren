@@ -12,14 +12,14 @@ Tous les chiffres ont été mesurés sur la base complète (42,7 M établissemen
 | Lot | Sujet | État |
 | --- | --- | --- |
 | 1.1 | Garde-fous sur l'usage des index | livré |
-| 1.2 | Tests d'intégration sur les scénarios des specs | livré — 29 tests |
+| 1.2 | Tests d'intégration sur les scénarios des specs | livré — 36 tests |
 | 1.3 | Instrumentation du repli trigramme | livré |
 | 2 | Index sur `date_creation` | livré |
 | 3 | Filtrage riche (multi-valeurs, plages, négation) | livré |
 | 4 | Facettes | livré |
 | 5 | `total` plafonné explicite | livré |
 | 6 | Phonétisation dans le lexique | livré, avec une limite connue |
-| 7 | Pagination par curseur | **reporté**, conditionné aux données d'usage |
+| 7 | Pagination par curseur | livré, restreint au tri par clé primaire |
 | 8.1 | Chargement de staging sans index | livré |
 | 8.2 | `docker-compose.yml` | livré |
 
@@ -183,14 +183,55 @@ assumé, pas un oubli.
 
 ---
 
-## Lot 7 — Pagination par curseur — *reporté*
+## Lot 7 — Pagination par curseur
 
-Débloquerait l'export exhaustif et `commune=paris` au-delà de 10 000 résultats
-(`offset` est plafonné à 10 000). Keyset sur `(date_creation, siret)`, ou
-`(score, siret)` pour le tri par pertinence en ajoutant `siret` comme départage.
+Débloque l'export exhaustif et le parcours au-delà des 10 000 résultats que
+plafonne `offset`.
 
-Volontairement non implémenté : le plan le conditionnait aux données d'usage, et
-elles n'existent pas encore. L'instrumentation du lot 1.3 tranchera.
+```
+GET /v3/etablissements?sort=siret&limit=1000
+→ { …, "next_cursor": "MDA1NTgwMTIxMDAxMDA" }
+```
+
+**Restreint au tri par clé primaire**, et c'est le résultat des mesures plutôt
+qu'une simplification. Le plan envisageait un keyset sur `(date_creation, siret)`
+ou `(score, siret)` ; les deux ont été écartés pour des raisons différentes :
+
+- **Pertinence et distance** : la reprise par clé n'accélère rien. Le score et la
+  distance se recalculent ligne à ligne, il n'y a aucun parcours à raccourcir —
+  le keyset filtre mais ne saute pas. Coût identique à `offset`.
+- **Date** : exige un index composé. Mesuré, le groupe d'ex æquo le plus dense
+  compte **583 632 lignes** (`1900-01-01`, valeur sentinelle des données Insee)
+  et une reprise à l'intérieur coûte **38,8 s** sans index composé, avec 39 M de
+  lignes rejetées par filtre. Il faudrait ~500 Mo de plus, et un curseur en deux
+  phases pour traiter la zone `NULL` — mesuré aussi : la disjonction
+  `OR date_creation IS NULL` fait passer la requête de 4,6 ms à 2 828 ms.
+- **Clé primaire** : l'index existe déjà, le parcours est un *index only scan*,
+  et le coût par page est constant.
+
+Mesure du parcours profond : **20 000 lignes en 20 pages de 1 000, 1,15 s, soit
+57 ms par page** — au-delà du plafond de `offset`, à coût constant.
+
+C'est aussi la sémantique de l'API Insee, dont le tri par défaut est sur le
+siren et dont le `curseur` pagine 1 000 résultats par page. La limite de page
+est relevée à 1 000 sur ce tri, contre 100 sur la pagination par décalage : une
+page keyset se paie un parcours d'index borné, là où `OFFSET n` paie toujours
+`n`.
+
+Détails de conception :
+
+- Le curseur est opaque (base64url de la clé primaire) et n'encode pas les
+  filtres : il n'est valide que rejoué avec les mêmes paramètres.
+- Le décodage n'accepte qu'une suite de chiffres d'au plus 14 caractères ; tout
+  le reste est refusé avant d'atteindre la comparaison SQL.
+- Un curseur illisible donne un **400**, pas un retour silencieux à la première
+  page — sans quoi un client bouclant sur `next_cursor` tournerait en rond sans
+  jamais s'en apercevoir.
+- Le tri par clé primaire est ascendant par défaut, ordre naturel d'un export.
+
+Six tests couvrent le parcours sans trou ni doublon, la persistance des filtres
+après reprise, le franchissement du plafond de `offset`, l'absence de curseur en
+dernière page, et le rejet des curseurs forgés.
 
 ---
 
@@ -242,3 +283,4 @@ API réelle, caches chauds, base complète.
 | `q=sarl` | 111 ms |
 | géo 1 km, tri distance | 158 ms |
 | plage de dates 2024 | 232 ms |
+| page de 1 000 par curseur | 57 ms |

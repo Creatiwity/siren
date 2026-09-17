@@ -180,6 +180,21 @@ The system SHALL support pagination via `limit` and `offset` query parameters.
 - **WHEN** a GET request is made to `/v3/unites_legales?offset=20000`
 - **THEN** the system caps the offset to 10000
 
+### Requirement: Paginate unites legales by cursor
+
+The system SHALL support keyset pagination via an opaque `cursor` parameter, requiring `sort=siren`, mutually exclusive with `offset`, allowing pages of up to 1 000 results.
+
+#### Scenario: Traverse with a cursor
+
+- **WHEN** a GET request is made to `/v3/unites_legales?sort=siren&limit=1000`
+- **THEN** the response includes `next_cursor`
+- **AND** replaying the request with that `cursor` returns the following results, with neither gap nor repetition
+
+#### Scenario: Cursor requires the primary-key sort
+
+- **WHEN** a GET request combines `cursor` with any sort other than `siren`
+- **THEN** the system responds with a 400 error
+
 ### Requirement: Search response format for unites legales
 
 The system SHALL return search results in a structured response with metadata.
