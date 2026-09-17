@@ -60,6 +60,13 @@ impl Action for SwapAction {
 
         model.swap(connectors).await?;
 
+        // Le swap n'est qu'un RENAME : la table qui devient la production a ete
+        // remplie en masse et n'a ni lexique de correction, ni dimension des
+        // communes, ni statistiques representatives. Sans ce rafraichissement le
+        // planificateur retombe sur des estimations par defaut et la recherche
+        // repart en seq scan.
+        model.refresh_search_metadata(connectors, None).await?;
+
         group_metadata::set_last_imported_timestamp(
             connectors,
             group_type,

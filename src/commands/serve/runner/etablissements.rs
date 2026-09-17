@@ -104,6 +104,20 @@ async fn search_etablissements(
         });
     }
 
+    // En dessous de trois caracteres, ni le FTS ni le trigramme ne sont
+    // exploitables : la requete degenere en parcours complet. On refuse
+    // explicitement plutot que d'ignorer silencieusement le parametre.
+    if let Some(q) = params.q.as_deref().map(str::trim)
+        && q.chars().count() < models::search::MIN_QUERY_LENGTH
+    {
+        return Err(Error::InvalidSearchParams {
+            message: format!(
+                "q must be at least {} characters long",
+                models::search::MIN_QUERY_LENGTH
+            ),
+        });
+    }
+
     match params.sort {
         Some(EtablissementSortField::Distance) if !has_all_geo => {
             return Err(Error::InvalidSearchParams {
@@ -123,6 +137,7 @@ async fn search_etablissements(
 
     let output = models::etablissement::search(&mut connection, &params).await?;
     let total = output.total;
+    let suggestion = output.suggestion;
 
     Ok(Json(EtablissementSearchResponse {
         etablissements: output
@@ -151,6 +166,7 @@ async fn search_etablissements(
         offset: output.offset,
         sort: output.sort,
         direction: output.direction,
+        suggestion,
     }))
 }
 

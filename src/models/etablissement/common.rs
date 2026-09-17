@@ -157,6 +157,10 @@ pub enum EtatAdministratif {
 #[derive(Debug, Deserialize, IntoParams)]
 pub struct EtablissementSearchParams {
     pub q: Option<String>,
+    /// Libelle de commune en clair (« paris », « saint etienne », « marseile »).
+    /// Resolu en liste de `code_commune` via la table de dimension, avec
+    /// correspondance par prefixe et tolerance aux fautes.
+    pub commune: Option<String>,
     pub etat_administratif: Option<EtatAdministratif>,
     pub code_postal: Option<String>,
     pub siren: Option<String>,
@@ -214,6 +218,7 @@ pub struct EtablissementSearchOutput {
     pub offset: i64,
     pub sort: EtablissementSortField,
     pub direction: SortDirection,
+    pub suggestion: Option<String>,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -224,6 +229,10 @@ pub struct EtablissementSearchResponse {
     pub offset: i64,
     pub sort: EtablissementSortField,
     pub direction: SortDirection,
+    /// Reformulation proposee, presente uniquement quand la recherche ne
+    /// renvoie aucun resultat et qu'un mot proche existe dans le corpus.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub suggestion: Option<String>,
 }
 
 #[derive(Debug, Serialize, ToSchema)]

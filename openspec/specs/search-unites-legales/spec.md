@@ -10,8 +10,19 @@ The system SHALL allow searching legal units by text query on denomination via t
 #### Scenario: Text search on denomination
 
 - **WHEN** a GET request is made to `/v3/unites_legales?q=creati`
-- **THEN** the system returns legal units whose `search_denomination` matches the query using BM25 ngram search
+- **THEN** the system returns legal units whose `denomination` or `denomination_usuelle_1..3` matches the query using PostgreSQL full-text search
 - **AND** each result includes a `score` field with the text relevance score
+
+#### Scenario: Query shorter than three characters
+
+- **WHEN** a GET request is made to `/v3/unites_legales?q=le`
+- **THEN** the system responds with a 400 error indicating that `q` must be at least 3 characters long
+
+#### Scenario: Suggestion on empty results
+
+- **WHEN** a text search returns no legal unit and a close term exists in the corpus
+- **THEN** the response includes a `suggestion` field with the reformulated query
+- **AND** the `suggestion` field is absent when the search returns at least one result
 
 #### Scenario: No text query provided
 
@@ -66,12 +77,12 @@ The system SHALL allow sorting search results via `sort` and `direction` query p
 #### Scenario: Sort by relevance
 
 - **WHEN** a GET request is made to `/v3/unites_legales?q=creati&sort=relevance`
-- **THEN** results are sorted by BM25 text relevance score descending (most relevant first)
+- **THEN** results are sorted by full-text relevance score descending (most relevant first)
 
 #### Scenario: Sort by relevance ascending
 
 - **WHEN** a GET request is made to `/v3/unites_legales?q=creati&sort=relevance&direction=asc`
-- **THEN** results are sorted by BM25 text relevance score ascending (least relevant first)
+- **THEN** results are sorted by full-text relevance score ascending (least relevant first)
 
 #### Scenario: Sort by date_creation
 

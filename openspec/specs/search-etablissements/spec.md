@@ -5,24 +5,55 @@ TBD - created by archiving change 2026-02-06-add-search-endpoints. Update Purpos
 ## Requirements
 ### Requirement: Search etablissements with text query
 
-The system SHALL allow searching establishments by text query on denomination and commune name via the `q` query parameter on `GET /v3/etablissements`.
+The system SHALL allow searching establishments by text query on denomination and enseigne fields via the `q` query parameter on `GET /v3/etablissements`. Commune names are NOT part of the text index; they are addressed by the dedicated `commune` parameter.
 
 #### Scenario: Text search on denomination
 
 - **WHEN** a GET request is made to `/v3/etablissements?q=creati`
-- **THEN** the system returns establishments whose `search_denomination` matches the query using BM25 ngram search
+- **THEN** the system returns establishments whose `denomination_usuelle`, `enseigne_1`, `enseigne_2` or `enseigne_3` matches the query using PostgreSQL full-text search
 - **AND** each result includes a `score` field with the text relevance score
 
-#### Scenario: Text search on commune name
+#### Scenario: Multiple words are combined with AND
 
-- **WHEN** a GET request is made to `/v3/etablissements?q=paris`
-- **THEN** the system also matches against `libelle_commune` using BM25 ngram search
+- **WHEN** a GET request is made to `/v3/etablissements?q=boulangerie+du+village`
+- **THEN** only establishments matching every significant term are returned
+
+#### Scenario: Query shorter than three characters
+
+- **WHEN** a GET request is made to `/v3/etablissements?q=le`
+- **THEN** the system responds with a 400 error indicating that `q` must be at least 3 characters long
 
 #### Scenario: No text query provided
 
 - **WHEN** a GET request is made to `/v3/etablissements` without a `q` parameter
 - **THEN** the system returns establishments without text filtering
 - **AND** the `score` field is absent from results
+
+### Requirement: Tolerate misspellings in text queries
+
+The system SHALL tolerate misspelled query terms without losing exact matches.
+
+#### Scenario: Misspelled term is augmented, never replaced
+
+- **WHEN** a GET request is made to `/v3/etablissements?q=carefour`
+- **THEN** the system searches for both the typed term and the corrected term
+- **AND** establishments literally named `carefour` are still returned alongside `CARREFOUR`
+
+#### Scenario: Rare but correct name is preserved
+
+- **WHEN** a GET request is made with a rare legitimate name that resembles a more frequent word
+- **THEN** the system still returns the establishments matching the typed name
+
+#### Scenario: Suggestion on empty results
+
+- **WHEN** a text search returns no establishment and a close term exists in the corpus
+- **THEN** the response includes a `suggestion` field with the reformulated query
+- **AND** the `suggestion` field is absent when the search returns at least one result
+
+#### Scenario: Trigram fallback
+
+- **WHEN** a text search returns no establishment through full-text search
+- **THEN** the system retries once with trigram similarity before returning an empty result set
 
 ### Requirement: Filter etablissements by field values
 
@@ -64,6 +95,35 @@ The system SHALL allow filtering establishments by exact field values via query 
 - **THEN** the system applies all filters together (AND logic)
 - **AND** only establishments matching all criteria are returned
 
+### Requirement: Filter etablissements by commune name
+
+The system SHALL allow filtering establishments by plain-text commune name via the `commune` query parameter. The name is resolved against a commune dimension, accent- and case-insensitively, by prefix on each word, with a fallback tolerant to misspellings.
+
+#### Scenario: Filter by commune name
+
+- **WHEN** a GET request is made to `/v3/etablissements?commune=paris`
+- **THEN** only establishments located in a commune whose name starts with `paris` are returned, including every Paris arrondissement
+
+#### Scenario: Match on any word of the commune name
+
+- **WHEN** a GET request is made to `/v3/etablissements?commune=etienne`
+- **THEN** establishments in `SAINT-ETIENNE` and other communes containing that word are returned
+
+#### Scenario: Misspelled commune name
+
+- **WHEN** a GET request is made to `/v3/etablissements?commune=marseile`
+- **THEN** the system falls back to trigram similarity and returns establishments in `MARSEILLE`
+
+#### Scenario: Unknown commune name
+
+- **WHEN** a GET request is made to `/v3/etablissements?commune=zzzzzz`
+- **THEN** the response contains an empty `etablissements` array and `total` is 0
+
+#### Scenario: Combine commune with a text query
+
+- **WHEN** a GET request is made to `/v3/etablissements?commune=paris&q=boulangerie`
+- **THEN** only establishments matching both the commune and the text query are returned
+
 ### Requirement: Geographic search on etablissements
 
 The system SHALL allow filtering establishments within a geographic radius from a reference point.
@@ -102,12 +162,12 @@ The system SHALL allow sorting search results via `sort` and `direction` query p
 #### Scenario: Sort by relevance
 
 - **WHEN** a GET request is made to `/v3/etablissements?q=creati&sort=relevance`
-- **THEN** results are sorted by BM25 text relevance score descending (most relevant first)
+- **THEN** results are sorted by full-text relevance score descending (most relevant first)
 
 #### Scenario: Sort by relevance ascending
 
 - **WHEN** a GET request is made to `/v3/etablissements?q=creati&sort=relevance&direction=asc`
-- **THEN** results are sorted by BM25 text relevance score ascending (least relevant first)
+- **THEN** results are sorted by full-text relevance score ascending (least relevant first)
 
 #### Scenario: Sort by date_creation
 
@@ -184,6 +244,7 @@ The system SHALL return search results in a structured response with metadata.
 - **AND** the response includes `total` with the total count of matching results
 - **AND** the response includes `limit` and `offset` reflecting the applied pagination
 - **AND** the response includes `sort` and `direction` reflecting the resolved sort field and direction
+- **AND** the response includes `suggestion` only when the result set is empty and a close term exists
 
 #### Scenario: Empty search results
 

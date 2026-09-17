@@ -3,6 +3,7 @@ pub mod error;
 
 use super::common::{Error as UpdatableError, UpdatableModel, copy_remote_zipped_csv};
 use super::schema::etablissement::dsl;
+use super::search;
 use crate::connectors::{Connectors, local::Connection};
 use crate::update::utils::remote_file::RemoteFile;
 use async_trait::async_trait;
@@ -15,7 +16,7 @@ use diesel::pg::upsert::excluded;
 use diesel::pg::{CopyFormat, CopyHeader};
 use diesel::prelude::*;
 use diesel::sql_query;
-use diesel::sql_types::{BigInt, Bool, Float8, Text};
+use diesel::sql_types::{Text, Timestamp};
 use diesel_async::{AsyncConnection, RunQueryDsl};
 use error::Error;
 
@@ -52,307 +53,318 @@ pub async fn get_siege_with_siren(
         .map_err(|error| error.into())
 }
 
-const SEARCH_TOTAL_CAP: i64 = 10_000;
+/// Mode de correspondance textuelle applique a la requete.
+enum TextMatch<'a> {
+    /// Aucun filtre texte.
+    None,
+    /// FTS natif : `tsvector @@ tsquery`. Chemin nominal.
+    FullText(&'a str),
+    /// Repli trigramme, declenche uniquement quand le FTS ne ramene rien.
+    Trigram(&'a str),
+}
 
-#[derive(QueryableByName)]
-struct RowCount {
-    #[diesel(sql_type = BigInt)]
-    count: i64,
+/// Parametres resolus d'une execution de recherche.
+struct SearchPlan<'a> {
+    text: TextMatch<'a>,
+    commune_codes: Option<&'a [String]>,
+    sort: EtablissementSortField,
+    direction: SortDirection,
+    limit: i64,
+    offset: i64,
 }
 
 pub async fn search(
     connection: &mut Connection,
     params: &EtablissementSearchParams,
 ) -> Result<EtablissementSearchOutput, Error> {
-    let has_geo = params.lat.is_some() && params.lng.is_some() && params.radius.is_some();
-    let has_q = params.q.is_some();
-
     let limit = params.limit.unwrap_or(20).clamp(1, 100);
     let offset = params.offset.unwrap_or(0).clamp(0, 10_000);
 
-    // Precompute q param index: geo binds lng+lat ($1,$2) before q
-    let q_param_index: Option<u32> = if has_q {
-        Some(if has_geo { 3 } else { 1 })
-    } else {
-        None
-    };
+    let q = params
+        .q
+        .as_deref()
+        .map(str::trim)
+        .filter(|q| q.chars().count() >= search::MIN_QUERY_LENGTH);
 
-    // Build SELECT columns
-    let mut select_columns = vec![
-        "e.siret".to_string(),
-        "e.siren".to_string(),
-        "e.etat_administratif".to_string(),
-        "e.date_creation".to_string(),
-        "e.denomination_usuelle".to_string(),
-        "e.enseigne_1".to_string(),
-        "e.enseigne_2".to_string(),
-        "e.enseigne_3".to_string(),
-        "e.code_postal".to_string(),
-        "e.libelle_commune".to_string(),
-        "e.activite_principale".to_string(),
-        "e.etablissement_siege".to_string(),
-        "e.position".to_string(),
-    ];
-
-    if has_geo {
-        select_columns.push("ST_Distance(e.position, ref_point.pt) AS meter_distance".to_string());
-    } else {
-        select_columns.push("NULL::float8 AS meter_distance".to_string());
-    }
-
-    if let Some(qi) = q_param_index {
-        select_columns.push(format!(
-            "word_similarity(lower(immutable_unaccent(${qi})), e.search_denomination) AS score"
-        ));
-    } else {
-        select_columns.push("NULL::real AS score".to_string());
-    }
-
-    // Build FROM clause
-    let mut from_parts = vec!["etablissement e".to_string()];
-    let mut param_index = 1u32;
-
-    if has_geo {
-        from_parts.push(format!(
-            "(SELECT ST_SetSRID(ST_MakePoint(${}, ${}), 4326)::geography AS pt) ref_point",
-            param_index,
-            param_index + 1
-        ));
-        param_index += 2;
-        // radius param will be used in WHERE
-    }
-
-    // Build WHERE conditions
-    let mut conditions: Vec<String> = Vec::new();
-
-    // Text search
-    if has_q {
-        conditions.push(format!(
-            "lower(immutable_unaccent(${param_index})) <% e.search_denomination"
-        ));
-        param_index += 1;
-    }
-
-    // Geo filter
-    let radius_param_index;
-    if has_geo {
-        radius_param_index = Some(param_index);
-        conditions.push(format!(
-            "ST_DWithin(e.position, ref_point.pt, ${param_index})"
-        ));
-        param_index += 1;
-    } else {
-        radius_param_index = None;
-    }
-
-    // Field filters
-    let mut field_param_indices: Vec<(String, u32)> = Vec::new();
-
-    if let Some(ref _v) = params.etat_administratif {
-        conditions.push(format!("e.etat_administratif = ${param_index}"));
-        field_param_indices.push(("etat_administratif".to_string(), param_index));
-        param_index += 1;
-    }
-    if let Some(ref _v) = params.code_postal {
-        conditions.push(format!("e.code_postal = ${param_index}"));
-        field_param_indices.push(("code_postal".to_string(), param_index));
-        param_index += 1;
-    }
-    if let Some(ref _v) = params.siren {
-        conditions.push(format!("e.siren = ${param_index}"));
-        field_param_indices.push(("siren".to_string(), param_index));
-        param_index += 1;
-    }
-    if let Some(ref _v) = params.code_commune {
-        conditions.push(format!("e.code_commune = ${param_index}"));
-        field_param_indices.push(("code_commune".to_string(), param_index));
-        param_index += 1;
-    }
-    if let Some(ref _v) = params.activite_principale {
-        conditions.push(format!("e.activite_principale = ${param_index}"));
-        field_param_indices.push(("activite_principale".to_string(), param_index));
-        param_index += 1;
-    }
-    if let Some(ref _v) = params.etablissement_siege {
-        conditions.push(format!("e.etablissement_siege = ${param_index}"));
-        field_param_indices.push(("etablissement_siege".to_string(), param_index));
-        param_index += 1;
-    }
-
-    let _ = param_index; // suppress unused warning
-
-    // Build ORDER BY
-    let sort_field = params.sort.unwrap_or(if has_q {
+    let sort = params.sort.unwrap_or(if q.is_some() {
         EtablissementSortField::Relevance
     } else {
         EtablissementSortField::DateCreation
     });
 
-    let resolved_dir = params.direction.unwrap_or(match sort_field {
+    let direction = params.direction.unwrap_or(match sort {
         EtablissementSortField::Distance => SortDirection::Asc,
         _ => SortDirection::Desc,
     });
 
-    let order_by = match (sort_field, resolved_dir) {
-        (EtablissementSortField::Distance, SortDirection::Desc) => {
-            "e.position <-> ref_point.pt DESC"
-        }
-        (EtablissementSortField::Distance, SortDirection::Asc) => "e.position <-> ref_point.pt ASC",
-        (EtablissementSortField::Relevance, SortDirection::Asc) => "score ASC",
-        (EtablissementSortField::Relevance, SortDirection::Desc) => "score DESC",
-        (EtablissementSortField::DateCreation, SortDirection::Asc) => {
-            "e.date_creation ASC NULLS LAST"
-        }
-        (EtablissementSortField::DateCreation, SortDirection::Desc) => {
-            "e.date_creation DESC NULLS LAST"
-        }
-        (EtablissementSortField::DateDebut, SortDirection::Asc) => "e.date_debut ASC NULLS LAST",
-        (EtablissementSortField::DateDebut, SortDirection::Desc) => "e.date_debut DESC NULLS LAST",
+    let empty = |suggestion| EtablissementSearchOutput {
+        results: Vec::new(),
+        total: 0,
+        limit,
+        offset,
+        sort,
+        direction,
+        suggestion,
     };
 
-    // Assemble query
+    // Resolution du libelle de commune en codes INSEE. Un libelle sans
+    // correspondance ne peut rien donner : inutile d'interroger la grande table.
+    let commune_codes = match params
+        .commune
+        .as_deref()
+        .map(str::trim)
+        .filter(|commune| !commune.is_empty())
+    {
+        Some(commune) => {
+            let codes = search::resolve_commune(connection, commune).await?;
+            if codes.is_empty() {
+                return Ok(empty(None));
+            }
+            Some(codes)
+        }
+        None => None,
+    };
+
+    // Analyse de la saisie : tsquery augmentee (chaque mot suspect est complete
+    // par `| correction`, jamais remplace) et reformulation proposee.
+    let parsed = match q {
+        Some(q) => Some(search::parse_query(connection, q, search::SOURCE_ETABLISSEMENT).await?),
+        None => None,
+    };
+
+    let text = match parsed.as_ref().and_then(|parsed| parsed.tsquery.as_deref()) {
+        Some(tsquery) => TextMatch::FullText(tsquery),
+        None => TextMatch::None,
+    };
+
+    let mut output = execute(
+        connection,
+        params,
+        &SearchPlan {
+            text,
+            commune_codes: commune_codes.as_deref(),
+            sort,
+            direction,
+            limit,
+            offset,
+        },
+    )
+    .await?;
+
+    // Repli trigramme : couvre ce que la correction par lexique ne rattrape pas
+    // (transpositions, correspondance infixe). Il ne s'execute que sur les
+    // recherches sans resultat, donc jamais sur le chemin chaud.
+    if output.results.is_empty()
+        && let Some(q) = q
+    {
+        output = execute(
+            connection,
+            params,
+            &SearchPlan {
+                text: TextMatch::Trigram(q),
+                commune_codes: commune_codes.as_deref(),
+                sort,
+                direction,
+                limit,
+                offset,
+            },
+        )
+        .await?;
+    }
+
+    // La reformulation n'est exposee que si la recherche reste vide : proposee
+    // systematiquement, elle serait fausse pour ~45 % des noms rares mais
+    // corrects (mesure sur le corpus).
+    if output.results.is_empty() {
+        output.suggestion = parsed.and_then(|parsed| parsed.suggestion);
+    }
+
+    Ok(output)
+}
+
+async fn execute(
+    connection: &mut Connection,
+    params: &EtablissementSearchParams,
+    plan: &SearchPlan<'_>,
+) -> Result<EtablissementSearchOutput, Error> {
+    let has_geo = params.lat.is_some() && params.lng.is_some() && params.radius.is_some();
+
+    let mut binder = search::Binder::new();
+
+    // Point de reference geographique : declare en premier pour que l'expression
+    // soit constante au moment de la planification, condition du parcours KNN
+    // sur l'index GiST.
+    let reference_point = has_geo.then(|| {
+        let lng = binder.push(search::Bind::Float8(params.lng.unwrap_or_default()));
+        let lat = binder.push(search::Bind::Float8(params.lat.unwrap_or_default()));
+        format!("ST_SetSRID(ST_MakePoint({lng}, {lat}), 4326)::geography")
+    });
+
+    let vector = search::search_vector("e", search::ETABLISSEMENT_SEARCH_COLUMNS);
+    let trigram = search::search_trigram("e", search::ETABLISSEMENT_SEARCH_COLUMNS);
+
+    let mut conditions: Vec<String> = Vec::new();
+
+    let score = match plan.text {
+        TextMatch::None => "NULL::real".to_string(),
+        TextMatch::FullText(tsquery) => {
+            let placeholder = binder.push(search::Bind::TsQuery(tsquery.to_string()));
+            conditions.push(format!("{vector} @@ {placeholder}::tsquery"));
+            format!("ts_rank_cd({vector}, {placeholder}::tsquery)")
+        }
+        TextMatch::Trigram(q) => {
+            let placeholder = binder.text(q);
+            let needle = format!("lower(public.immutable_unaccent({placeholder}))");
+            conditions.push(format!("{needle} <% {trigram}"));
+            format!("word_similarity({needle}, {trigram})")
+        }
+    };
+
+    let distance = match &reference_point {
+        Some(point) => {
+            let radius = binder.push(search::Bind::Float8(params.radius.unwrap_or_default()));
+            conditions.push(format!("ST_DWithin(e.position, {point}, {radius})"));
+            format!("ST_Distance(e.position, {point})")
+        }
+        None => "NULL::float8".to_string(),
+    };
+
+    // Filtre commune : la resolution du libelle est deja faite, on ne manipule
+    // plus que des codes INSEE, servis par etablissement_commune_date_idx.
+    let commune_placeholder = plan
+        .commune_codes
+        .map(|codes| binder.push(search::Bind::TextArray(codes.to_vec())));
+
+    if let Some(placeholder) = &commune_placeholder {
+        conditions.push(format!("e.code_commune = ANY({placeholder})"));
+    }
+
+    if let Some(value) = params.etat_administratif {
+        let placeholder = binder.text(match value {
+            common::EtatAdministratif::A => "A",
+            common::EtatAdministratif::F => "F",
+        });
+        conditions.push(format!("e.etat_administratif = {placeholder}"));
+    }
+    if let Some(value) = params.code_postal.as_deref() {
+        let placeholder = binder.text(value);
+        conditions.push(format!("e.code_postal = {placeholder}"));
+    }
+    if let Some(value) = params.siren.as_deref() {
+        let placeholder = binder.text(value);
+        conditions.push(format!("e.siren = {placeholder}"));
+    }
+    if let Some(value) = params.code_commune.as_deref() {
+        let placeholder = binder.text(value);
+        conditions.push(format!("e.code_commune = {placeholder}"));
+    }
+    if let Some(value) = params.activite_principale.as_deref() {
+        let placeholder = binder.text(value);
+        conditions.push(format!("e.activite_principale = {placeholder}"));
+    }
+    if let Some(value) = params.etablissement_siege {
+        let placeholder = binder.push(search::Bind::Bool(value));
+        conditions.push(format!("e.etablissement_siege = {placeholder}"));
+    }
+
+    let order_by = order_by_clause(plan.sort, plan.direction, reference_point.as_deref());
+
     let where_clause = if conditions.is_empty() {
         String::new()
     } else {
         format!("WHERE {}", conditions.join(" AND "))
     };
 
-    let sql = format!(
-        "SELECT {} FROM {} {} ORDER BY {} LIMIT {} OFFSET {}",
-        select_columns.join(", "),
-        from_parts.join(", "),
-        where_clause,
-        order_by,
-        limit,
-        offset
+    let columns = format!(
+        "e.siret, e.siren, e.etat_administratif, e.date_creation, e.denomination_usuelle, \
+         e.enseigne_1, e.enseigne_2, e.enseigne_3, e.code_postal, e.libelle_commune, \
+         e.activite_principale, e.etablissement_siege, e.position, \
+         {distance} AS meter_distance, {score} AS score"
     );
 
-    // Bind parameters in order
-    let mut query = sql_query(&sql).into_boxed();
+    // Filtrer par commune sans filtre texte revient a trier des millions de
+    // lignes : `code_commune = ANY(...)` ne peut pas rendre l'ordre de l'index.
+    // On passe alors par un top-N par commune, fusionne ensuite (1,5 ms contre
+    // 22 s sur `commune=paris`).
+    let sql = match (&commune_placeholder, &plan.text, has_geo) {
+        (Some(placeholder), TextMatch::None, false) => {
+            let inner_conditions: Vec<&String> = conditions
+                .iter()
+                .filter(|condition| !condition.starts_with("e.code_commune = ANY("))
+                .collect();
 
-    if has_geo {
-        query = query
-            .bind::<Float8, _>(params.lng.unwrap())
-            .bind::<Float8, _>(params.lat.unwrap());
-    }
+            let mut inner = vec!["e.code_commune = codes.code_commune".to_string()];
+            inner.extend(inner_conditions.into_iter().cloned());
 
-    if let Some(ref q) = params.q {
-        query = query.bind::<Text, _>(q);
-    }
-
-    if has_geo {
-        let _ = radius_param_index;
-        query = query.bind::<Float8, _>(params.radius.unwrap());
-    }
-
-    // Bind field filters in order
-    for (field_name, _) in &field_param_indices {
-        match field_name.as_str() {
-            "etat_administratif" => {
-                let val = match params.etat_administratif.unwrap() {
-                    common::EtatAdministratif::A => "A",
-                    common::EtatAdministratif::F => "F",
-                };
-                query = query.bind::<Text, _>(val);
-            }
-            "code_postal" => {
-                query = query.bind::<Text, _>(params.code_postal.as_ref().unwrap());
-            }
-            "siren" => {
-                query = query.bind::<Text, _>(params.siren.as_ref().unwrap());
-            }
-            "code_commune" => {
-                query = query.bind::<Text, _>(params.code_commune.as_ref().unwrap());
-            }
-            "activite_principale" => {
-                query = query.bind::<Text, _>(params.activite_principale.as_ref().unwrap());
-            }
-            "etablissement_siege" => {
-                query = query.bind::<Bool, _>(params.etablissement_siege.unwrap());
-            }
-            _ => {}
+            format!(
+                "SELECT {columns} FROM unnest({placeholder}) AS codes(code_commune) \
+                 CROSS JOIN LATERAL ( \
+                   SELECT * FROM etablissement e WHERE {} ORDER BY {order_by} LIMIT {} \
+                 ) e \
+                 ORDER BY {order_by} LIMIT {} OFFSET {}",
+                inner.join(" AND "),
+                plan.limit + plan.offset,
+                plan.limit,
+                plan.offset
+            )
         }
-    }
+        _ => format!(
+            "SELECT {columns} FROM etablissement e {where_clause} \
+             ORDER BY {order_by} LIMIT {} OFFSET {}",
+            plan.limit, plan.offset
+        ),
+    };
 
-    let results = query
+    let results = binder
+        .apply(sql_query(sql).into_boxed())
         .load::<EtablissementSearchResult>(connection)
         .await
-        .map_err(|e| -> Error { e.into() })?;
+        .map_err(|error| -> Error { error.into() })?;
 
+    // Comptage plafonne : le tri n'est pas necessaire, la forme simple suffit
+    // meme dans le cas commune-sans-texte.
     let count_sql = format!(
-        "SELECT count(*) AS count FROM (SELECT 1 FROM {} {} LIMIT {}) _sub",
-        from_parts.join(", "),
-        where_clause,
-        SEARCH_TOTAL_CAP + 1
+        "SELECT count(*) AS count FROM (SELECT 1 FROM etablissement e {where_clause} LIMIT {}) _sub",
+        search::SEARCH_TOTAL_CAP + 1
     );
-    let mut count_query = sql_query(&count_sql).into_boxed();
-    if has_geo {
-        count_query = count_query
-            .bind::<Float8, _>(params.lng.unwrap())
-            .bind::<Float8, _>(params.lat.unwrap());
-    }
-    if let Some(ref q) = params.q {
-        count_query = count_query.bind::<Text, _>(q);
-    }
-    if has_geo {
-        count_query = count_query.bind::<Float8, _>(params.radius.unwrap());
-    }
-    for (field_name, _) in &field_param_indices {
-        match field_name.as_str() {
-            "etat_administratif" => {
-                let val = match params.etat_administratif.unwrap() {
-                    common::EtatAdministratif::A => "A",
-                    common::EtatAdministratif::F => "F",
-                };
-                count_query = count_query.bind::<Text, _>(val);
-            }
-            "code_postal" => {
-                count_query = count_query.bind::<Text, _>(params.code_postal.as_ref().unwrap());
-            }
-            "siren" => {
-                count_query = count_query.bind::<Text, _>(params.siren.as_ref().unwrap());
-            }
-            "code_commune" => {
-                count_query = count_query.bind::<Text, _>(params.code_commune.as_ref().unwrap());
-            }
-            "activite_principale" => {
-                count_query =
-                    count_query.bind::<Text, _>(params.activite_principale.as_ref().unwrap());
-            }
-            "etablissement_siege" => {
-                count_query = count_query.bind::<Bool, _>(params.etablissement_siege.unwrap());
-            }
-            _ => {}
-        }
-    }
 
-    let total = if has_q {
-        connection
-            .transaction(async |conn| {
-                diesel::sql_query("SET LOCAL enable_seqscan = off")
-                    .execute(conn)
-                    .await?;
-                count_query.get_result::<RowCount>(conn).await
-            })
-            .await
-            .map(|r| r.count.min(SEARCH_TOTAL_CAP))
-            .unwrap_or(0)
-    } else {
-        count_query
-            .get_result::<RowCount>(connection)
-            .await
-            .map(|r| r.count.min(SEARCH_TOTAL_CAP))
-            .unwrap_or(0)
-    };
+    let total = binder
+        .apply(sql_query(count_sql).into_boxed())
+        .get_result::<search::RowCount>(connection)
+        .await
+        .map(|row| row.count.min(search::SEARCH_TOTAL_CAP))
+        .unwrap_or(0);
 
     Ok(EtablissementSearchOutput {
         results,
         total,
-        limit,
-        offset,
-        sort: sort_field,
-        direction: resolved_dir,
+        limit: plan.limit,
+        offset: plan.offset,
+        sort: plan.sort,
+        direction: plan.direction,
+        suggestion: None,
     })
+}
+
+fn order_by_clause(
+    sort: EtablissementSortField,
+    direction: SortDirection,
+    reference_point: Option<&str>,
+) -> String {
+    let dir = match direction {
+        SortDirection::Asc => "ASC",
+        SortDirection::Desc => "DESC",
+    };
+
+    match sort {
+        EtablissementSortField::Distance => match reference_point {
+            Some(point) => format!("e.position <-> {point} {dir}"),
+            None => format!("e.date_creation {dir} NULLS LAST"),
+        },
+        EtablissementSortField::Relevance => format!("score {dir}"),
+        EtablissementSortField::DateCreation => format!("e.date_creation {dir} NULLS LAST"),
+        EtablissementSortField::DateDebut => format!("e.date_debut {dir} NULLS LAST"),
+    }
 }
 
 pub struct EtablissementModel {}
@@ -610,5 +622,56 @@ impl UpdatableModel for EtablissementModel {
             .await?;
 
         Ok((next_cursor, updated_count))
+    }
+
+    fn search_source(&self) -> Option<&'static str> {
+        Some(search::SOURCE_ETABLISSEMENT)
+    }
+
+    async fn refresh_search_metadata(
+        &self,
+        connectors: &Connectors,
+        since: Option<NaiveDateTime>,
+    ) -> Result<(), UpdatableError> {
+        let Some(source) = self.search_source() else {
+            return Ok(());
+        };
+
+        let mut connection = connectors.local.pool.get().await?;
+
+        match since {
+            Some(since) => {
+                sql_query("SELECT public.search_refresh_incremental($1, $2)")
+                    .bind::<Text, _>(source)
+                    .bind::<Timestamp, _>(since)
+                    .execute(&mut connection)
+                    .await?;
+            }
+            None => {
+                sql_query("SELECT public.search_refresh_full($1)")
+                    .bind::<Text, _>(source)
+                    .execute(&mut connection)
+                    .await?;
+
+                // Sans statistiques fraiches, le planificateur retombe sur des
+                // estimations par defaut et choisit des seq scans sur les
+                // predicats GIN. Le RENAME du swap laisse la table sans stats
+                // representatives : il faut les recalculer explicitement.
+                sql_query("ANALYZE etablissement")
+                    .execute(&mut connection)
+                    .await?;
+
+                // La reconstruction remplace l'integralite des lignes de la
+                // source et laisse autant de tuples morts derriere elle
+                // (1,37 M mesures pour etablissement). VACUUM les recupere sans
+                // bloquer lectures ni ecritures — contrairement a VACUUM FULL,
+                // a ne jamais utiliser ici.
+                sql_query("VACUUM (ANALYZE) search_lexicon")
+                    .execute(&mut connection)
+                    .await?;
+            }
+        }
+
+        Ok(())
     }
 }
