@@ -60,8 +60,8 @@ pub trait UpdatableModel: Sync + Send {
     }
 }
 
-/// The source name doubles as the table name, so `ANALYZE` needs no extra
-/// argument.
+/// The source table itself is analyzed before the swap, by
+/// [`load_staging_without_indexes`], so nothing here touches it.
 async fn refresh_search_metadata(
     connectors: &Connectors,
     source: &'static str,
@@ -87,13 +87,6 @@ async fn refresh_search_metadata(
                 .execute(&mut connection)
                 .await?;
 
-            // The swap is a RENAME: the table now in production carries no
-            // representative statistics, and the planner falls back to defaults
-            // that pick sequential scans over the GIN predicates.
-            sql_query(format!("ANALYZE {source}"))
-                .execute(&mut connection)
-                .await?;
-
             // A full rebuild replaces every row of the source and leaves as many
             // dead tuples behind. The function already analyzed the result, so
             // plain VACUUM suffices — and unlike VACUUM FULL it blocks neither
@@ -107,7 +100,8 @@ async fn refresh_search_metadata(
     Ok(())
 }
 
-/// Loads a staging table with its indexes dropped, then rebuilds them.
+/// Loads a staging table with its indexes dropped, then rebuilds and analyzes
+/// them.
 ///
 /// Maintaining indexes row by row during a bulk load costs far more than
 /// rebuilding them in one pass: 36.9 s down to 14.2 s on 1M establishment rows.
@@ -169,6 +163,13 @@ where
         }
 
         debug!("{} index reconstruits sur {}", indexes.len(), staging_table);
+
+        // The bulk load leaves no usable row estimate behind. Analyzing here
+        // rather than after the swap is what keeps production from ever serving
+        // on default estimates: the swap is a RENAME, and statistics are keyed on
+        // the table OID, which the rename preserves.
+        diesel::sql_query(format!("ANALYZE {}", quote_identifier(staging_table)))
+            .execute(connection)?;
 
         Ok(inserted)
     })
