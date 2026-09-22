@@ -9,6 +9,8 @@ mod diesel_instrumentation;
 mod models;
 mod sentry_crons;
 mod telemetry;
+#[cfg(test)]
+mod tests;
 mod update;
 
 use connectors::ConnectorsBuilders;
@@ -27,14 +29,11 @@ fn main() {
 
     let _guard = sentry::init((
         sentry_dsn,
-        sentry::ClientOptions {
-            release: sentry::release_name!(),
-            environment: Some(sirene_env.into()),
+        sentry::ClientOptions::new()
+            .maybe_release(sentry::release_name!())
+            .environment(sirene_env)
             // Capture all traces and spans. Set to a lower value in production
-            traces_sample_rate: 1.0,
-            enable_logs: true,
-            ..sentry::ClientOptions::default()
-        },
+            .traces_sample_rate(1.0),
     ));
 
     tokio::runtime::Builder::new_multi_thread()

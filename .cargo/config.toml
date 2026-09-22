@@ -1,2 +1,8 @@
 [target.aarch64-apple-darwin]
 rustflags = ["-Ctarget-cpu=native"]
+
+# Cible de production, cross-compilée en CI : le CPU du runner n'est pas celui
+# des nœuds de prod, donc pas de `native` ici. x86-64-v3 implique AVX2 + BMI1/2
+# + FMA + LZCNT + MOVBE, soit Haswell (2013+) et Zen (2017+).
+[target.x86_64-unknown-linux-musl]
+rustflags = ["-Ctarget-cpu=x86-64-v3"]

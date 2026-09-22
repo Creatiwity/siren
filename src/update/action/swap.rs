@@ -54,21 +54,18 @@ impl Action for SwapAction {
 
         let model = group_type.get_updatable_model();
 
-        if !self.force {
-            let count = model.count(connectors).await? as f64;
-            let count_staging = model.count_staging(connectors).await? as f64;
-
-            let max_count_staging = count * 1.01;
-            let min_count_staging = count * 0.99;
-
-            if count != 0.0
-                && (count_staging < min_count_staging || max_count_staging < count_staging)
-            {
-                return Err(Error::SwapStoppedTooMuchDifference { group_type });
-            }
+        if !self.force && model.count_staging(connectors).await? == 0 {
+            return Err(Error::SwapStoppedNoDataLoaded { group_type });
         }
 
         model.swap(connectors).await?;
+
+        // Le lexique de correction et la dimension des communes derivent du
+        // contenu de la table et decrivent encore le stock sortant. Ils sont
+        // reconstruits depuis la production, donc apres le RENAME. Les
+        // statistiques, elles, sont deja faites : ANALYZE a eu lieu sur le
+        // staging, et le RENAME conserve l'OID auquel elles sont rattachees.
+        model.refresh_search_metadata(connectors, None).await?;
 
         group_metadata::set_last_imported_timestamp(
             connectors,

@@ -1,5 +1,3 @@
-version: "3"
-
 networks:
   siren_network:
     external: false
@@ -17,11 +15,20 @@ services:
       - API_KEY=${API_KEY}
       - SIRENE_ENV=${SIRENE_ENV}
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     networks:
       - siren_network
   db:
-    image: postgres:12
+    # PostGIS est indispensable (colonne `position`, recherche geographique) et
+    # l'image embarque aussi les contrib utilises par la recherche : pg_trgm,
+    # unaccent, fuzzystrmatch. Les extensions elles-memes sont creees par les
+    # migrations Diesel au demarrage de l'API.
+    #
+    # Le tag fixe PostgreSQL 17, mais les migrations tournent depuis la 14. Leurs
+    # fonctions sont schema-qualifiees, ce qui les fait survivre au search_path
+    # restreint que la 17 applique aux commandes de maintenance.
+    image: postgis/postgis:17-3.5
     container_name: db
     restart: unless-stopped
     user: "${DOCKER_UID}:${DOCKER_GID}"
@@ -29,7 +36,12 @@ services:
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_DB=${POSTGRES_DB}
-      - PGUSER=${DOCKER_USER}
+      - PGUSER=${POSTGRES_USER}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
     volumes:
       - ./docker/postgres:/var/lib/postgresql/data
       - /etc/passwd:/etc/passwd:ro

@@ -1,0 +1,127 @@
+{{/* Gateway API routing, as an alternative to the nginx Ingress above.
+
+     Two HTTPRoutes on purpose rather than one with several rules. Only /v3 is
+     the customer-facing data API, and only it should sit behind an api key
+     check -- /scalar serves the public OpenAPI documentation, /admin has its own
+     API_KEY, and / is the health check. Splitting them means a policy can attach
+     to the /v3 route alone, on any Gateway API version, without depending on
+     per-rule section names. Matching is by path specificity, so the /v3 route
+     wins over the catch-all whatever the order.
+
+     Do not enable this while ingress.enabled is still true for the same host: if
+     both carry a TLS certificate annotation, ingress-shim and gateway-shim fight
+     over the same Certificate and renewal silently stops. Retire the Ingress
+     first, then hand the host over. */}}
+{{- if .Values.gateway.enabled -}}
+{{- if not .Values.gateway.parentRef.name -}}
+{{- fail "gateway.enabled requires gateway.parentRef.name: the Gateway this ListenerSet attaches to" -}}
+{{- end -}}
+{{- $root := . -}}
+{{- $fullName := include "app.fullname" . -}}
+{{- $svcPort := .Values.service.port -}}
+apiVersion: gateway.networking.k8s.io/v1
+kind: ListenerSet
+metadata:
+  name: {{ $fullName }}
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+  {{- with .Values.gateway.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  parentRef:
+    group: gateway.networking.k8s.io
+    kind: Gateway
+    name: {{ .Values.gateway.parentRef.name }}
+    {{- with .Values.gateway.parentRef.namespace }}
+    namespace: {{ . }}
+    {{- end }}
+  listeners:
+    {{- range $i, $entry := .Values.gateway.hosts }}
+    {{- $secretName := printf "%s-tls" $fullName }}
+    {{- range $tls := $root.Values.gateway.tls }}
+    {{- if has $entry.host $tls.hosts }}
+    {{- $secretName = $tls.secretName }}
+    {{- end }}
+    {{- end }}
+    {{- $sfx := $entry.suffix | default (ternary (printf "%d" $i) "" (gt $i 0)) }}
+    - name: {{ if $sfx }}{{ printf "https-%s" $sfx }}{{ else }}https{{ end }}
+      hostname: {{ $entry.host | quote }}
+      port: 443
+      protocol: HTTPS
+      allowedRoutes:
+        namespaces:
+          from: Same
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - group: ""
+            kind: Secret
+            name: {{ $secretName }}
+    - name: {{ if $sfx }}{{ printf "http-%s" $sfx }}{{ else }}http{{ end }}
+      hostname: {{ $entry.host | quote }}
+      port: 80
+      protocol: HTTP
+      allowedRoutes:
+        namespaces:
+          from: Same
+    {{- end }}
+---
+{{/* The customer data API. This is the route an ext auth policy attaches to. */}}
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ $fullName }}-api
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+spec:
+  parentRefs:
+    - group: gateway.networking.k8s.io
+      kind: ListenerSet
+      name: {{ $fullName }}
+  hostnames:
+    {{- range .Values.gateway.hosts }}
+    - {{ .host | quote }}
+    {{- end }}
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /v3
+      backendRefs:
+        - group: ""
+          kind: Service
+          name: {{ $fullName }}
+          port: {{ $svcPort }}
+          weight: 1
+---
+{{/* Everything else: the health check, the Scalar documentation, and /admin,
+     which authenticates with its own API_KEY rather than a client key. */}}
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ $fullName }}
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+spec:
+  parentRefs:
+    - group: gateway.networking.k8s.io
+      kind: ListenerSet
+      name: {{ $fullName }}
+  hostnames:
+    {{- range .Values.gateway.hosts }}
+    - {{ .host | quote }}
+    {{- end }}
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - group: ""
+          kind: Service
+          name: {{ $fullName }}
+          port: {{ $svcPort }}
+          weight: 1
+{{- end }}

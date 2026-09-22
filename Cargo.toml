@@ -1,6 +1,6 @@
 [package]
 name = "sirene"
-version = "6.4.4"
+version = "6.5.0"
 authors = ["Julien Blatecky <julien.blatecky@creatiwity.net>"]
 edition = "2024"
 
@@ -8,6 +8,7 @@ edition = "2024"
 
 [dependencies]
 async-trait = "0.1"
+base64 = "0.23"
 axum = { version = "0.8", features = ["json"] }
 chrono = { version = "0.4", features = ["serde"] }
 clap = { version = "4.6", features = ["derive", "env"] }
@@ -32,7 +33,7 @@ reqwest = { version = "0.13", default-features = false, features = [
   "stream",
   "rustls",
 ] }
-sentry = { version = "0.48", features = [
+sentry = { version = "0.49", features = [
   "tracing",
   "logs",
   "tower-axum-matched-path",
@@ -40,7 +41,7 @@ sentry = { version = "0.48", features = [
 ] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-tokio = { version = "1.52", features = [
+tokio = { version = "1.53", features = [
   "macros",
   "io-util",
   "fs",
@@ -49,7 +50,7 @@ tokio = { version = "1.52", features = [
 ] }
 tokio-util = { version = "0.7", features = ["compat"] }
 tower = { version = "0.5" }
-tower-http = { version = "0.6", features = [
+tower-http = { version = "0.7", features = [
   "cors",
   "trace",
   "compression-full",
@@ -74,5 +75,3 @@ incremental = false
 lto = "thin"        # ThinLTO pour réduire la taille binaire sans sacrifier les perfs
 codegen-units = 1   # Meilleure optimisation (mais compilation plus lente)
 
-[target.x86_64-unknown-linux-musl]
-rustflags = ["-Ctarget-cpu=native", "-Ctarget-feature=+avx2,+bmi2"]

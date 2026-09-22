@@ -56,6 +56,16 @@ impl Action for SyncInseeAction {
 
                 debug!("{} {:#?} synced", updated_count, group_type);
 
+                // Les lignes du jour apportent du vocabulaire (et parfois des
+                // communes) absents du lexique. Fusion incrementale : on ne
+                // reparcourt que ce qui a bouge depuis `timestamp`, au lieu des
+                // 42 M de lignes du rafraichissement complet.
+                if updated_count > 0 {
+                    model
+                        .refresh_search_metadata(connectors, Some(timestamp))
+                        .await?;
+                }
+
                 group_metadata::set_last_insee_synced_timestamp(connectors, group_type, Utc::now())
                     .await?;
 
