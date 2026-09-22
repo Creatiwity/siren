@@ -31,15 +31,6 @@ pub struct LienSuccessionModel {}
 
 #[async_trait]
 impl UpdatableModel for LienSuccessionModel {
-    async fn count(&self, connectors: &Connectors) -> Result<i64, UpdatableError> {
-        let mut connection = connectors.local.pool.get().await?;
-        dsl::lien_succession
-            .select(diesel::dsl::count(dsl::id))
-            .first::<i64>(&mut connection)
-            .await
-            .map_err(|error| error.into())
-    }
-
     async fn count_staging(&self, connectors: &Connectors) -> Result<i64, UpdatableError> {
         use super::schema::lien_succession_staging::dsl;
 

@@ -359,15 +359,6 @@ pub struct EtablissementModel {}
 
 #[async_trait]
 impl UpdatableModel for EtablissementModel {
-    async fn count(&self, connectors: &Connectors) -> Result<i64, UpdatableError> {
-        let mut connection = connectors.local.pool.get().await?;
-        dsl::etablissement
-            .select(diesel::dsl::count(dsl::siret))
-            .first::<i64>(&mut connection)
-            .await
-            .map_err(|error| error.into())
-    }
-
     async fn count_staging(&self, connectors: &Connectors) -> Result<i64, UpdatableError> {
         use super::schema::etablissement_staging::dsl;
 

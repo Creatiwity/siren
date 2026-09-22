@@ -54,18 +54,8 @@ impl Action for SwapAction {
 
         let model = group_type.get_updatable_model();
 
-        if !self.force {
-            let count = model.count(connectors).await? as f64;
-            let count_staging = model.count_staging(connectors).await? as f64;
-
-            let max_count_staging = count * 1.01;
-            let min_count_staging = count * 0.99;
-
-            if count != 0.0
-                && (count_staging < min_count_staging || max_count_staging < count_staging)
-            {
-                return Err(Error::SwapStoppedTooMuchDifference { group_type });
-            }
+        if !self.force && model.count_staging(connectors).await? == 0 {
+            return Err(Error::SwapStoppedNoDataLoaded { group_type });
         }
 
         model.swap(connectors).await?;
