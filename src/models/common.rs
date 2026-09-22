@@ -11,7 +11,6 @@ use tracing::debug;
 
 #[async_trait]
 pub trait UpdatableModel: Sync + Send {
-    async fn count(&self, connectors: &Connectors) -> Result<i64, Error>;
     async fn count_staging(&self, connectors: &Connectors) -> Result<i64, Error>;
     fn insert_remote_file_in_staging(
         &self,

@@ -267,15 +267,6 @@ pub struct UniteLegaleModel {}
 
 #[async_trait]
 impl UpdatableModel for UniteLegaleModel {
-    async fn count(&self, connectors: &Connectors) -> Result<i64, UpdatableError> {
-        let mut connection = connectors.local.pool.get().await?;
-        dsl::unite_legale
-            .select(diesel::dsl::count(dsl::siren))
-            .first::<i64>(&mut connection)
-            .await
-            .map_err(|error| error.into())
-    }
-
     async fn count_staging(&self, connectors: &Connectors) -> Result<i64, UpdatableError> {
         use super::schema::unite_legale_staging::dsl;
 

@@ -30,15 +30,6 @@ pub struct SirenDoublonModel {}
 
 #[async_trait]
 impl UpdatableModel for SirenDoublonModel {
-    async fn count(&self, connectors: &Connectors) -> Result<i64, UpdatableError> {
-        let mut connection = connectors.local.pool.get().await?;
-        dsl::siren_doublons
-            .select(diesel::dsl::count_star())
-            .first::<i64>(&mut connection)
-            .await
-            .map_err(|error| error.into())
-    }
-
     async fn count_staging(&self, connectors: &Connectors) -> Result<i64, UpdatableError> {
         use super::schema::siren_doublons_staging::dsl as staging_dsl;
 
