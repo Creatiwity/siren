@@ -60,6 +60,13 @@ impl Action for SwapAction {
 
         model.swap(connectors).await?;
 
+        // Le lexique de correction et la dimension des communes derivent du
+        // contenu de la table et decrivent encore le stock sortant. Ils sont
+        // reconstruits depuis la production, donc apres le RENAME. Les
+        // statistiques, elles, sont deja faites : ANALYZE a eu lieu sur le
+        // staging, et le RENAME conserve l'OID auquel elles sont rattachees.
+        model.refresh_search_metadata(connectors, None).await?;
+
         group_metadata::set_last_imported_timestamp(
             connectors,
             group_type,
