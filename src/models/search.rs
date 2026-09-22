@@ -59,7 +59,6 @@ pub const UNITE_LEGALE_FACET_FIELDS: &[&str] = &[
     "categorie_entreprise",
 ];
 
-/// How the text query is matched.
 pub enum TextMatch<'a> {
     None,
     /// Native full-text search. Nominal path.
@@ -154,7 +153,6 @@ pub fn encode_cursor(primary_key: &str) -> String {
     base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(primary_key)
 }
 
-/// Returns `None` on an unreadable cursor.
 pub fn decode_cursor(cursor: &str) -> Option<String> {
     use base64::Engine as _;
     let decoded = base64::engine::general_purpose::URL_SAFE_NO_PAD
@@ -320,7 +318,6 @@ impl Binder {
         format!("({column} IS NULL OR {column} <> ALL({placeholder}))")
     }
 
-    /// Adds an inclusion filter, if the parameter carries any value.
     pub fn filter_in(&mut self, conditions: &mut Vec<String>, column: &str, raw: Option<&str>) {
         let values = raw.map(split_values).unwrap_or_default();
         if !values.is_empty() {
@@ -328,7 +325,6 @@ impl Binder {
         }
     }
 
-    /// Adds an exclusion filter, if the parameter carries any value.
     pub fn filter_not_in(&mut self, conditions: &mut Vec<String>, column: &str, raw: Option<&str>) {
         let values = raw.map(split_values).unwrap_or_default();
         if !values.is_empty() {
@@ -336,7 +332,6 @@ impl Binder {
         }
     }
 
-    /// Adds the bounds that are present, each one optional.
     pub fn range(
         &mut self,
         conditions: &mut Vec<String>,
@@ -354,7 +349,6 @@ impl Binder {
         }
     }
 
-    /// Adds a keyset bound on the primary key.
     pub fn keyset(
         &mut self,
         conditions: &mut Vec<String>,
@@ -367,7 +361,6 @@ impl Binder {
         conditions.push(format!("{column} {comparison} {placeholder}"));
     }
 
-    /// Applies the values in registration order.
     pub fn apply<'a>(
         &self,
         query: BoxedSqlQuery<'a, Pg, SqlQuery>,

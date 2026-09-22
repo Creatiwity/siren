@@ -316,6 +316,11 @@ BEGIN
     ON CONFLICT (code_commune, libelle_commune) DO UPDATE SET nb = excluded.nb;
   END IF;
 
+  -- La selectivite de la correction se lit sur la distribution de ndoc, que
+  -- chaque fusion decale. Le seuil de l'autoanalyze (10 % des lignes) n'est
+  -- jamais atteint par un delta quotidien, d'ou cet ANALYZE explicite.
+  ANALYZE search_lexicon;
+
   RETURN merged;
 END $fn$;
 
