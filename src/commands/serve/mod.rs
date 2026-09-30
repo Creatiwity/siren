@@ -30,7 +30,11 @@ pub struct ServeFlags {
 
     /// On SIGTERM, keep serving for this many seconds with readiness failing,
     /// so the load balancer stops routing here before the listener closes
-    #[clap(long = "shutdown-delay", env = "SHUTDOWN_DELAY_SECONDS", default_value_t = 0)]
+    #[clap(
+        long = "shutdown-delay",
+        env = "SHUTDOWN_DELAY_SECONDS",
+        default_value_t = 0
+    )]
     shutdown_delay: u64,
 }
 

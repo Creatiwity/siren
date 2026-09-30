@@ -40,18 +40,10 @@ spec:
               containerPort: 3000
               protocol: TCP
           env:
-            - name: "DATABASE_HOST"
-              value: {{ .Values.pgHost }}
-            - name: "DATABASE_PORT"
-              value: "{{ .Values.pgPort }}"
+            {{- include "app.apiDatabaseEnv" . | nindent 12 }}
             - name: "DATABASE_POOL_SIZE"
               value: "{{ .Values.pgPoolSize }}"
-            - name: "DATABASE_NAME"
-              value: {{ .Values.pgDatabase }}
-            - name: "DATABASE_USER"
-              value: {{ .Values.pgUsername }}
-            - name: "DATABASE_PASSWORD"
-              value: {{ .Values.pgPassword }}
+            {{- include "app.skipMigrationsEnv" . | nindent 12 }}
             - name: "RUST_LOG"
               value: {{ .Values.rustLog }}
             - name: "SIRENE_ENV"
@@ -64,9 +56,9 @@ spec:
               value: "{{ .Values.tokioWorkerThreads }}"
             - name: "SHUTDOWN_DELAY_SECONDS"
               value: "{{ .Values.shutdownDelaySeconds }}"
-          # Migrations run before the listener opens: the startup probe holds
-          # back the liveness probe until then, instead of killing a pod that
-          # is still migrating.
+          # Migrations (or their check, with migrations.enabled) run before the
+          # listener opens: the startup probe holds back the liveness probe
+          # until then, instead of killing a pod that is still migrating.
           startupProbe:
             httpGet:
               path: /health/live

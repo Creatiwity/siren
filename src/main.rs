@@ -13,7 +13,6 @@ mod telemetry;
 mod tests;
 mod update;
 
-use connectors::ConnectorsBuilders;
 use dotenv::dotenv;
 use opentelemetry::trace::TracerProvider as _;
 use sentry::SentryFutureExt;
@@ -69,9 +68,6 @@ fn main() {
 
 #[tracing::instrument]
 async fn launch() {
-    // Load database
-    let connectors_builders = ConnectorsBuilders::new();
-
-    // Run command
-    commands::run(connectors_builders).await;
+    // Each command decides how to connect, and whether to migrate
+    commands::run().await;
 }

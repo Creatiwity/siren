@@ -1,0 +1,67 @@
+{{/* Applies the database migrations before the Deployment and the CronJob are
+     installed or upgraded. Helm waits for the Job to succeed: a failed
+     migration aborts the release and the pods keep running the previous
+     version. Argo CD maps these hooks to PreSync.
+
+     Hooks run before the chart's other resources exist, so the Job does not
+     use the chart's ServiceAccount (it would not exist yet on first install).
+
+     Helm waits at most --timeout (5m by default) for hooks: raise it along with
+     activeDeadlineSeconds for a long migration. */}}
+{{- if .Values.migrations.enabled -}}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "app.fullname" . }}-migrate
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "0"
+    # The failed Job is kept for inspection, and replaced on the next release.
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: {{ .Values.migrations.backoffLimit }}
+  activeDeadlineSeconds: {{ .Values.migrations.activeDeadlineSeconds }}
+  template:
+    metadata:
+      # Not the selector labels: the Service would pick this pod up.
+      labels:
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: migrate
+    spec:
+      restartPolicy: Never
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: "{{ include "app.fullname" . }}-migrate"
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            {{- include "app.databaseEnv" . | nindent 12 }}
+            - name: "RUST_LOG"
+              value: {{ .Values.rustLog }}
+            - name: "SIRENE_ENV"
+              value: {{ .Values.sireneEnv }}
+            - name: "SENTRY_DSN"
+              value: {{ .Values.sentryDsn }}
+          args: ["migrate"]
+          {{- with .Values.migrations.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}
