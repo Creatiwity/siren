@@ -21,7 +21,7 @@ pub async fn run(flags: MigrateFlags) {
     match result {
         Ok(versions) if flags.check && !versions.is_empty() => {
             println!("Pending migrations: {}", versions.join(", "));
-            std::process::exit(1);
+            crate::telemetry::exit(1);
         }
         Ok(_) if flags.check => println!("No pending migration"),
         Ok(versions) if versions.is_empty() => println!("No pending migration"),
@@ -29,7 +29,7 @@ pub async fn run(flags: MigrateFlags) {
         Err(error) => {
             sentry::capture_message(&error, sentry::Level::Error);
             eprintln!("{error}");
-            std::process::exit(1);
+            crate::telemetry::exit(1);
         }
     }
 }
