@@ -60,3 +60,48 @@ Create the name of the service account to use
 {{- default "default" .Values.serviceAccount.name }}
 {{- end }}
 {{- end }}
+
+{{/*
+Database connection, shared by the API, the updater and the migration job
+*/}}
+{{- define "app.databaseEnv" -}}
+- name: "DATABASE_HOST"
+  value: {{ .Values.pgHost }}
+- name: "DATABASE_PORT"
+  value: "{{ .Values.pgPort }}"
+- name: "DATABASE_NAME"
+  value: {{ .Values.pgDatabase }}
+- name: "DATABASE_USER"
+  value: {{ .Values.pgUsername }}
+- name: "DATABASE_PASSWORD"
+  value: {{ .Values.pgPassword }}
+{{- end }}
+
+{{/*
+Database connection of the API only: apiDatabase, field by field, over the
+primary. The migration Job and the updater keep writing to the primary.
+*/}}
+{{- define "app.apiDatabaseEnv" -}}
+{{- $db := .Values.apiDatabase | default dict -}}
+{{- if and $db.host (not .Values.migrations.enabled) -}}
+{{- fail "apiDatabase.host requires migrations.enabled: the API cannot migrate a read replica on startup" -}}
+{{- end -}}
+- name: "DATABASE_HOST"
+  value: {{ $db.host | default .Values.pgHost }}
+- name: "DATABASE_PORT"
+  value: "{{ $db.port | default .Values.pgPort }}"
+- name: "DATABASE_NAME"
+  value: {{ $db.database | default .Values.pgDatabase }}
+- name: "DATABASE_USER"
+  value: {{ $db.username | default .Values.pgUsername }}
+- name: "DATABASE_PASSWORD"
+  value: {{ $db.password | default .Values.pgPassword }}
+{{- end }}
+
+{{/*
+When the migration hook owns the schema, the other workloads only check it
+*/}}
+{{- define "app.skipMigrationsEnv" -}}
+- name: "SKIP_MIGRATIONS"
+  value: "{{ .Values.migrations.enabled }}"
+{{- end }}

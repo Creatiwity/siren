@@ -39,6 +39,9 @@ cargo run -- update etablissements
 ### CLI Commands (`src/commands/`)
 - **serve**: HTTP API server via Axum with OpenAPI/Scalar docs at `/scalar`
 - **update**: Data sync workflow (download CSV → load staging → swap tables → sync daily from INSEE API)
+- **migrate**: Applies the embedded Diesel migrations and exits (`--check` only lists the pending ones, exit 1 if any)
+
+`serve` and `update` migrate on startup unless `--skip-migrations` / `SKIP_MIGRATIONS=true` is set; they then only verify that nothing is pending and panic otherwise. That check reads `__diesel_schema_migrations` directly (`connectors::local::pending_migrations`), because `MigrationHarness` issues a `CREATE TABLE IF NOT EXISTS` that a read replica rejects. The Helm chart runs `migrate` as a pre-install/pre-upgrade hook Job and sets `SKIP_MIGRATIONS=true` on the Deployment and CronJob (`migrations.enabled`). `apiDatabase.*` gives the Deployment alone its own connection (read replica), falling back field by field to `pg*`; the Job and the CronJob always use the primary.
 
 ### Domain Models (`src/models/`)
 - **etablissement**: Business establishments (SIRET) - includes geographic search
@@ -50,6 +53,8 @@ Each model follows the pattern: `mod.rs` (queries/CRUD), `common.rs` (structs/ty
 
 ### HTTP Routes (`src/commands/serve/runner/`)
 Routes map to `/v3/etablissements`, `/v3/unites_legales`, `/v3/etablissements/liens_succession`, and `/admin`.
+
+Probes live in `health.rs`: `/health/live` (process only, never a dependency) and `/health/ready` (database `SELECT 1` under a 2 s timeout, 503 once SIGTERM is received). They are merged after the Sentry/trace layers so probes do not create transactions. `/` is data-freshness metadata, not a probe. On SIGTERM the server fails readiness for `SHUTDOWN_DELAY_SECONDS`, then shuts down gracefully.
 
 Search endpoints use raw SQL with parameterized queries for complex filtering (geographic radius, text search, field filters).
 

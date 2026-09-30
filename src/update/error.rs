@@ -3,7 +3,6 @@ use crate::models;
 use crate::models::group_metadata::common::GroupType;
 use crate::models::{group_metadata, update_metadata};
 use custom_error::custom_error;
-use std::process;
 use tracing::error;
 
 custom_error! { pub Error
@@ -39,6 +38,6 @@ custom_error! { pub Error
 impl Error {
     pub fn exit(&self) -> ! {
         error!("{}", self);
-        process::exit(1);
+        crate::telemetry::exit(1);
     }
 }

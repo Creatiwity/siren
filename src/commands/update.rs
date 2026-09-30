@@ -73,7 +73,7 @@ pub async fn run(flags: UpdateFlags, builders: ConnectorsBuilders) {
                         error.exit()
                     }
 
-                    std::process::exit(0);
+                    crate::telemetry::exit(0);
                 }
             };
 

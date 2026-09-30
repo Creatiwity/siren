@@ -30,6 +30,55 @@ sentryDsn:
 cronSchedule: "0 4 * * *"
 tokioWorkerThreads: 10
 
+# Database migrations, applied by a Job run as a pre-install/pre-upgrade hook.
+# The API and the updater then start with SKIP_MIGRATIONS=true: they only check,
+# read-only, that no migration is pending, so their database may be a read
+# replica. Set enabled to false to go back to migrating on startup.
+migrations:
+  enabled: true
+  backoffLimit: 1
+  # Also pass a large enough `helm upgrade --timeout` (5m by default), which
+  # bounds the wait on hooks.
+  activeDeadlineSeconds: 1800
+  resources: {}
+
+# Optional connection for the API Deployment only, typically a read replica.
+# Each empty field falls back to its pg* counterpart; the migration Job and the
+# updater CronJob always use pg*. Requires migrations.enabled.
+# - /admin endpoints that launch an update write to the database, so they fail
+#   against a read replica: trigger updates through the CronJob.
+# - Right after a migration, a lagging replica may still report it as pending:
+#   the new pods then exit and are restarted until the replica catches up.
+apiDatabase:
+  host:
+  port:
+  database:
+  username:
+  password:
+
+# On SIGTERM the pod keeps serving this long with /health/ready failing, so it
+# leaves the Service endpoints before the listener closes.
+shutdownDelaySeconds: 5
+terminationGracePeriodSeconds: 30
+
+probes:
+  # Up to 5 minutes for pending migrations before liveness takes over.
+  startup:
+    periodSeconds: 5
+    timeoutSeconds: 2
+    failureThreshold: 60
+  liveness:
+    periodSeconds: 10
+    timeoutSeconds: 2
+    failureThreshold: 3
+  # timeoutSeconds stays above the 2 s database check timeout in the app, so a
+  # slow database yields an explicit 503 rather than a probe timeout.
+  readiness:
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 2
+    successThreshold: 1
+
 serviceAccount:
   # Specifies whether a service account should be created
   create: true
