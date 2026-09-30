@@ -5,6 +5,8 @@ use crate::models::unite_legale::common::UniteLegale;
 use crate::models::update_metadata::common::SyntheticGroupType;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 use utoipa::ToSchema;
 
 pub const ADMIN_TAG: &str = "admin";
@@ -15,6 +17,8 @@ pub struct Context {
     pub builders: ConnectorsBuilders,
     pub api_key: Option<String>,
     pub base_url: Option<String>,
+    /// Set on SIGTERM, so readiness fails while in-flight requests drain.
+    pub shutting_down: Arc<AtomicBool>,
 }
 
 #[derive(ToSchema, Deserialize)]

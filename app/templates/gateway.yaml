@@ -3,7 +3,7 @@
      Two HTTPRoutes on purpose rather than one with several rules. Only /v3 is
      the customer-facing data API, and only it should sit behind an api key
      check -- /scalar serves the public OpenAPI documentation, /admin has its own
-     API_KEY, and / is the health check. Splitting them means a policy can attach
+     API_KEY, and / and /health/* are the status and probe endpoints. Splitting them means a policy can attach
      to the /v3 route alone, on any Gateway API version, without depending on
      per-rule section names. Matching is by path specificity, so the /v3 route
      wins over the catch-all whatever the order.
@@ -96,7 +96,7 @@ spec:
           port: {{ $svcPort }}
           weight: 1
 ---
-{{/* Everything else: the health check, the Scalar documentation, and /admin,
+{{/* Everything else: the status and probe endpoints, the Scalar documentation, and /admin,
      which authenticates with its own API_KEY rather than a client key. */}}
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute

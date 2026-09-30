@@ -30,6 +30,29 @@ sentryDsn:
 cronSchedule: "0 4 * * *"
 tokioWorkerThreads: 10
 
+# On SIGTERM the pod keeps serving this long with /health/ready failing, so it
+# leaves the Service endpoints before the listener closes.
+shutdownDelaySeconds: 5
+terminationGracePeriodSeconds: 30
+
+probes:
+  # Up to 5 minutes for pending migrations before liveness takes over.
+  startup:
+    periodSeconds: 5
+    timeoutSeconds: 2
+    failureThreshold: 60
+  liveness:
+    periodSeconds: 10
+    timeoutSeconds: 2
+    failureThreshold: 3
+  # timeoutSeconds stays above the 2 s database check timeout in the app, so a
+  # slow database yields an explicit 503 rather than a probe timeout.
+  readiness:
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 2
+    successThreshold: 1
+
 serviceAccount:
   # Specifies whether a service account should be created
   create: true
