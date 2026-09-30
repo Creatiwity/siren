@@ -8,6 +8,9 @@ pub enum CmdGroupType {
     LiensSuccession,
     SirenDoublons,
     All,
+    /// The address geocoding index (a file, not database tables).
+    #[cfg(feature = "geocoding")]
+    Geocoding,
 }
 
 impl From<CmdGroupType> for SyntheticGroupType {
@@ -18,6 +21,8 @@ impl From<CmdGroupType> for SyntheticGroupType {
             CmdGroupType::LiensSuccession => SyntheticGroupType::LiensSuccession,
             CmdGroupType::SirenDoublons => SyntheticGroupType::SirenDoublons,
             CmdGroupType::All => SyntheticGroupType::All,
+            #[cfg(feature = "geocoding")]
+            CmdGroupType::Geocoding => unreachable!("the geocoding index has no database workflow"),
         }
     }
 }

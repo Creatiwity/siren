@@ -169,6 +169,59 @@ GET /v3/unites_legales?q=<text>&sort=<field>&direction=<asc|desc>&limit=<number>
 - `date_creation`: Filter by creation date (legal units only)
 - `date_debut`: Filter by start date (legal units only)
 
+#### Address geocoding (feature `geocoding`)
+
+Addresses are geocoded with [geocoder-core](https://github.com/Creatiwity/geocoder-core),
+a port of addok ranking like the BAN API, on an index built from the BAN
+export. Build with `cargo build --features geocoding` (the Docker image is),
+then point `GEOCODING_INDEX_PATH` to the index file, for `update` (which
+builds it) and `serve` (which reads it, and reloads it when it changes).
+
+```
+sirene update geocoding           # build or refresh the index (skipped if the BAN export did not change)
+sirene update geocoding --force   # rebuild anyway
+sirene update all                 # database update, then the index (GEOCODING_WITH_UPDATE_ALL=false to skip it)
+```
+
+| Variable | Default |
+|---|---|
+| `GEOCODING_INDEX_PATH` | none: geocoding disabled |
+| `GEOCODING_SOURCE_URL` | BAN export `adresses-addok-france.ndjson.gz` (URL or local path) |
+| `GEOCODING_SOURCE_FORMAT` | `addok` (`bano` also supported) |
+| `GEOCODING_WITH_UPDATE_ALL` | `true` |
+| `GEOCODING_RELOAD_INTERVAL_SECONDS` | `60` (`serve`) |
+
+The full index takes about 6 minutes and 5 GB of memory to build, and 2.7 GB
+on disk. The export is downloaded next to the index, then removed.
+
+**Address endpoints**
+
+```
+GET /v3/adresses/autocomplete?q=<text>   # type-ahead: the last word may be incomplete
+GET /v3/adresses/search?q=<address>      # geocode a full address
+```
+
+Optional: `limit` (1–20, default 5), `lat` + `lng` (favour nearby addresses),
+`type`, `postcode`, `citycode` (comma-separated). Each address has `label`,
+`score`, `type` (`housenumber`, `street`, `locality`, `municipality`), `name`,
+`housenumber`, `street`, `postcode`, `city`, `citycode`, `context`, `lat`,
+`lng`. 503 until an index is loaded, 501 when geocoding is not configured.
+
+**Searching establishments by address**
+
+`GET /v3/etablissements?address=42 rue de rivoli paris` geocodes the address
+and narrows the search around it: 100 m for a housenumber, 1 km for a street or
+a locality (`radius` overrides both), the municipality's `code_commune` for a
+municipality (every arrondissement for Paris, Lyon, Marseille). Other filters
+and `sort=distance` still apply. The response gets an `adresse` object: the
+geocoded address, its score, `meets_min_score` and the `filter` applied.
+
+- `geocoding_min_score`: minimum score (default 0.5);
+- `geocoding_mode`: `threshold_or_best` (default, the best result even below
+  the minimum), `threshold` (below it, no establishment is returned) or `best`
+  (ignore the score);
+- `geocoding_type`: restrict the address to some types, comma-separated.
+
 **Maintenance**
 
 _This API is enabled only if you have provided an API_KEY when starting the `serve` process._

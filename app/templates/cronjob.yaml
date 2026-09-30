@@ -27,7 +27,7 @@ spec:
             {{- include "app.jobPodLabels" (dict "root" . "component" "update") | nindent 12 }}
         spec:
           serviceAccountName: {{ include "app.serviceAccountName" . }}
-          {{- include "app.podCommon" (dict "root" . "jobs" true) | nindent 10 }}
+          {{- include "app.podCommon" (dict "root" . "jobs" true "geocoding" true) | nindent 10 }}
           restartPolicy: OnFailure
           containers:
             - name: "{{ include "app.fullname" . }}-job-updater"
@@ -40,10 +40,21 @@ spec:
                 {{- include "app.databaseEnv" (dict "root" .) | nindent 16 }}
                 {{- include "app.skipMigrationsEnv" . | nindent 16 }}
                 {{- include "app.secretEnv" (dict "root" . "env" "INSEE_CREDENTIALS" "key" "inseeCredentials") | nindent 16 }}
+                {{- include "app.geocodingEnv" . | nindent 16 }}
                 {{- include "app.commonEnv" (dict "root" .) | nindent 16 }}
+              # With geocoding enabled, `update all` refreshes the index too
+              # (geocoding.withUpdateAll).
               args: ["update", "all", "--crontab", {{ .Values.cronSchedule | quote }}]
               {{- with .Values.updateResources }}
               resources:
                 {{- toYaml . | nindent 16 }}
               {{- end }}
+              {{- if .Values.geocoding.enabled }}
+              volumeMounts:
+                {{- include "app.geocodingVolumeMount" . | nindent 16 }}
+              {{- end }}
+          {{- if .Values.geocoding.enabled }}
+          volumes:
+            {{- include "app.geocodingVolume" . | nindent 12 }}
+          {{- end }}
 {{- end }}

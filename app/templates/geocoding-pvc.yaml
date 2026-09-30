@@ -1,0 +1,20 @@
+{{- if and .Values.geocoding.enabled (not .Values.geocoding.persistence.existingClaim) -}}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "app.geocodingClaim" . }}
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+  annotations:
+    # The index takes minutes to rebuild: keep it across uninstalls.
+    "helm.sh/resource-policy": keep
+spec:
+  accessModes:
+    {{- toYaml .Values.geocoding.persistence.accessModes | nindent 4 }}
+  {{- with .Values.geocoding.persistence.storageClass }}
+  storageClassName: {{ . }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.geocoding.persistence.size }}
+{{- end }}

@@ -8,8 +8,6 @@ use crate::models::etablissement::common::{
     EtablissementSearchOutput, EtablissementSearchParams, EtablissementSearchResponse,
     EtablissementSearchResultResponse, EtablissementSortField,
 };
-#[cfg(feature = "geocoding")]
-use crate::models::etablissement::common::{DEFAULT_GEOCODING_MIN_SCORE, DEFAULT_GEOCODING_RADIUS};
 use crate::models::etablissement::error::Error as EtablissementModelError;
 use axum::{
     Json,
@@ -104,8 +102,9 @@ async fn search_etablissements(
         });
     }
 
-    // Resolve address → lat/lng before geo validation
-    let params = resolve_geocoding(params, &context)?;
+    // Resolve address → lat/lng/radius or code_commune before geo validation
+    #[cfg_attr(not(feature = "geocoding"), allow(unused_variables))]
+    let (params, adresse) = resolve_address(params, &context).await?;
 
     let has_any_geo = params.lat.is_some() || params.lng.is_some() || params.radius.is_some();
     let has_all_geo = params.lat.is_some() && params.lng.is_some() && params.radius.is_some();
@@ -194,68 +193,104 @@ async fn search_etablissements(
         suggestion,
         facettes,
         next_cursor,
+        #[cfg(feature = "geocoding")]
+        adresse,
     }))
 }
 
-/// If `address` is set, geocode it and fill in lat/lng/radius.
-/// Returns the params unchanged when address is absent.
-fn resolve_geocoding(
+#[cfg(not(feature = "geocoding"))]
+async fn resolve_address(
     params: EtablissementSearchParams,
+    _context: &Context,
+) -> Result<(EtablissementSearchParams, ()), Error> {
+    if params.address.is_some() {
+        return Err(Error::GeocodingDisabled);
+    }
+    Ok((params, ()))
+}
+
+/// If `address` is set, geocode it and narrow the search accordingly (see
+/// `geocoding::address::filter_for`). The chosen address is returned for the
+/// response.
+#[cfg(feature = "geocoding")]
+async fn resolve_address(
+    mut params: EtablissementSearchParams,
     context: &Context,
-) -> Result<EtablissementSearchParams, Error> {
-    let Some(address) = params.address.clone() else {
-        return Ok(params);
+) -> Result<
+    (
+        EtablissementSearchParams,
+        Option<crate::geocoding::address::AddressMatch>,
+    ),
+    Error,
+> {
+    use crate::geocoding::address::{
+        AddressFilter, AddressMatch, Adresse, DEFAULT_MIN_SCORE, filter_for, select,
     };
 
-    #[cfg(not(feature = "geocoding"))]
-    {
-        let _ = (address, context);
-        return Err(Error::InvalidSearchParams {
-            message: "geocoding support is not compiled in this build".to_string(),
+    let Some(address) = params.address.clone() else {
+        return Ok((params, None));
+    };
+    let mut filters = std::collections::HashMap::new();
+    if let Some(kinds) = super::adresses::filter_values(params.geocoding_type.as_deref()) {
+        filters.insert("type".to_string(), kinds);
+    }
+    let opts = geocoder_core::SearchOpts {
+        limit: Some(1),
+        autocomplete: Some(false),
+        filters,
+        ..Default::default()
+    };
+    let results = super::adresses::geocode(context, address, opts).await?;
+
+    let min_score = params.geocoding_min_score.unwrap_or(DEFAULT_MIN_SCORE);
+    let mode = params.geocoding_mode.unwrap_or_default();
+    let nothing = |params: &mut EtablissementSearchParams| {
+        // Matches no establishment.
+        params.lat = Some(0.0);
+        params.lng = Some(0.0);
+        params.radius = Some(0.0);
+    };
+
+    let Some((best, meets_min_score)) = select(&results, mode, min_score) else {
+        let rejected = results.first().map(|r| AddressMatch {
+            adresse: Adresse::from(r),
+            min_score,
+            meets_min_score: false,
+            filter: None,
         });
+        nothing(&mut params);
+        return Ok((params, rejected));
+    };
+
+    let adresse = Adresse::from(best);
+    // An explicit code_commune already narrows to municipalities: then a
+    // municipality address narrows by distance instead.
+    let mut filter = filter_for(&adresse, params.radius);
+    if params.code_commune.is_some() && matches!(filter, AddressFilter::Commune { .. }) {
+        filter = filter_for(
+            &adresse,
+            Some(crate::geocoding::address::RADIUS_MUNICIPALITY),
+        );
     }
-
-    #[cfg(feature = "geocoding")]
-    {
-        let mut params = params;
-        let Some(ref geocoder) = context.geocoder else {
-            return Err(Error::InvalidSearchParams {
-                message: "geocoding index not loaded — start the server with --geocoding-index-path"
-                    .to_string(),
-            });
-        };
-
-        let min_score = params.geocoding_min_score.unwrap_or(DEFAULT_GEOCODING_MIN_SCORE);
-        let results = geocoder.search(&address, geocoder_core::SearchOpts::default());
-        let best = results.into_iter().find(|r| r.score >= min_score);
-
-        match best {
-            None => {
-                // No result above threshold → radius=0 ensures empty DB results
-                params.lat = Some(0.0);
-                params.lng = Some(0.0);
-                params.radius = Some(0.0);
-            }
-            Some(result) => {
-                let lat = result.doc.get("lat").and_then(|v| v.as_f64());
-                let lon = result.doc.get("lon").and_then(|v| v.as_f64());
-                match (lat, lon) {
-                    (Some(lat), Some(lon)) => {
-                        params.lat = Some(lat);
-                        params.lng = Some(lon);
-                        params.radius = Some(params.radius.unwrap_or(DEFAULT_GEOCODING_RADIUS));
-                    }
-                    _ => {
-                        return Err(Error::InvalidSearchParams {
-                            message: "geocoding result has no coordinates".to_string(),
-                        });
-                    }
-                }
-            }
+    match &filter {
+        AddressFilter::Radius { lat, lng, radius } => {
+            params.lat = Some(*lat);
+            params.lng = Some(*lng);
+            params.radius = Some(*radius);
         }
-
-        Ok(params)
+        AddressFilter::Commune { code_commune } => {
+            params.code_commune = Some(code_commune.join(","));
+        }
     }
+    Ok((
+        params,
+        Some(AddressMatch {
+            adresse,
+            min_score,
+            meets_min_score,
+            filter: Some(filter),
+        }),
+    ))
 }
 
 pub fn router() -> OpenApiRouter<Arc<Context>> {

@@ -37,10 +37,20 @@ pub struct ServeFlags {
     )]
     shutdown_delay: u64,
 
-    /// Path to the geocoding index binary (enables address geocoding)
+    /// Path to the geocoding index (enables address geocoding). Built by
+    /// `update geocoding`; reloaded when the file changes.
     #[cfg(feature = "geocoding")]
     #[clap(long = "geocoding-index-path", env = "GEOCODING_INDEX_PATH")]
     geocoding_index_path: Option<std::path::PathBuf>,
+
+    /// How often to check the geocoding index file for a new version
+    #[cfg(feature = "geocoding")]
+    #[clap(
+        long = "geocoding-reload-interval",
+        env = "GEOCODING_RELOAD_INTERVAL_SECONDS",
+        default_value_t = 60
+    )]
+    geocoding_reload_interval: u64,
 }
 
 #[derive(clap::ValueEnum, Clone, Debug)]
@@ -60,18 +70,19 @@ pub async fn run(flags: ServeFlags, builders: ConnectorsBuilders) {
     info!("Configuring for {:#?}", flags.environment);
 
     #[cfg(feature = "geocoding")]
-    let geocoder = flags.geocoding_index_path.as_deref().and_then(|path| {
-        match geocoder_core::Geocoder::open(path) {
-            Ok(g) => {
-                info!("Geocoding index loaded from {}", path.display());
-                Some(std::sync::Arc::new(g))
-            }
-            Err(e) => {
-                tracing::warn!("Failed to load geocoding index: {e}");
-                None
-            }
+    let geocoder = {
+        let handle = crate::geocoding::GeocoderHandle::open(flags.geocoding_index_path.clone());
+        match (handle.path(), handle.get()) {
+            (None, _) => info!("Geocoding disabled: no GEOCODING_INDEX_PATH"),
+            (Some(path), None) => tracing::warn!(
+                "Geocoding index {} not available yet, it will be loaded once built",
+                path.display()
+            ),
+            _ => {}
         }
-    });
+        handle.watch(Duration::from_secs(flags.geocoding_reload_interval.max(1)));
+        handle
+    };
 
     runner::run(
         addr,

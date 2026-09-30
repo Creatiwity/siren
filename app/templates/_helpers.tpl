@@ -202,7 +202,7 @@ envFrom:
 
 {{/*
 Labels of the job pods: never the selector labels, or the Service would pick
-them up
+them up (and the geocoding pod affinity would target them)
 */}}
 {{- define "app.jobPodLabels" -}}
 app.kubernetes.io/instance: {{ .root.Release.Name }}
@@ -214,8 +214,10 @@ app.kubernetes.io/component: {{ .component }}
 
 {{/*
 Pod spec fields shared by every workload
-  (dict "root" . "jobs" <bool>)
+  (dict "root" . "jobs" <bool> "geocoding" <bool>)
 - jobs: scheduling from `jobs.*`, falling back to the top-level values.
+- geocoding: joins the node of the API pods when the ReadWriteOnce geocoding
+  volume must be shared (geocoding.persistence.sameNode).
 */}}
 {{- define "app.podCommon" -}}
 {{- $v := .root.Values -}}
@@ -227,6 +229,13 @@ Pod spec fields shared by every workload
 {{- $nodeSelector = $jobs.nodeSelector | default $nodeSelector -}}
 {{- $tolerations = $jobs.tolerations | default $tolerations -}}
 {{- $affinity = deepCopy ($jobs.affinity | default $affinity) -}}
+{{- end -}}
+{{- if and .geocoding $v.geocoding.enabled $v.geocoding.persistence.sameNode -}}
+{{- $term := dict "labelSelector" (dict "matchLabels" (include "app.selectorLabels" .root | fromYaml)) "topologyKey" "kubernetes.io/hostname" -}}
+{{- $podAffinity := get $affinity "podAffinity" | default dict -}}
+{{- $required := get $podAffinity "requiredDuringSchedulingIgnoredDuringExecution" | default list -}}
+{{- $_ := set $podAffinity "requiredDuringSchedulingIgnoredDuringExecution" (append $required $term) -}}
+{{- $_ := set $affinity "podAffinity" $podAffinity -}}
 {{- end -}}
 automountServiceAccountToken: {{ $v.serviceAccount.automount }}
 {{- with $v.imagePullSecrets }}
@@ -260,6 +269,41 @@ When the migration hook owns the schema, the other workloads only check it
 {{- define "app.skipMigrationsEnv" -}}
 - name: "SKIP_MIGRATIONS"
   value: "{{ .Values.migrations.enabled }}"
+{{- end }}
+
+{{/*
+Geocoding: claim name, environment and volume of the index
+*/}}
+{{- define "app.geocodingClaim" -}}
+{{- .Values.geocoding.persistence.existingClaim | default (printf "%s-geocoding" (include "app.fullname" .)) }}
+{{- end }}
+
+{{- define "app.geocodingEnv" -}}
+{{- if .Values.geocoding.enabled }}
+- name: "GEOCODING_INDEX_PATH"
+  value: {{ .Values.geocoding.indexPath | quote }}
+- name: "GEOCODING_SOURCE_URL"
+  value: {{ .Values.geocoding.sourceUrl | quote }}
+- name: "GEOCODING_WITH_UPDATE_ALL"
+  value: "{{ .Values.geocoding.withUpdateAll }}"
+- name: "GEOCODING_RELOAD_INTERVAL_SECONDS"
+  value: "{{ .Values.geocoding.reloadIntervalSeconds }}"
+{{- end }}
+{{- end }}
+
+{{- define "app.geocodingVolumeMount" -}}
+{{- if .Values.geocoding.enabled }}
+- name: geocoding
+  mountPath: {{ dir .Values.geocoding.indexPath }}
+{{- end }}
+{{- end }}
+
+{{- define "app.geocodingVolume" -}}
+{{- if .Values.geocoding.enabled }}
+- name: geocoding
+  persistentVolumeClaim:
+    claimName: {{ include "app.geocodingClaim" . }}
+{{- end }}
 {{- end }}
 
 {{/*
