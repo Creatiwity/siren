@@ -461,8 +461,23 @@ cargo watch -x 'run -- serve --env development --port 8080'
 
 ### Database Migrations
 
+By default, `serve` and `update` apply the pending migrations on startup. To
+migrate as a separate step instead (deployment hook, read-only database for the
+API), run `migrate` beforehand and start the other commands with
+`--skip-migrations` (or `SKIP_MIGRATIONS=true`): they then only check, with
+read-only queries, that no migration is pending, and refuse to start otherwise.
+
 ```bash
-# Run migrations
+# Apply the pending migrations, then exit
+sirene migrate
+
+# List the pending migrations, exit with 1 if there is any
+sirene migrate --check
+
+# Start without migrating (DATABASE_URL may target a read replica)
+SKIP_MIGRATIONS=true sirene serve
+
+# Run migrations with the Diesel CLI
 diesel migration run
 
 # Create new migration

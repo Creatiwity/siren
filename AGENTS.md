@@ -39,6 +39,9 @@ cargo run -- update etablissements
 ### CLI Commands (`src/commands/`)
 - **serve**: HTTP API server via Axum with OpenAPI/Scalar docs at `/scalar`
 - **update**: Data sync workflow (download CSV → load staging → swap tables → sync daily from INSEE API)
+- **migrate**: Applies the embedded Diesel migrations and exits (`--check` only lists the pending ones, exit 1 if any)
+
+`serve` and `update` migrate on startup unless `--skip-migrations` / `SKIP_MIGRATIONS=true` is set; they then only verify that nothing is pending and panic otherwise. That check reads `__diesel_schema_migrations` directly (`connectors::local::pending_migrations`), because `MigrationHarness` issues a `CREATE TABLE IF NOT EXISTS` that a read replica rejects. The Helm chart runs `migrate` as a pre-install/pre-upgrade hook Job and sets `SKIP_MIGRATIONS=true` on the Deployment and CronJob (`migrations.enabled`). `apiDatabase.*` gives the Deployment alone its own connection (read replica), falling back field by field to `pg*`; the Job and the CronJob always use the primary.
 
 ### Domain Models (`src/models/`)
 - **etablissement**: Business establishments (SIRET) - includes geographic search

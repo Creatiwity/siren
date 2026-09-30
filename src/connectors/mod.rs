@@ -20,9 +20,9 @@ pub struct Connectors {
 }
 
 impl ConnectorsBuilders {
-    pub fn new() -> Self {
+    pub fn new(migration_mode: local::MigrationMode) -> Self {
         ConnectorsBuilders {
-            local: local::ConnectorBuilder::new(),
+            local: local::ConnectorBuilder::new(migration_mode),
             insee: insee::ConnectorBuilder::new(),
         }
     }

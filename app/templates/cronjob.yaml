@@ -18,16 +18,8 @@ spec:
               image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
               imagePullPolicy: {{ .Values.image.pullPolicy }}
               env:
-                - name: "DATABASE_HOST"
-                  value: {{ .Values.pgHost }}
-                - name: "DATABASE_PORT"
-                  value: "{{ .Values.pgPort }}"
-                - name: "DATABASE_NAME"
-                  value: {{ .Values.pgDatabase }}
-                - name: "DATABASE_USER"
-                  value: {{ .Values.pgUsername }}
-                - name: "DATABASE_PASSWORD"
-                  value: {{ .Values.pgPassword }}
+                {{- include "app.databaseEnv" . | nindent 16 }}
+                {{- include "app.skipMigrationsEnv" . | nindent 16 }}
                 - name: "RUST_LOG"
                   value: {{ .Values.rustLog }}
                 - name: "SIRENE_ENV"
