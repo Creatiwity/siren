@@ -1,0 +1,55 @@
+{{/* `update geocoding` alone. Suspended by default: a template for the first
+     build right after install,
+       kubectl create job --from=cronjob/<fullname>-geocoding <fullname>-geocoding-init
+     The nightly `update all` keeps the index fresh afterwards
+     (geocoding.withUpdateAll). */}}
+{{- if .Values.geocoding.enabled -}}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "app.fullname" . }}-geocoding
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+spec:
+  schedule: {{ .Values.geocoding.cronSchedule | quote }}
+  suspend: {{ .Values.geocoding.suspend }}
+  {{- with .Values.cronjob.timeZone }}
+  timeZone: {{ . | quote }}
+  {{- end }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: {{ .Values.cronjob.successfulJobsHistoryLimit }}
+  failedJobsHistoryLimit: {{ .Values.cronjob.failedJobsHistoryLimit }}
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      template:
+        metadata:
+          labels:
+            {{- include "app.jobPodLabels" (dict "root" . "component" "geocoding") | nindent 12 }}
+        spec:
+          serviceAccountName: {{ include "app.serviceAccountName" . }}
+          {{- include "app.podCommon" (dict "root" . "jobs" true "geocoding" true) | nindent 10 }}
+          restartPolicy: Never
+          containers:
+            - name: "{{ include "app.fullname" . }}-geocoding"
+              securityContext:
+                {{- toYaml .Values.securityContext | nindent 16 }}
+              image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+              imagePullPolicy: {{ .Values.image.pullPolicy }}
+              {{- include "app.envFrom" . | nindent 14 }}
+              env:
+                # `update` checks the database schema on startup.
+                {{- include "app.databaseEnv" (dict "root" .) | nindent 16 }}
+                {{- include "app.skipMigrationsEnv" . | nindent 16 }}
+                {{- include "app.geocodingEnv" . | nindent 16 }}
+                {{- include "app.commonEnv" (dict "root" .) | nindent 16 }}
+              args: ["update", "geocoding"]
+              {{- with .Values.updateResources }}
+              resources:
+                {{- toYaml . | nindent 16 }}
+              {{- end }}
+              volumeMounts:
+                {{- include "app.geocodingVolumeMount" . | nindent 16 }}
+          volumes:
+            {{- include "app.geocodingVolume" . | nindent 12 }}
+{{- end }}

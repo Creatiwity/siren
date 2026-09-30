@@ -6,6 +6,8 @@ static GLOBAL: jemallocator::Jemalloc = jemallocator::Jemalloc;
 mod commands;
 mod connectors;
 mod diesel_instrumentation;
+#[cfg(feature = "geocoding")]
+mod geocoding;
 mod models;
 mod sentry_crons;
 mod telemetry;

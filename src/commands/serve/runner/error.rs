@@ -25,6 +25,8 @@ custom_error! { pub Error
     Status {source: update_metadata::error::Error} = "[Status] {source}",
     SirenDoublonRedirect{location: String} = "Moved permanently to {location}",
     SirenDoublonLookup{source: siren_doublon::error::Error} = "[SirenDoublon] {source}",
+    GeocodingUnavailable = "[Geocoding] No geocoding index loaded yet",
+    GeocodingDisabled = "[Geocoding] Geocoding is not enabled on this server",
 }
 
 impl IntoResponse for Error {
@@ -43,6 +45,9 @@ impl IntoResponse for Error {
             }
             Error::ApiKey => (StatusCode::UNAUTHORIZED, self.to_string()),
             Error::MissingBaseUrlForAsync => (StatusCode::BAD_REQUEST, self.to_string()),
+            // Expected until the first index build: not reported to Sentry.
+            Error::GeocodingUnavailable => (StatusCode::SERVICE_UNAVAILABLE, self.to_string()),
+            Error::GeocodingDisabled => (StatusCode::NOT_IMPLEMENTED, self.to_string()),
             Error::SirenDoublonLookup { source: _ } => {
                 (StatusCode::INTERNAL_SERVER_ERROR, self.to_string())
             }
