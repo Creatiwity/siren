@@ -25,6 +25,8 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       serviceAccountName: {{ include "app.serviceAccountName" . }}
+      # Must exceed shutdownDelaySeconds plus the longest request to drain.
+      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
@@ -60,14 +62,29 @@ spec:
               value: {{ .Values.sentryDsn }}
             - name: "TOKIO_WORKER_THREADS"
               value: "{{ .Values.tokioWorkerThreads }}"
+            - name: "SHUTDOWN_DELAY_SECONDS"
+              value: "{{ .Values.shutdownDelaySeconds }}"
+          # Migrations run before the listener opens: the startup probe holds
+          # back the liveness probe until then, instead of killing a pod that
+          # is still migrating.
+          startupProbe:
+            httpGet:
+              path: /health/live
+              port: http
+            {{- toYaml .Values.probes.startup | nindent 12 }}
+          # Process only, never the database: an outage must not restart every
+          # pod at once.
           livenessProbe:
             httpGet:
-              path: /
+              path: /health/live
               port: http
+            {{- toYaml .Values.probes.liveness | nindent 12 }}
+          # Process + database: a failure only takes the pod out of the Service.
           readinessProbe:
             httpGet:
-              path: /
+              path: /health/ready
               port: http
+            {{- toYaml .Values.probes.readiness | nindent 12 }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
       {{- with .Values.nodeSelector }}

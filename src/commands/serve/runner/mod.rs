@@ -1,6 +1,7 @@
 mod admin;
 mod error;
 mod etablissements;
+mod health;
 mod liens_succession;
 mod root;
 mod trace;
@@ -14,6 +15,9 @@ use common::Context;
 use sentry::integrations::tower::{NewSentryLayer, SentryHttpLayer};
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::Duration;
+use tracing::info;
 use utoipa::OpenApi;
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_scalar::{Scalar, Servable};
@@ -34,10 +38,13 @@ use utoipa_scalar::{Scalar, Servable};
 )]
 struct ApiDoc;
 
-pub async fn run(addr: SocketAddr, context: Context) {
+pub async fn run(addr: SocketAddr, context: Context, shutdown_delay: Duration) {
+    let shutting_down = context.shutting_down.clone();
     let shared_context = Arc::new(context);
 
-    let (router, api) = OpenApiRouter::with_openapi(ApiDoc::openapi())
+    let (health_router, health_api) = health::router().split_for_parts();
+
+    let (router, mut api) = OpenApiRouter::with_openapi(ApiDoc::openapi())
         .nest("/admin", admin::router())
         .nest("/v3/etablissements", etablissements::router())
         .nest(
@@ -47,6 +54,7 @@ pub async fn run(addr: SocketAddr, context: Context) {
         .nest("/v3/unites_legales", unites_legales::router())
         .merge(root::router())
         .split_for_parts();
+    api.merge(health_api);
 
     let app = router
         .layer(
@@ -62,12 +70,52 @@ pub async fn run(addr: SocketAddr, context: Context) {
         .layer(middleware::from_fn(trace::siren_context_middleware))
         .layer(NewSentryLayer::new_from_top())
         .layer(middleware::from_fn(trace::traceparent_middleware))
+        // Merged after the layers on purpose: probes stay out of Sentry
+        // transactions and request traces.
+        .merge(health_router)
         .with_state(shared_context);
 
     axum::serve(
         tokio::net::TcpListener::bind(&addr).await.unwrap(),
         app.into_make_service(),
     )
+    .with_graceful_shutdown(shutdown_signal(shutting_down, shutdown_delay))
     .await
     .unwrap();
+}
+
+/// Resolves when the server should stop accepting connections.
+///
+/// On SIGTERM (the orchestrator), readiness starts failing and the server keeps
+/// serving for `delay`, the time for the pod to leave the load balancer; then
+/// in-flight requests are drained. Ctrl+C stops right away.
+async fn shutdown_signal(shutting_down: Arc<AtomicBool>, delay: Duration) {
+    let ctrl_c = async {
+        tokio::signal::ctrl_c()
+            .await
+            .expect("Unable to listen for Ctrl+C");
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+            .expect("Unable to listen for SIGTERM")
+            .recv()
+            .await;
+    };
+
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        _ = ctrl_c => {
+            info!("Ctrl+C received, shutting down");
+            shutting_down.store(true, Ordering::Relaxed);
+        }
+        _ = terminate => {
+            info!("SIGTERM received, failing readiness for {:?} before shutting down", delay);
+            shutting_down.store(true, Ordering::Relaxed);
+            tokio::time::sleep(delay).await;
+        }
+    }
 }

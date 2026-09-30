@@ -6,7 +6,10 @@ use std::sync::Arc;
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
 
-/// Health check
+/// Last successful data update
+///
+/// Not a probe: it queries `update_metadata`. Orchestrators should use
+/// `/health/live` and `/health/ready`.
 #[utoipa::path(
     get,
     path = "/",
