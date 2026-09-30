@@ -105,3 +105,54 @@ When the migration hook owns the schema, the other workloads only check it
 - name: "SKIP_MIGRATIONS"
   value: "{{ .Values.migrations.enabled }}"
 {{- end }}
+
+{{/*
+Geocoding: claim name, environment and volume of the index
+*/}}
+{{- define "app.geocodingClaim" -}}
+{{- .Values.geocoding.persistence.existingClaim | default (printf "%s-geocoding" (include "app.fullname" .)) }}
+{{- end }}
+
+{{- define "app.geocodingEnv" -}}
+{{- if .Values.geocoding.enabled }}
+- name: "GEOCODING_INDEX_PATH"
+  value: {{ .Values.geocoding.indexPath | quote }}
+- name: "GEOCODING_SOURCE_URL"
+  value: {{ .Values.geocoding.sourceUrl | quote }}
+- name: "GEOCODING_WITH_UPDATE_ALL"
+  value: "{{ .Values.geocoding.withUpdateAll }}"
+- name: "GEOCODING_RELOAD_INTERVAL_SECONDS"
+  value: "{{ .Values.geocoding.reloadIntervalSeconds }}"
+{{- end }}
+{{- end }}
+
+{{- define "app.geocodingVolumeMount" -}}
+{{- if .Values.geocoding.enabled }}
+- name: geocoding
+  mountPath: {{ dir .Values.geocoding.indexPath }}
+{{- end }}
+{{- end }}
+
+{{- define "app.geocodingVolume" -}}
+{{- if .Values.geocoding.enabled }}
+- name: geocoding
+  persistentVolumeClaim:
+    claimName: {{ include "app.geocodingClaim" . }}
+{{- end }}
+{{- end }}
+
+{{/*
+Jobs writing the geocoding index join an API pod's node, so a ReadWriteOnce
+volume attached there can be mounted by both.
+*/}}
+{{- define "app.geocodingAffinity" -}}
+{{- if and .Values.geocoding.enabled .Values.geocoding.persistence.sameNode }}
+affinity:
+  podAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      - labelSelector:
+          matchLabels:
+            {{- include "app.selectorLabels" . | nindent 12 }}
+        topologyKey: kubernetes.io/hostname
+{{- end }}
+{{- end }}

@@ -1,47 +1,54 @@
+{{/* `update geocoding` alone. Suspended by default: a template for the first
+     build right after install,
+       kubectl create job --from=cronjob/<fullname>-geocoding <fullname>-geocoding-init
+     The nightly `update all` keeps the index fresh afterwards
+     (geocoding.withUpdateAll). */}}
+{{- if .Values.geocoding.enabled -}}
 apiVersion: batch/v1
 kind: CronJob
 metadata:
-  name: {{ include "app.fullname" . }}
+  name: {{ include "app.fullname" . }}-geocoding
   labels:
     {{- include "app.labels" . | nindent 4 }}
 spec:
-  schedule: {{ .Values.cronSchedule | quote }}
+  schedule: {{ .Values.geocoding.cronSchedule | quote }}
+  suspend: {{ .Values.geocoding.suspend }}
+  concurrencyPolicy: Forbid
   jobTemplate:
     spec:
+      backoffLimit: 1
       template:
         spec:
           {{- include "app.geocodingAffinity" . | nindent 10 }}
-          restartPolicy: OnFailure
+          restartPolicy: Never
+          {{- with .Values.imagePullSecrets }}
+          imagePullSecrets:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           containers:
-            - name: "{{ include "app.fullname" . }}-job-updater"
+            - name: "{{ include "app.fullname" . }}-geocoding"
               securityContext:
                 {{- toYaml .Values.securityContext | nindent 16 }}
               image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
               imagePullPolicy: {{ .Values.image.pullPolicy }}
               env:
+                # `update` checks the database schema on startup.
                 {{- include "app.databaseEnv" . | nindent 16 }}
                 {{- include "app.skipMigrationsEnv" . | nindent 16 }}
                 - name: "RUST_LOG"
                   value: {{ .Values.rustLog }}
                 - name: "SIRENE_ENV"
                   value: {{ .Values.sireneEnv }}
-                - name: "INSEE_CREDENTIALS"
-                  value: {{ .Values.inseeCredentials }}
                 - name: "SENTRY_DSN"
                   value: {{ .Values.sentryDsn }}
                 {{- include "app.geocodingEnv" . | nindent 16 }}
-              # With geocoding enabled, `update all` refreshes the index too
-              # (geocoding.withUpdateAll).
-              args: ["update", "all", "--crontab", {{ .Values.cronSchedule | quote }}]
+              args: ["update", "geocoding"]
               {{- with .Values.updateResources }}
               resources:
                 {{- toYaml . | nindent 16 }}
               {{- end }}
-              {{- if .Values.geocoding.enabled }}
               volumeMounts:
                 {{- include "app.geocodingVolumeMount" . | nindent 16 }}
-              {{- end }}
-          {{- if .Values.geocoding.enabled }}
           volumes:
             {{- include "app.geocodingVolume" . | nindent 12 }}
-          {{- end }}
+{{- end }}

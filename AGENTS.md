@@ -43,6 +43,13 @@ cargo run -- update etablissements
 
 `serve` and `update` migrate on startup unless `--skip-migrations` / `SKIP_MIGRATIONS=true` is set; they then only verify that nothing is pending and panic otherwise. That check reads `__diesel_schema_migrations` directly (`connectors::local::pending_migrations`), because `MigrationHarness` issues a `CREATE TABLE IF NOT EXISTS` that a read replica rejects. The Helm chart runs `migrate` as a pre-install/pre-upgrade hook Job and sets `SKIP_MIGRATIONS=true` on the Deployment and CronJob (`migrations.enabled`). `apiDatabase.*` gives the Deployment alone its own connection (read replica), falling back field by field to `pg*`; the Job and the CronJob always use the primary.
 
+### Geocoding (`src/geocoding/`, feature `geocoding`)
+Address geocoding with the `geocoder-core` crate (git dependency, `Creatiwity/geocoder-core`), which reproduces the BAN API ranking. Everything is behind `#[cfg(feature = "geocoding")]`; `cargo clippy --all-features` covers it, plain `cargo check` covers the build without it.
+- `sync`: `update geocoding` (and after `update all` unless `GEOCODING_WITH_UPDATE_ALL=false`) downloads the BAN export next to `GEOCODING_INDEX_PATH`, rebuilds the index atomically, and records the source `Last-Modified`/`ETag` in `<index>.source.json` to skip unchanged exports.
+- `handle`: `GeocoderHandle`, held by the serve `Context`, reloads the index when the file's modification time changes (`GEOCODING_RELOAD_INTERVAL_SECONDS`).
+- `address`: `Adresse` (API shape), the `geocoding_mode` selection (`threshold_or_best`, `threshold`, `best`) and `filter_for` (housenumber 100 m, street/locality 1 km, municipality → `code_commune`, with Paris/Lyon/Marseille arrondissements).
+Routes: `/v3/adresses/autocomplete`, `/v3/adresses/search`, and the `address` parameter of `/v3/etablissements` (response field `adresse`). 503 while no index is loaded, 501 without `GEOCODING_INDEX_PATH`. Helm: `geocoding.*` (PVC shared by the API and the jobs, suspended `-geocoding` CronJob for the first build). The default is ReadWriteOnce with `persistence.sameNode`: a required pod affinity puts the API pods and the jobs on one node, since block storage (OVH csi-cinder) cannot be attached to several; use a ReadWriteMany class and `sameNode: false` to spread API replicas.
+
 ### Domain Models (`src/models/`)
 - **etablissement**: Business establishments (SIRET) - includes geographic search
 - **unite_legale**: Legal units (SIREN)

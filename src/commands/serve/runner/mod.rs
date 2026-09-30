@@ -1,4 +1,6 @@
 mod admin;
+#[cfg(feature = "geocoding")]
+mod adresses;
 mod error;
 mod etablissements;
 mod health;
@@ -44,7 +46,7 @@ pub async fn run(addr: SocketAddr, context: Context, shutdown_delay: Duration) {
 
     let (health_router, health_api) = health::router().split_for_parts();
 
-    let (router, mut api) = OpenApiRouter::with_openapi(ApiDoc::openapi())
+    let router = OpenApiRouter::with_openapi(ApiDoc::openapi())
         .nest("/admin", admin::router())
         .nest("/v3/etablissements", etablissements::router())
         .nest(
@@ -52,8 +54,10 @@ pub async fn run(addr: SocketAddr, context: Context, shutdown_delay: Duration) {
             liens_succession::router(),
         )
         .nest("/v3/unites_legales", unites_legales::router())
-        .merge(root::router())
-        .split_for_parts();
+        .merge(root::router());
+    #[cfg(feature = "geocoding")]
+    let router = router.nest("/v3/adresses", adresses::router());
+    let (router, mut api) = router.split_for_parts();
     api.merge(health_api);
 
     let app = router

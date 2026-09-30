@@ -19,8 +19,9 @@ pub struct Context {
     pub base_url: Option<String>,
     /// Set on SIGTERM, so readiness fails while in-flight requests drain.
     pub shutting_down: Arc<AtomicBool>,
+    /// Current geocoding index, swapped when the file is rebuilt.
     #[cfg(feature = "geocoding")]
-    pub geocoder: Option<std::sync::Arc<geocoder_core::Geocoder>>,
+    pub geocoder: Arc<crate::geocoding::GeocoderHandle>,
 }
 
 #[derive(ToSchema, Deserialize)]

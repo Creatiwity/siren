@@ -56,6 +56,14 @@ spec:
               value: "{{ .Values.tokioWorkerThreads }}"
             - name: "SHUTDOWN_DELAY_SECONDS"
               value: "{{ .Values.shutdownDelaySeconds }}"
+            {{- include "app.geocodingEnv" . | nindent 12 }}
+          {{- if .Values.geocoding.enabled }}
+          # The index is only read here; the jobs rebuild it in place.
+          volumeMounts:
+            - name: geocoding
+              mountPath: {{ dir .Values.geocoding.indexPath }}
+              readOnly: true
+          {{- end }}
           # Migrations (or their check, with migrations.enabled) run before the
           # listener opens: the startup probe holds back the liveness probe
           # until then, instead of killing a pod that is still migrating.
@@ -79,13 +87,23 @@ spec:
             {{- toYaml .Values.probes.readiness | nindent 12 }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
+      {{- if .Values.geocoding.enabled }}
+      volumes:
+        {{- include "app.geocodingVolume" . | nindent 8 }}
+      {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      {{- if and .Values.geocoding.enabled .Values.geocoding.persistence.sameNode }}
+      # ReadWriteOnce geocoding volume: every API pod on the node it is
+      # attached to, including the new ones of a rolling update.
+      {{- include "app.geocodingAffinity" . | nindent 6 }}
+      {{- else }}
       {{- with .Values.affinity }}
       affinity:
         {{- toYaml . | nindent 8 }}
+      {{- end }}
       {{- end }}
       {{- with .Values.tolerations }}
       tolerations:

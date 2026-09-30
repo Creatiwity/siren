@@ -29,6 +29,43 @@ inseeCredentials:
 sentryDsn:
 cronSchedule: "0 4 * * *"
 tokioWorkerThreads: 10
+# Resources of the update CronJob. With geocoding enabled, building the full
+# BAN index takes ~6 min and up to ~5 GiB of memory.
+updateResources: {}
+
+# Address geocoding: `address` filter on establishment searches and the
+# /v3/adresses endpoints. The index file lives on a volume shared by the API
+# (read only, reloaded when the file changes) and the jobs building it.
+geocoding:
+  enabled: false
+  indexPath: /data/geocoding/index.bin
+  # BAN export in addok format (~1.2 GB).
+  sourceUrl: https://adresse.data.gouv.fr/data/ban/adresses/latest/addok/adresses-addok-france.ndjson.gz
+  # Refresh the index after the nightly `update all` (skipped when the BAN
+  # export did not change).
+  withUpdateAll: true
+  reloadIntervalSeconds: 60
+  # `<fullname>-geocoding` CronJob running `update geocoding` only. Suspended by
+  # default: use it for the first build right after install,
+  #   kubectl create job --from=cronjob/<fullname>-geocoding <fullname>-geocoding-init
+  # or unsuspend it to refresh on its own schedule.
+  cronSchedule: "0 3 * * *"
+  suspend: true
+  persistence:
+    # Use an existing claim instead of creating one.
+    existingClaim: ""
+    storageClass: ""
+    # ReadWriteOnce (block storage, e.g. OVH csi-cinder) is attached to one
+    # node at a time, but every pod on that node can mount it: with sameNode,
+    # the jobs building the index are scheduled next to an API pod. Fits a
+    # single API replica (or replicas pinned to one node).
+    # For API replicas spread over nodes, use a ReadWriteMany class (NFS)
+    # and set sameNode to false.
+    accessModes:
+      - ReadWriteOnce
+    sameNode: true
+    # Index (~2.7 GB) + its rebuild (~2.7 GB) + the download (~1.2 GB).
+    size: 10Gi
 
 # Database migrations, applied by a Job run as a pre-install/pre-upgrade hook.
 # The API and the updater then start with SKIP_MIGRATIONS=true: they only check,

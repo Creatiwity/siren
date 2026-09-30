@@ -159,11 +159,6 @@ pub enum EtatAdministratif {
     F,
 }
 
-#[cfg(feature = "geocoding")]
-pub const DEFAULT_GEOCODING_RADIUS: f64 = 500.0;
-#[cfg(feature = "geocoding")]
-pub const DEFAULT_GEOCODING_MIN_SCORE: f32 = 0.5;
-
 #[derive(Debug, Default, Clone, Deserialize, IntoParams)]
 pub struct EtablissementSearchParams {
     pub q: Option<String>,
@@ -207,11 +202,23 @@ pub struct EtablissementSearchParams {
     /// Resume position returned by `next_cursor`. Requires `sort=siret`, excludes
     /// `offset`, and walks past the 10,000-result offset ceiling.
     pub cursor: Option<String>,
-    /// Free-text address to geocode. Mutually exclusive with lat/lng.
+    /// Free-text address to geocode, then search around (see `adresse` in the
+    /// response). A housenumber narrows to 100 m, a street or locality to
+    /// 1 km (or `radius`), a municipality to its `code_commune`. Mutually
+    /// exclusive with lat/lng.
     pub address: Option<String>,
-    /// Minimum geocoding score to accept a result (default: 0.5).
+    /// Minimum geocoding score for `address` (default: 0.5).
     #[cfg(feature = "geocoding")]
     pub geocoding_min_score: Option<f32>,
+    /// What to do with the best geocoding result: `threshold_or_best`
+    /// (default: use it even below `geocoding_min_score`), `threshold`
+    /// (below it, return nothing), `best` (ignore the score).
+    #[cfg(feature = "geocoding")]
+    pub geocoding_mode: Option<crate::geocoding::address::GeocodingMode>,
+    /// Restrict `address` to these kinds, comma-separated: `housenumber`,
+    /// `street`, `locality`, `municipality`.
+    #[cfg(feature = "geocoding")]
+    pub geocoding_type: Option<String>,
 }
 
 #[derive(Debug, QueryableByName, Serialize, ToSchema)]
@@ -285,6 +292,10 @@ pub struct EtablissementSearchResponse {
     /// or when the sort does not support cursor resume.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub next_cursor: Option<String>,
+    /// The address `address` was geocoded to, and how it narrowed the search.
+    #[cfg(feature = "geocoding")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub adresse: Option<crate::geocoding::address::AddressMatch>,
 }
 
 #[derive(Debug, Serialize, ToSchema)]

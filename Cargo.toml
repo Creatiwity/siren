@@ -7,7 +7,9 @@ edition = "2024"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
-geocoding = ["dep:geocoder-core"]
+# Address geocoding: index sync (`update geocoding`), `address` search filter
+# and the /v3/adresses endpoints.
+geocoding = ["dep:geocoder-core", "dep:flate2"]
 
 [dependencies]
 async-trait = "0.1"
@@ -25,8 +27,9 @@ diesel = { version = "2.3", features = [
 diesel-async = { version = "0.9", features = ["postgres", "deadpool"] }
 diesel_migrations = { version = "2.3", features = ["postgres"] }
 dotenv = "0.15"
+flate2 = { version = "1.1", optional = true }
 futures = "0.3"
-geocoder-core = { path = "../geocoder-core", optional = true }
+geocoder-core = { git = "https://github.com/Creatiwity/geocoder-core", tag = "v0.1.0", default-features = false, optional = true }
 jemallocator = "0.5"
 openssl-sys = { version = "0.9", features = ["vendored"] }
 postgis_diesel = { version = "3.1", features = ["serde"] }
