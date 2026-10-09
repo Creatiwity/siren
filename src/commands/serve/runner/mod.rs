@@ -9,8 +9,10 @@ mod unites_legales;
 
 pub mod common;
 
+use axum::Json;
 use axum::http::{Method, header};
 use axum::middleware;
+use axum::routing::get;
 use common::Context;
 use sentry::integrations::tower::{NewSentryLayer, SentryHttpLayer};
 use std::net::SocketAddr;
@@ -56,7 +58,9 @@ pub async fn run(addr: SocketAddr, context: Context, shutdown_delay: Duration) {
         .split_for_parts();
     api.merge(health_api);
 
+    let spec = api.clone();
     let app = router
+        .route("/openapi.json", get(move || async move { Json(spec) }))
         .layer(
             tower_http::cors::CorsLayer::new()
                 .allow_methods([Method::GET, Method::POST])
