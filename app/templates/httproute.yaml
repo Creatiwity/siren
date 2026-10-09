@@ -1,0 +1,59 @@
+{{/* A single HTTPRoute to the Service, for any Gateway API controller: the
+     default rule, a rule with auth.matches carrying the auth filter
+     (auth-policy.yaml), then httpRoute.extraRules. Matching is by specificity,
+     so /v3 behind auth wins over the default / whatever the order. */}}
+{{- with .Values.httpRoute -}}
+{{- if .enabled -}}
+{{- $fullName := include "app.fullname" $ -}}
+{{- $parentRefs := .parentRefs -}}
+{{- if not $parentRefs -}}
+{{- if not $.Values.listenerSet.enabled -}}
+{{- fail "httpRoute.enabled requires httpRoute.parentRefs, or listenerSet.enabled to attach to the chart's ListenerSet" -}}
+{{- end -}}
+{{- $parentRefs = list (dict "group" "gateway.networking.k8s.io" "kind" "ListenerSet" "name" $fullName) -}}
+{{- end -}}
+{{- $hostnames := .hostnames -}}
+{{- if not $hostnames -}}
+{{- range $.Values.listenerSet.hosts }}{{ $hostnames = append $hostnames .host }}{{ end -}}
+{{- end -}}
+{{- $backend := dict "group" "" "kind" "Service" "name" $fullName "port" $.Values.service.port "weight" 1 -}}
+{{- $default := dict "matches" (.matches | default (list (dict "path" (dict "type" "PathPrefix" "value" "/")))) -}}
+{{- with .filters }}{{ $_ := set $default "filters" . }}{{ end -}}
+{{- $authRules := list -}}
+{{- $auth := $.Values.auth | default dict -}}
+{{- if $auth.provider -}}
+{{- $kinds := dict "kgateway" (list "gateway.kgateway.dev" "TrafficPolicy") "apisix" (list "apisix.apache.org" "PluginConfig") -}}
+{{- $kind := get $kinds $auth.provider | default (list "" "") -}}
+{{- $authFilter := dict "type" "ExtensionRef" "extensionRef" (dict "group" (index $kind 0) "kind" (index $kind 1) "name" (include "app.authPolicyName" $)) -}}
+{{- $authRule := dict "matches" $auth.matches "filters" (append (.filters | default list) $authFilter) -}}
+{{- $authRules = list $authRule -}}
+{{- end -}}
+{{- $rules := list -}}
+{{- range concat (list $default) $authRules (.extraRules | default list) -}}
+{{- $rule := deepCopy . -}}
+{{- if not $rule.backendRefs }}{{ $_ := set $rule "backendRefs" (list $backend) }}{{ end -}}
+{{- $rules = append $rules $rule -}}
+{{- end -}}
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ $fullName }}
+  labels:
+    {{- include "app.labels" $ | nindent 4 }}
+  {{- with .annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  parentRefs:
+    {{- toYaml $parentRefs | nindent 4 }}
+  {{- with $hostnames }}
+  hostnames:
+    {{- range . }}
+    - {{ . | quote }}
+    {{- end }}
+  {{- end }}
+  rules:
+    {{- toYaml $rules | nindent 4 }}
+{{- end }}
+{{- end }}

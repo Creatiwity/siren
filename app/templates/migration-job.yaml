@@ -4,11 +4,32 @@
      version. Argo CD maps these hooks to PreSync.
 
      Hooks run before the chart's other resources exist, so the Job does not
-     use the chart's ServiceAccount (it would not exist yet on first install).
+     use the chart's ServiceAccount nor its Secret (they would not exist yet on
+     first install): its passwords come from a hook Secret of its own, deleted
+     once the Job succeeds.
 
      Helm waits at most --timeout (5m by default) for hooks: raise it along with
      activeDeadlineSeconds for a long migration. */}}
 {{- if .Values.migrations.enabled -}}
+{{- $secret := printf "%s-migrate" (include "app.fullname" .) -}}
+{{- $data := include "app.secretData" (dict "root" . "keys" (list "databaseUrl" "databasePassword" "sentryDsn")) -}}
+{{- if and (not .Values.secrets.existingSecret) (trim $data) }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ $secret }}
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    # Before the Job.
+    "helm.sh/hook-weight": "-5"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+type: Opaque
+data:
+  {{- $data | nindent 2 }}
+---
+{{- end }}
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -27,41 +48,23 @@ spec:
     metadata:
       # Not the selector labels: the Service would pick this pod up.
       labels:
-        app.kubernetes.io/instance: {{ .Release.Name }}
-        app.kubernetes.io/component: migrate
+        {{- include "app.jobPodLabels" (dict "root" . "component" "migrate") | nindent 8 }}
     spec:
       restartPolicy: Never
-      {{- with .Values.imagePullSecrets }}
-      imagePullSecrets:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
-      securityContext:
-        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- include "app.podCommon" (dict "root" . "jobs" true) | nindent 6 }}
       containers:
         - name: "{{ include "app.fullname" . }}-migrate"
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- include "app.envFrom" . | nindent 10 }}
           env:
-            {{- include "app.databaseEnv" . | nindent 12 }}
-            - name: "RUST_LOG"
-              value: {{ .Values.rustLog }}
-            - name: "SIRENE_ENV"
-              value: {{ .Values.sireneEnv }}
-            - name: "SENTRY_DSN"
-              value: {{ .Values.sentryDsn }}
+            {{- include "app.databaseEnv" (dict "root" . "secret" $secret) | nindent 12 }}
+            {{- include "app.commonEnv" (dict "root" . "secret" $secret) | nindent 12 }}
           args: ["migrate"]
           {{- with .Values.migrations.resources }}
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-      {{- with .Values.nodeSelector }}
-      nodeSelector:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
-      {{- with .Values.tolerations }}
-      tolerations:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
 {{- end }}
