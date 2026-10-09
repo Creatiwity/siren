@@ -1,0 +1,25 @@
+{{- with .Values.podDisruptionBudget -}}
+{{- if .enabled -}}
+{{- if and (not (kindIs "invalid" .minAvailable)) (not (kindIs "invalid" .maxUnavailable)) -}}
+{{- fail "podDisruptionBudget: set either minAvailable or maxUnavailable, not both" -}}
+{{- end -}}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "app.fullname" $ }}
+  labels:
+    {{- include "app.labels" $ | nindent 4 }}
+spec:
+  {{- if not (kindIs "invalid" .minAvailable) }}
+  minAvailable: {{ .minAvailable }}
+  {{- else }}
+  maxUnavailable: {{ ternary 1 .maxUnavailable (kindIs "invalid" .maxUnavailable) }}
+  {{- end }}
+  {{- with .unhealthyPodEvictionPolicy }}
+  unhealthyPodEvictionPolicy: {{ . }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "app.selectorLabels" $ | nindent 6 }}
+{{- end }}
+{{- end }}

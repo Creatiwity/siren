@@ -1,0 +1,61 @@
+{{/* Listeners of the hosts, on an existing Gateway. Left out when the Gateway
+     already has them (e.g. a shared one): the HTTPRoute then attaches to it
+     through httpRoute.parentRefs. */}}
+{{- include "app.checkRemovedValues" . -}}
+{{- with .Values.listenerSet -}}
+{{- if .enabled -}}
+{{- if not .parentRef.name -}}
+{{- fail "listenerSet.enabled requires listenerSet.parentRef.name: the Gateway this ListenerSet attaches to" -}}
+{{- end -}}
+{{- $fullName := include "app.fullname" $ -}}
+{{- $tlsEntries := .tls -}}
+apiVersion: gateway.networking.k8s.io/v1
+kind: ListenerSet
+metadata:
+  name: {{ $fullName }}
+  labels:
+    {{- include "app.labels" $ | nindent 4 }}
+  {{- with .annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  parentRef:
+    group: gateway.networking.k8s.io
+    kind: Gateway
+    name: {{ .parentRef.name }}
+    {{- with .parentRef.namespace }}
+    namespace: {{ . }}
+    {{- end }}
+  listeners:
+    {{- range $i, $entry := .hosts }}
+    {{- $secretName := printf "%s-tls" $fullName }}
+    {{- range $tls := $tlsEntries }}
+    {{- if has $entry.host $tls.hosts }}
+    {{- $secretName = $tls.secretName }}
+    {{- end }}
+    {{- end }}
+    {{- $sfx := $entry.suffix | default (ternary (printf "%d" $i) "" (gt $i 0)) }}
+    - name: {{ if $sfx }}{{ printf "https-%s" $sfx }}{{ else }}https{{ end }}
+      hostname: {{ $entry.host | quote }}
+      port: 443
+      protocol: HTTPS
+      allowedRoutes:
+        namespaces:
+          from: Same
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - group: ""
+            kind: Secret
+            name: {{ $secretName }}
+    - name: {{ if $sfx }}{{ printf "http-%s" $sfx }}{{ else }}http{{ end }}
+      hostname: {{ $entry.host | quote }}
+      port: 80
+      protocol: HTTP
+      allowedRoutes:
+        namespaces:
+          from: Same
+    {{- end }}
+{{- end }}
+{{- end }}

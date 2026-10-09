@@ -1,3 +1,4 @@
+{{- if .Values.cronjob.enabled -}}
 apiVersion: batch/v1
 kind: CronJob
 metadata:
@@ -6,10 +7,27 @@ metadata:
     {{- include "app.labels" . | nindent 4 }}
 spec:
   schedule: {{ .Values.cronSchedule | quote }}
+  suspend: {{ .Values.cronjob.suspend }}
+  {{- with .Values.cronjob }}
+  {{- with .timeZone }}
+  timeZone: {{ . | quote }}
+  {{- end }}
+  concurrencyPolicy: {{ .concurrencyPolicy }}
+  {{- with .startingDeadlineSeconds }}
+  startingDeadlineSeconds: {{ . }}
+  {{- end }}
+  successfulJobsHistoryLimit: {{ .successfulJobsHistoryLimit }}
+  failedJobsHistoryLimit: {{ .failedJobsHistoryLimit }}
+  {{- end }}
   jobTemplate:
     spec:
       template:
+        metadata:
+          labels:
+            {{- include "app.jobPodLabels" (dict "root" . "component" "update") | nindent 12 }}
         spec:
+          serviceAccountName: {{ include "app.serviceAccountName" . }}
+          {{- include "app.podCommon" (dict "root" . "jobs" true) | nindent 10 }}
           restartPolicy: OnFailure
           containers:
             - name: "{{ include "app.fullname" . }}-job-updater"
@@ -17,15 +35,15 @@ spec:
                 {{- toYaml .Values.securityContext | nindent 16 }}
               image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
               imagePullPolicy: {{ .Values.image.pullPolicy }}
+              {{- include "app.envFrom" . | nindent 14 }}
               env:
-                {{- include "app.databaseEnv" . | nindent 16 }}
+                {{- include "app.databaseEnv" (dict "root" .) | nindent 16 }}
                 {{- include "app.skipMigrationsEnv" . | nindent 16 }}
-                - name: "RUST_LOG"
-                  value: {{ .Values.rustLog }}
-                - name: "SIRENE_ENV"
-                  value: {{ .Values.sireneEnv }}
-                - name: "INSEE_CREDENTIALS"
-                  value: {{ .Values.inseeCredentials }}
-                - name: "SENTRY_DSN"
-                  value: {{ .Values.sentryDsn }}
+                {{- include "app.secretEnv" (dict "root" . "env" "INSEE_CREDENTIALS" "key" "inseeCredentials") | nindent 16 }}
+                {{- include "app.commonEnv" (dict "root" .) | nindent 16 }}
               args: ["update", "all", "--crontab", {{ .Values.cronSchedule | quote }}]
+              {{- with .Values.updateResources }}
+              resources:
+                {{- toYaml . | nindent 16 }}
+              {{- end }}
+{{- end }}

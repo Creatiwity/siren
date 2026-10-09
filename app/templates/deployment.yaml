@@ -8,27 +8,43 @@ spec:
   {{- if not .Values.autoscaling.enabled }}
   replicas: {{ .Values.replicaCount }}
   {{- end }}
+  revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}
+  {{- with .Values.strategy }}
+  strategy:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
   selector:
     matchLabels:
       {{- include "app.selectorLabels" . | nindent 6 }}
   template:
     metadata:
-      {{- with .Values.podAnnotations }}
       annotations:
+        # Rolls the pods when a value of the chart Secret changes.
+        checksum/secret: {{ include "app.secretValues" . | sha256sum }}
+        {{- with .Values.podAnnotations }}
         {{- toYaml . | nindent 8 }}
-      {{- end }}
+        {{- end }}
       labels:
         {{- include "app.selectorLabels" . | nindent 8 }}
-    spec:
-      {{- with .Values.imagePullSecrets }}
-      imagePullSecrets:
+        app.kubernetes.io/component: api
+        {{- with .Values.podLabels }}
         {{- toYaml . | nindent 8 }}
-      {{- end }}
+        {{- end }}
+    spec:
       serviceAccountName: {{ include "app.serviceAccountName" . }}
       # Must exceed shutdownDelaySeconds plus the longest request to drain.
       terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
-      securityContext:
-        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- include "app.podCommon" (dict "root" .) | nindent 6 }}
+      {{- with .Values.topologySpreadConstraints }}
+      topologySpreadConstraints:
+        {{- range . }}
+        {{- $constraint := deepCopy . }}
+        {{- if not (hasKey $constraint "labelSelector") }}
+        {{- $_ := set $constraint "labelSelector" (dict "matchLabels" (include "app.selectorLabels" $ | fromYaml)) }}
+        {{- end }}
+        {{- list $constraint | toYaml | nindent 8 }}
+        {{- end }}
+      {{- end }}
       containers:
         - name: {{ .Chart.Name }}
           securityContext:
@@ -39,23 +55,21 @@ spec:
             - name: http
               containerPort: 3000
               protocol: TCP
+          {{- include "app.envFrom" . | nindent 10 }}
           env:
             {{- include "app.apiDatabaseEnv" . | nindent 12 }}
             - name: "DATABASE_POOL_SIZE"
               value: "{{ .Values.pgPoolSize }}"
             {{- include "app.skipMigrationsEnv" . | nindent 12 }}
-            - name: "RUST_LOG"
-              value: {{ .Values.rustLog }}
-            - name: "SIRENE_ENV"
-              value: {{ .Values.sireneEnv }}
-            - name: "BASE_URL"
-              value: {{ .Values.baseUrl }}
-            - name: "SENTRY_DSN"
-              value: {{ .Values.sentryDsn }}
+            {{- include "app.optionalEnv" (dict "name" "BASE_URL" "value" .Values.baseUrl) | nindent 12 }}
+            # /admin: its key, and INSEE for the updates it launches.
+            {{- include "app.secretEnv" (dict "root" . "env" "API_KEY" "key" "apiKey") | nindent 12 }}
+            {{- include "app.secretEnv" (dict "root" . "env" "INSEE_CREDENTIALS" "key" "inseeCredentials") | nindent 12 }}
             - name: "TOKIO_WORKER_THREADS"
               value: "{{ .Values.tokioWorkerThreads }}"
             - name: "SHUTDOWN_DELAY_SECONDS"
               value: "{{ .Values.shutdownDelaySeconds }}"
+            {{- include "app.commonEnv" (dict "root" .) | nindent 12 }}
           # Migrations (or their check, with migrations.enabled) run before the
           # listener opens: the startup probe holds back the liveness probe
           # until then, instead of killing a pod that is still migrating.
@@ -77,17 +91,7 @@ spec:
               path: /health/ready
               port: http
             {{- toYaml .Values.probes.readiness | nindent 12 }}
+          {{- with .Values.resources }}
           resources:
-            {{- toYaml .Values.resources | nindent 12 }}
-      {{- with .Values.nodeSelector }}
-      nodeSelector:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
-      {{- with .Values.affinity }}
-      affinity:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
-      {{- with .Values.tolerations }}
-      tolerations:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
