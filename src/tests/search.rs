@@ -114,6 +114,38 @@ async fn index_fts_utilise_sur_unite_legale() {
     );
 }
 
+/// With a commune, the planner used to AND the text bitmap with a commune-sized
+/// one (3.9 M rows for Paris, ~450 ms each time). The composite index resolves
+/// both conditions in a single scan.
+///
+/// Matched on the name suffix: the swap trades table names, so the index carries
+/// the `etablissement_staging_` prefix one update out of two.
+#[tokio::test]
+async fn index_fts_commune_utilise_avec_une_commune() {
+    let mut connection = require_database!();
+
+    let vector = search::search_vector(Some("e"), search::ETABLISSEMENT_SEARCH_COLUMNS);
+    let codes = (1..=20)
+        .map(|arrondissement| format!("751{arrondissement:02}"))
+        .collect::<Vec<_>>()
+        .join(",");
+    let sql = format!(
+        "SELECT e.siret FROM etablissement e \
+         WHERE {vector} @@ 'carrefour'::tsquery AND e.code_commune = ANY('{{{codes}}}'::text[]) \
+         LIMIT 20"
+    );
+
+    let plan = query_plan(&mut connection, &sql).await;
+    assert!(
+        plan.contains("search_fts_commune_idx"),
+        "texte + commune n'utilise pas l'index composite.\n{plan}"
+    );
+    assert!(
+        !plan.contains("commune_date_idx"),
+        "le bitmap de la commune est revenu.\n{plan}"
+    );
+}
+
 #[tokio::test]
 async fn index_trigramme_utilise_en_repli() {
     let mut connection = require_database!();

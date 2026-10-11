@@ -76,6 +76,7 @@ PostgreSQL 14+ with extensions (all contrib, available on every managed provider
 - `unaccent` (accent folding)
 - `pg_trgm` (commune name matching, correction candidates, search fallback)
 - `fuzzystrmatch` (Levenshtein re-ranking of correction candidates)
+- `btree_gin` (`code_commune` next to the tsvector in `etablissement_search_fts_commune_idx`, so `q` + `commune` never builds a commune-sized bitmap)
 
 Full-text search itself needs no extension: it uses the core `tsvector`/`tsquery` machinery with the `french` configuration.
 
