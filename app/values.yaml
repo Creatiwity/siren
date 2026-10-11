@@ -17,11 +17,16 @@ fullnameOverride: ""
 # Options
 rustLog: "sirene=info"
 sireneEnv: "production"
+# Primary database, either as a URL (postgresql://user:password@host:port/db),
+# or as the separate pg* fields below. The URL wins when both are set. Stored in
+# the chart Secret, since it carries the password.
+databaseUrl:
 pgHost:
 pgPort:
 pgPoolSize: 200
 pgDatabase:
 pgUsername:
+# Sensitive: stored in the chart Secret (see `secrets`), never in a pod spec.
 pgPassword:
 apiKey:
 baseUrl:
@@ -29,6 +34,63 @@ inseeCredentials:
 sentryDsn:
 cronSchedule: "0 4 * * *"
 tokioWorkerThreads: 10
+# Resources of the update CronJob.
+updateResources:
+  requests:
+    cpu: 500m
+    memory: 1Gi
+
+# Sensitive values (databaseUrl, pgPassword, apiDatabase.url,
+# apiDatabase.password, apiKey, inseeCredentials, sentryDsn) go to a Secret
+# created by the chart, only with the keys that are set. The migration hook
+# gets its own short-lived copy, since it runs before the release resources
+# exist on first install.
+secrets:
+  # Use an existing Secret instead (the values above are then ignored). Every
+  # key is optional: a Secret holding only DATABASE_URL works.
+  existingSecret: ""
+  # Key names in the Secret. The API reads apiDatabaseUrl / apiDatabasePassword
+  # only when they are set (existingSecret) or apiDatabase.url / .password are
+  # (chart Secret, stored as API_DATABASE_URL / API_DATABASE_PASSWORD), the
+  # primary's keys otherwise.
+  keys:
+    databaseUrl: DATABASE_URL
+    apiDatabaseUrl: ""
+    databasePassword: DATABASE_PASSWORD
+    apiDatabasePassword: ""
+    apiKey: API_KEY
+    inseeCredentials: INSEE_CREDENTIALS
+    sentryDsn: SENTRY_DSN
+
+# Added to every container (API, update jobs, migration hook). The chart only
+# sets the variables whose value is configured, so these can provide the rest,
+# e.g. DATABASE_URL from a Secret managed elsewhere. `env` wins over `envFrom`.
+envFrom: []
+#  - secretRef:
+#      name: siren-database
+#  - configMapRef:
+#      name: siren-config
+extraEnv: []
+#  - name: FOO
+#    value: bar
+
+# Update CronJob (`update all`).
+cronjob:
+  # false: no update CronJob at all, updates are driven from elsewhere (/admin,
+  # an external scheduler).
+  enabled: true
+  # true: the CronJob stays as a template for manual runs, but never fires,
+  #   kubectl create job --from=cronjob/<fullname> <fullname>-manual
+  suspend: false
+  # Two `update all` running together would swap the same tables.
+  concurrencyPolicy: Forbid
+  # A run missed by more than this (controller down, cluster upgrade) is skipped
+  # instead of starting late.
+  startingDeadlineSeconds: 3600
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  # IANA name, e.g. Europe/Paris. Cluster time zone (usually UTC) when empty.
+  timeZone: ""
 
 # Database migrations, applied by a Job run as a pre-install/pre-upgrade hook.
 # The API and the updater then start with SKIP_MIGRATIONS=true: they only check,
@@ -40,16 +102,21 @@ migrations:
   # Also pass a large enough `helm upgrade --timeout` (5m by default), which
   # bounds the wait on hooks.
   activeDeadlineSeconds: 1800
-  resources: {}
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
 
 # Optional connection for the API Deployment only, typically a read replica.
-# Each empty field falls back to its pg* counterpart; the migration Job and the
-# updater CronJob always use pg*. Requires migrations.enabled.
+# Either `url`, or fields that each fall back to their pg* counterpart (so with
+# databaseUrl alone, give the replica as `url`). The migration Job and the
+# updater CronJob always use the primary. Requires migrations.enabled.
 # - /admin endpoints that launch an update write to the database, so they fail
 #   against a read replica: trigger updates through the CronJob.
 # - Right after a migration, a lagging replica may still report it as pending:
 #   the new pods then exit and are restarted until the replica catches up.
 apiDatabase:
+  url:
   host:
   port:
   database:
@@ -82,6 +149,8 @@ probes:
 serviceAccount:
   # Specifies whether a service account should be created
   create: true
+  # The API never calls the Kubernetes API: no token is mounted.
+  automount: false
   # Annotations to add to the service account
   annotations: {}
   # The name of the service account to use.
@@ -89,17 +158,25 @@ serviceAccount:
   name: ""
 
 podAnnotations: {}
+# Added to every pod (API, jobs). Never used as a selector.
+podLabels: {}
 
-podSecurityContext: {}
-  # fsGroup: 2000
+priorityClassName: ""
 
-securityContext: {}
-  # capabilities:
-  #   drop:
-  #   - ALL
+# Distroless image: its `nonroot` user (65532) has no shell and owns nothing.
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  runAsGroup: 65532
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
   # readOnlyRootFilesystem: true
-  # runAsNonRoot: true
-  # runAsUser: 1000
 
 service:
   type: ClusterIP
@@ -121,17 +198,24 @@ ingress:
   #    hosts:
   #      - siren-api.local
 
-# Gateway API routing, as an alternative to the Ingress above. Never enable both
-# for the same host while either carries a certificate annotation.
-gateway:
+# Gateway API routing, as an alternative to the Ingress above, for any
+# controller (kgateway, APISIX, ...). Never enable it for a host the Ingress
+# still serves while either carries a certificate annotation: ingress-shim and
+# gateway-shim would fight over the Certificate and renewal silently stops.
+
+# Listeners of the hosts, attached to an existing Gateway. Leave it disabled
+# when the Gateway already has them, e.g. a shared one.
+listenerSet:
   enabled: false
-  # Annotations on the ListenerSet, e.g. cert-manager.io/cluster-issuer.
+  # E.g. cert-manager.io/cluster-issuer.
   annotations: {}
   # The Gateway this ListenerSet attaches to. Required when enabled.
   parentRef:
     name: ""
     # Defaults to the release namespace when empty.
     namespace: ""
+  # One HTTPS (443) and one HTTP (80) listener per host. `suffix` names them
+  # (https-<suffix>), the index by default.
   hosts:
     - host: siren-api.local
   # Pins the TLS secret per host. Defaults to "<fullname>-tls" when unset.
@@ -140,39 +224,123 @@ gateway:
   #    hosts:
   #      - siren-api.local
 
-# extAuth -- Puts the /v3 route behind an external authorization service, which
-# resolves the caller's api key and injects its identity and tier. /scalar,
-# /admin and the health check are on a separate route and stay open.
-# The GatewayExtension named here is created by the chart that owns the auth
-# service, not by this one.
-extAuth:
+# A single HTTPRoute to the Service. Authentication is set by `auth` below;
+# other filters (rewrites, an ExtensionRef to a resource managed elsewhere)
+# are set here.
+httpRoute:
   enabled: false
-  extensionRef:
-    name: ""
-    # Defaults to the release namespace when empty.
-    namespace: ""
+  annotations: {}
+  # Gateway API ParentReferences. Empty: the chart's ListenerSet (requires
+  # listenerSet.enabled).
+  parentRefs: []
+  #  - name: shared-gateway
+  #    namespace: gateway-system
+  #    sectionName: https
+  # Empty: the hosts of listenerSet.hosts.
+  hostnames: []
+  # Default rule. Empty matches: PathPrefix /.
+  matches: []
+  filters: []
+  # Further HTTPRouteRules. A rule without backendRefs goes to the Service.
+  # Matching is by specificity, not order: a /v3 rule wins over the default /.
+  extraRules: []
+  #  - matches:
+  #      - path: {type: PathPrefix, value: /legacy}
+  #    backendRefs:
+  #      - name: legacy
+  #        port: 8080
 
-resources: {}
-  # We usually recommend not to specify default resources and to leave this as a conscious
-  # choice for the user. This also increases chances charts run on environments with little
-  # resources, such as Minikube. If you do want to specify resources, uncomment the following
-  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+# Authentication on part of the HTTPRoute, for the controller in use. The chart
+# creates the controller's resource (<fullname>-auth) and adds a rule with
+# `matches`, carrying the default rule's filters plus an ExtensionRef to it. Paths outside
+# `matches` (/scalar, /admin with its own key, /, /health/*) stay open.
+auth:
+  # "" (none), kgateway or apisix. Requires httpRoute.enabled.
+  provider: ""
+  matches:
+    - path:
+        type: PathPrefix
+        value: /v3
+  # TrafficPolicy with external authorization, which resolves the caller's api
+  # key and injects the identity and tier headers the API sees.
+  kgateway:
+    # The GatewayExtension of the ext auth service, created by the chart that
+    # owns that service. Across namespaces this is allowed under kgateway's
+    # default PERMISSIVE reference-grant mode; under STRICT it also needs a
+    # ReferenceGrant in the extension's namespace.
+    extensionRef:
+      name: ""
+      # Defaults to the release namespace when empty.
+      namespace: ""
+  # PluginConfig: its plugins, as APISIX expects them.
+  apisix:
+    plugins: []
+    #  - name: key-auth
+    #    enable: true
+    #  - name: forward-auth
+    #    enable: true
+    #    config:
+    #      uri: http://ext-auth.auth.svc/verify
+    #      request_headers: [apikey]
+    #      upstream_headers: [x-user-id, x-tier]
+
+# Requests only by default: a CPU limit throttles the Tokio workers. Set the
+# memory limit once measured.
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
   # limits:
-  #   cpu: 100m
-  #   memory: 128Mi
-  # requests:
-  #   cpu: 100m
-  #   memory: 128Mi
+  #   memory: 1Gi
 
 autoscaling:
   enabled: false
   minReplicas: 1
+  # Each replica opens up to pgPoolSize connections: keep
+  # maxReplicas * pgPoolSize under the database max_connections.
   maxReplicas: 100
   targetCPUUtilizationPercentage: 80
   # targetMemoryUtilizationPercentage: 80
+
+# Rolling update: a new pod is ready before an old one goes away.
+strategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxSurge: 1
+    maxUnavailable: 0
+
+revisionHistoryLimit: 5
+
+# PodDisruptionBudget of the API pods, honoured by node drains and upgrades.
+podDisruptionBudget:
+  enabled: true
+  # Set at most one; maxUnavailable: 1 when both are empty. maxUnavailable: 1
+  # never blocks a drain, even with a single replica; minAvailable: 1 with a
+  # single replica would block it forever.
+  maxUnavailable:
+  minAvailable:
+  # Readiness checks the database: during an outage every pod is unready, and
+  # the default policy (IfHealthyBudget) would then block drains. Requires
+  # Kubernetes 1.27+; set to "" on older clusters.
+  unhealthyPodEvictionPolicy: AlwaysAllow
 
 nodeSelector: {}
 
 tolerations: []
 
 affinity: {}
+
+# Spread the API pods, e.g. over nodes or zones. labelSelector defaults to the
+# API pods.
+topologySpreadConstraints: []
+#  - maxSkew: 1
+#    topologyKey: kubernetes.io/hostname
+#    whenUnsatisfiable: ScheduleAnyway
+
+# Scheduling of the update CronJob and the migration hook. Each empty field
+# falls back to its top-level counterpart, e.g. to run updates on high-memory
+# nodes.
+jobs:
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}

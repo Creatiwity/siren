@@ -9,7 +9,7 @@ metadata:
 spec:
   containers:
     - name: wget
-      image: busybox
+      image: busybox:1.37
       command: ['wget']
-      args: ['{{ include "app.fullname" . }}:{{ .Values.service.port }}']
+      args: ['-qO-', '{{ include "app.fullname" . }}:{{ .Values.service.port }}/health/ready']
   restartPolicy: Never

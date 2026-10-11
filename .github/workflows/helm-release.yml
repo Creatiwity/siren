@@ -6,12 +6,15 @@ on:
       - v*
     paths:
       - "app/**"
+  # Publishes the current chart version, e.g. one released before the OCI push.
+  workflow_dispatch:
 
 jobs:
   release:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      packages: write
 
     steps:
       - name: Checkout
@@ -33,3 +36,19 @@ jobs:
           charts_dir: .
         env:
           CR_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+
+      # Same chart, also as an OCI artifact: oci://ghcr.io/creatiwity/charts/siren.
+      # A published version is never overwritten.
+      - name: Push the chart to GHCR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          version=$(helm show chart app | awk '$1 == "version:" {print $2}')
+          echo "$GH_TOKEN" | helm registry login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          if helm show chart oci://ghcr.io/creatiwity/charts/siren --version "$version" > /dev/null 2>&1; then
+            echo "siren $version already on GHCR"
+            exit 0
+          fi
+          helm package app --destination "$RUNNER_TEMP"
+          helm push "$RUNNER_TEMP/siren-$version.tgz" oci://ghcr.io/creatiwity/charts

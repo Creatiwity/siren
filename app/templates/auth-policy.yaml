@@ -1,0 +1,42 @@
+{{/* The authentication resource of auth.provider. It has no target of its
+     own: httproute.yaml attaches it with an ExtensionRef filter, on the rules
+     of auth.matches only. */}}
+{{- $auth := .Values.auth | default dict -}}
+{{- with $auth.provider -}}
+{{- if not $.Values.httpRoute.enabled -}}
+{{- fail "auth.provider requires httpRoute.enabled: there is no route to protect" -}}
+{{- end -}}
+{{- if eq . "kgateway" -}}
+{{- if not $auth.kgateway.extensionRef.name -}}
+{{- fail "auth.provider kgateway requires auth.kgateway.extensionRef.name: the GatewayExtension of the auth service" -}}
+{{- end -}}
+apiVersion: gateway.kgateway.dev/v1alpha1
+kind: TrafficPolicy
+metadata:
+  name: {{ include "app.authPolicyName" $ }}
+  labels:
+    {{- include "app.labels" $ | nindent 4 }}
+spec:
+  extAuth:
+    extensionRef:
+      name: {{ $auth.kgateway.extensionRef.name }}
+      {{- with $auth.kgateway.extensionRef.namespace }}
+      namespace: {{ . }}
+      {{- end }}
+{{- else if eq . "apisix" -}}
+{{- if not $auth.apisix.plugins -}}
+{{- fail "auth.provider apisix requires auth.apisix.plugins, e.g. key-auth or forward-auth" -}}
+{{- end -}}
+apiVersion: apisix.apache.org/v2
+kind: PluginConfig
+metadata:
+  name: {{ include "app.authPolicyName" $ }}
+  labels:
+    {{- include "app.labels" $ | nindent 4 }}
+spec:
+  plugins:
+    {{- toYaml $auth.apisix.plugins | nindent 4 }}
+{{- else -}}
+{{- fail (printf "auth.provider %q: expected kgateway or apisix" .) -}}
+{{- end -}}
+{{- end }}
