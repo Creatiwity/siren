@@ -171,7 +171,7 @@ GET /v3/unites_legales?q=<text>&sort=<field>&direction=<asc|desc>&limit=<number>
 
 **Maintenance**
 
-_This API is enabled only if you have provided an API_KEY when starting the `serve` process._
+_This API is enabled only if you have provided a non-empty API_KEY when starting the `serve` process: otherwise `/admin` is not served (404) and is left out of the OpenAPI documentation._
 
 ```
 POST /admin/update

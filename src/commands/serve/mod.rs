@@ -58,7 +58,9 @@ pub async fn run(flags: ServeFlags, builders: ConnectorsBuilders) {
         addr,
         Context {
             builders,
-            api_key: flags.api_key,
+            // `API_KEY=` (empty) disables the admin endpoints too, instead of
+            // accepting an empty key.
+            api_key: flags.api_key.filter(|key| !key.is_empty()),
             base_url: flags.base_url,
             shutting_down: Default::default(),
         },

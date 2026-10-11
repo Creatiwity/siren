@@ -15,6 +15,7 @@ pub const PUBLIC_TAG: &str = "public";
 #[derive(Clone)]
 pub struct Context {
     pub builders: ConnectorsBuilders,
+    /// Admin key; `/admin` is only mounted when set.
     pub api_key: Option<String>,
     pub base_url: Option<String>,
     /// Set on SIGTERM, so readiness fails while in-flight requests drain.
