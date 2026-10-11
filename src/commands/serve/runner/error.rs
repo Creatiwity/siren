@@ -14,7 +14,6 @@ use tracing::error;
 custom_error! { pub Error
     InvalidData = "Invalid data",
     InvalidSearchParams{message: String} = "Invalid search parameters: {message}",
-    MissingApiKey = "[Admin] Missing API key in configuration",
     ApiKey = "[Admin] Wrong API key",
     MissingBaseUrlForAsync = "[Admin] No BASE_URL configured, needed for asynchronous updates",
     LocalConnectionFailed{source: PoolError} = "Unable to connect to local database ({source}).",
@@ -42,7 +41,6 @@ impl IntoResponse for Error {
             Error::InvalidSearchParams { message: _ } => {
                 (StatusCode::BAD_REQUEST, self.to_string())
             }
-            Error::MissingApiKey => (StatusCode::UNAUTHORIZED, self.to_string()),
             Error::ApiKey => (StatusCode::UNAUTHORIZED, self.to_string()),
             Error::MissingBaseUrlForAsync => (StatusCode::BAD_REQUEST, self.to_string()),
             Error::SirenDoublonLookup { source: _ } => {

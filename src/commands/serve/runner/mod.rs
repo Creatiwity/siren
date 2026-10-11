@@ -45,8 +45,16 @@ pub async fn run(addr: SocketAddr, context: Context, shutdown_delay: Duration) {
 
     let (health_router, health_api) = health::router().split_for_parts();
 
-    let (router, mut api) = OpenApiRouter::with_openapi(ApiDoc::openapi())
-        .nest("/admin", admin::router())
+    let router = OpenApiRouter::with_openapi(ApiDoc::openapi());
+    // Without an API key the admin endpoints are not served, nor documented.
+    let router = match shared_context.api_key.as_deref() {
+        Some(api_key) => router.nest("/admin", admin::router(api_key)),
+        None => {
+            info!("Admin endpoints disabled: no API_KEY");
+            router
+        }
+    };
+    let (router, mut api) = router
         .nest("/v3/etablissements", etablissements::router())
         .nest(
             "/v3/etablissements/liens_succession",
