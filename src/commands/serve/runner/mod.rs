@@ -9,8 +9,10 @@ mod unites_legales;
 
 pub mod common;
 
+use axum::body::Bytes;
 use axum::http::{Method, header};
-use axum::middleware;
+use axum::routing::get;
+use axum::{Router, middleware};
 use common::Context;
 use sentry::integrations::tower::{NewSentryLayer, SentryHttpLayer};
 use std::net::SocketAddr;
@@ -28,8 +30,7 @@ use utoipa_scalar::{Scalar, Servable};
         title = "Siren API",
         description = "API providing information about all companies in France",
         contact(name = "Julien Blatecky", email = "contact@creatiwity.net"),
-        license(name = "MIT", url = "https://opensource.org/licenses/MIT"),
-        version = "5.1.1"
+        license(name = "MIT", url = "https://opensource.org/licenses/MIT")
     ),
     tags(
         (name = common::PUBLIC_TAG, description = "Public endpoint"),
@@ -56,13 +57,18 @@ pub async fn run(addr: SocketAddr, context: Context, shutdown_delay: Duration) {
         .split_for_parts();
     api.merge(health_api);
 
-    let app = router
-        .layer(
-            tower_http::cors::CorsLayer::new()
-                .allow_methods([Method::GET, Method::POST])
-                .allow_headers([header::CONTENT_TYPE])
-                .allow_origin(tower_http::cors::Any),
+    // Serialized once: the spec never changes after startup.
+    let spec = Bytes::from(api.to_json().expect("Unable to serialize the OpenAPI spec"));
+    let openapi_router = Router::new()
+        .route(
+            "/openapi.json",
+            get(move || async move { ([(header::CONTENT_TYPE, "application/json")], spec) }),
         )
+        .layer(cors_layer())
+        .layer(tower_http::compression::CompressionLayer::new());
+
+    let app = router
+        .layer(cors_layer())
         .merge(Scalar::with_url("/scalar", api))
         .layer(tower_http::compression::CompressionLayer::new())
         .layer(tower_http::trace::TraceLayer::new_for_http())
@@ -70,9 +76,10 @@ pub async fn run(addr: SocketAddr, context: Context, shutdown_delay: Duration) {
         .layer(middleware::from_fn(trace::siren_context_middleware))
         .layer(NewSentryLayer::new_from_top())
         .layer(middleware::from_fn(trace::traceparent_middleware))
-        // Merged after the layers on purpose: probes stay out of Sentry
-        // transactions and request traces.
+        // Merged after the layers on purpose: probes and the static spec stay
+        // out of Sentry transactions and request traces.
         .merge(health_router)
+        .merge(openapi_router)
         .with_state(shared_context);
 
     axum::serve(
@@ -82,6 +89,13 @@ pub async fn run(addr: SocketAddr, context: Context, shutdown_delay: Duration) {
     .with_graceful_shutdown(shutdown_signal(shutting_down, shutdown_delay))
     .await
     .unwrap();
+}
+
+fn cors_layer() -> tower_http::cors::CorsLayer {
+    tower_http::cors::CorsLayer::new()
+        .allow_methods([Method::GET, Method::POST])
+        .allow_headers([header::CONTENT_TYPE])
+        .allow_origin(tower_http::cors::Any)
 }
 
 /// Resolves when the server should stop accepting connections.
