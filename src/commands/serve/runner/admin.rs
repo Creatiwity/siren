@@ -4,7 +4,7 @@ use crate::models;
 use crate::models::update_metadata::common::UpdateMetadata;
 use crate::update::{common::Config as DataConfig, update as update_data};
 use axum::{
-    Json,
+    Extension, Json,
     body::Body,
     extract::{Query, State},
     http::StatusCode,
@@ -40,16 +40,10 @@ impl From<UpdateMetadata> for StatusCode {
 )]
 async fn post_update(
     State(context): State<Arc<Context>>,
+    Extension(api_key): Extension<ApiKey>,
     Json(options): Json<UpdateOptions>,
 ) -> Result<Response, Error> {
-    let api_key = match &context.api_key {
-        Some(key) => key,
-        None => return Err(Error::MissingApiKey),
-    };
-
-    if &options.api_key != api_key {
-        return Err(Error::ApiKey);
-    }
+    api_key.check(&options.api_key)?;
 
     if options.asynchronous && context.base_url.is_none() {
         return Err(Error::MissingBaseUrlForAsync);
@@ -68,7 +62,7 @@ async fn post_update(
     )
     .await?;
 
-    reply_with_update_metadata(update_metadata, context.base_url.clone(), api_key)
+    reply_with_update_metadata(update_metadata, context.base_url.clone(), &api_key.0)
 }
 
 /// Get update status
@@ -88,22 +82,16 @@ async fn post_update(
 )]
 async fn get_update_status(
     State(context): State<Arc<Context>>,
+    Extension(api_key): Extension<ApiKey>,
     Query(query): Query<StatusQueryString>,
 ) -> Result<Response, Error> {
-    let api_key = match &context.api_key {
-        Some(key) => key,
-        None => return Err(Error::MissingApiKey),
-    };
-
-    if &query.api_key != api_key {
-        return Err(Error::ApiKey);
-    }
+    api_key.check(&query.api_key)?;
 
     let connectors = context.builders.create();
 
     let update_metadata = models::update_metadata::current_update(&connectors).await?;
 
-    reply_with_update_metadata(update_metadata, context.base_url.clone(), api_key)
+    reply_with_update_metadata(update_metadata, context.base_url.clone(), &api_key.0)
 }
 
 fn reply_with_update_metadata<T: Serialize + Clone + Into<StatusCode>>(
@@ -144,16 +132,10 @@ fn reply_with_update_metadata<T: Serialize + Clone + Into<StatusCode>>(
 )]
 async fn post_update_status_to_error(
     State(context): State<Arc<Context>>,
+    Extension(api_key): Extension<ApiKey>,
     Json(query): Json<StatusQueryString>,
 ) -> Result<Response, Error> {
-    let api_key = match &context.api_key {
-        Some(key) => key,
-        None => return Err(Error::MissingApiKey),
-    };
-
-    if &query.api_key != api_key {
-        return Err(Error::ApiKey);
-    }
+    api_key.check(&query.api_key)?;
 
     let connectors = context.builders.create();
 
@@ -167,8 +149,25 @@ async fn post_update_status_to_error(
     Ok(Response::new(Body::empty()))
 }
 
-pub fn router() -> OpenApiRouter<Arc<Context>> {
+/// The configured admin key, handed to the handlers by the router layer.
+#[derive(Clone)]
+struct ApiKey(Arc<str>);
+
+impl ApiKey {
+    fn check(&self, provided: &str) -> Result<(), Error> {
+        if provided == &*self.0 {
+            Ok(())
+        } else {
+            Err(Error::ApiKey)
+        }
+    }
+}
+
+/// Only mounted when an API key is configured: without one, `/admin` is not
+/// served at all (404) rather than answering every call with an error.
+pub fn router(api_key: &str) -> OpenApiRouter<Arc<Context>> {
     OpenApiRouter::new()
         .routes(routes!(post_update, get_update_status))
         .routes(routes!(post_update_status_to_error))
+        .layer(Extension(ApiKey(Arc::from(api_key))))
 }

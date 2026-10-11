@@ -52,7 +52,7 @@ cargo run -- update etablissements
 Each model follows the pattern: `mod.rs` (queries/CRUD), `common.rs` (structs/types), `error.rs`
 
 ### HTTP Routes (`src/commands/serve/runner/`)
-Routes map to `/v3/etablissements`, `/v3/unites_legales`, `/v3/etablissements/liens_succession`, and `/admin`.
+Routes map to `/v3/etablissements`, `/v3/unites_legales`, `/v3/etablissements/liens_succession`, and `/admin`. `/admin` is only mounted when `API_KEY` is set and non-empty; the key reaches its handlers as an `Extension`.
 
 Probes live in `health.rs`: `/health/live` (process only, never a dependency) and `/health/ready` (database `SELECT 1` under a 2 s timeout, 503 once SIGTERM is received). They are merged after the Sentry/trace layers so probes do not create transactions. `/` is data-freshness metadata, not a probe. On SIGTERM the server fails readiness for `SHUTDOWN_DELAY_SECONDS`, then shuts down gracefully.
 
