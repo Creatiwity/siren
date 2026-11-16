@@ -438,6 +438,23 @@ mod tests {
         assert!(SyncConfig::new("/d".into(), " ", None, false).is_err());
     }
 
+    /// The real thing: downloads the published index (3.3 GB) twice, the
+    /// second time a no-op. `cargo test --features geocoding -- --ignored
+    /// published_index`, with GEOCODING_TEST_DIR on a disk with room.
+    #[tokio::test]
+    #[ignore]
+    async fn published_index() {
+        let dir = PathBuf::from(std::env::var("GEOCODING_TEST_DIR").expect("GEOCODING_TEST_DIR"));
+        let config = SyncConfig::new(dir.join("index.bin"), DEFAULT_BASE_URL, None, false).unwrap();
+        let first = sync(&config).await.unwrap();
+        assert!(matches!(first, SyncOutcome::Downloaded { .. }), "{first:?}");
+        let second = sync(&config).await.unwrap();
+        assert!(matches!(second, SyncOutcome::UpToDate { .. }), "{second:?}");
+        let geocoder = geocoder_core::Geocoder::open(&config.index_path).unwrap();
+        let results = geocoder.search("8 bd du port nanterre", Default::default());
+        assert_eq!(results[0].label, "8 Rue du Port 92000 Nanterre");
+    }
+
     #[test]
     fn sidecar_next_to_the_index() {
         assert_eq!(
