@@ -6,7 +6,7 @@ metadata:
   labels:
     {{- include "app.labels" . | nindent 4 }}
   annotations:
-    # The index takes minutes to rebuild: keep it across uninstalls.
+    # The index takes minutes to download: keep it across uninstalls.
     "helm.sh/resource-policy": keep
 spec:
   accessModes:

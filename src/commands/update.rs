@@ -31,33 +31,26 @@ pub struct UpdateFlags {
 #[cfg(feature = "geocoding")]
 #[derive(clap::Args, Debug)]
 struct GeocodingFlags {
-    /// Geocoding index file to build or refresh (the one `serve` reads)
+    /// Geocoding index file to refresh (the one `serve` reads)
     #[clap(long = "geocoding-index-path", env = "GEOCODING_INDEX_PATH")]
     index_path: Option<std::path::PathBuf>,
 
-    /// Source of the index: URL or local path, gzipped if it ends with .gz
+    /// Where the prebuilt, signed indexes are published (the format version
+    /// is appended)
     #[clap(
-        long = "geocoding-source-url",
-        env = "GEOCODING_SOURCE_URL",
-        default_value = crate::geocoding::DEFAULT_SOURCE_URL
+        long = "geocoding-index-base-url",
+        env = "GEOCODING_INDEX_BASE_URL",
+        default_value = crate::geocoding::sync::DEFAULT_BASE_URL
     )]
-    source_url: String,
+    base_url: String,
 
-    /// Source format: addok (BAN exports) or bano
+    /// Public keys trusted to sign the indexes, comma separated (hex);
+    /// default: the geocoder-core CI's
     #[clap(
-        long = "geocoding-source-format",
-        env = "GEOCODING_SOURCE_FORMAT",
-        default_value = "addok"
+        long = "geocoding-index-public-keys",
+        env = "GEOCODING_INDEX_PUBLIC_KEYS"
     )]
-    source_format: String,
-
-    /// Text processing profile of the index
-    #[clap(
-        long = "geocoding-profile",
-        env = "GEOCODING_PROFILE",
-        default_value = "fr"
-    )]
-    profile: String,
+    public_keys: Option<String>,
 
     /// Also sync the geocoding index after `update all` (when an index path is set)
     #[clap(
@@ -159,8 +152,9 @@ pub async fn run(flags: UpdateFlags, builders: ConnectorsBuilders) {
     }
 }
 
-/// Build or refresh the geocoding index. `required`: fail when no index path
-/// is configured (explicit `update geocoding`), rather than skip.
+/// Download the published geocoding index when it changed. `required`: fail
+/// when no index path is configured (explicit `update geocoding`), rather
+/// than skip.
 #[cfg(feature = "geocoding")]
 async fn sync_geocoding(flags: &GeocodingFlags, force: bool, required: bool) {
     use crate::geocoding::sync::{SyncConfig, sync};
@@ -175,12 +169,17 @@ async fn sync_geocoding(flags: &GeocodingFlags, force: bool, required: bool) {
         tracing::debug!("No geocoding index path configured, skipping the geocoding sync");
         return;
     };
-    let config = SyncConfig {
+    let config = match SyncConfig::new(
         index_path,
-        source_url: flags.source_url.clone(),
-        source_format: flags.source_format.clone(),
-        profile: flags.profile.clone(),
+        &flags.base_url,
+        flags.public_keys.as_deref(),
         force,
+    ) {
+        Ok(config) => config,
+        Err(error) => {
+            tracing::error!("{error}");
+            crate::telemetry::exit(1);
+        }
     };
     match sync(&config).await {
         Ok(outcome) => println!(

@@ -1,5 +1,5 @@
-{{/* `update geocoding` alone. Suspended by default: a template for the first
-     build right after install,
+{{/* `update geocoding` alone (downloads the prebuilt index). Suspended by
+     default: a template for the first download right after install,
        kubectl create job --from=cronjob/<fullname>-geocoding <fullname>-geocoding-init
      The nightly `update all` keeps the index fresh afterwards
      (geocoding.withUpdateAll). */}}

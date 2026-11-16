@@ -282,8 +282,14 @@ Geocoding: claim name, environment and volume of the index
 {{- if .Values.geocoding.enabled }}
 - name: "GEOCODING_INDEX_PATH"
   value: {{ .Values.geocoding.indexPath | quote }}
-- name: "GEOCODING_SOURCE_URL"
-  value: {{ .Values.geocoding.sourceUrl | quote }}
+{{- with .Values.geocoding.indexBaseUrl }}
+- name: "GEOCODING_INDEX_BASE_URL"
+  value: {{ . | quote }}
+{{- end }}
+{{- with .Values.geocoding.publicKeys }}
+- name: "GEOCODING_INDEX_PUBLIC_KEYS"
+  value: {{ . | quote }}
+{{- end }}
 - name: "GEOCODING_WITH_UPDATE_ALL"
   value: "{{ .Values.geocoding.withUpdateAll }}"
 - name: "GEOCODING_RELOAD_INTERVAL_SECONDS"

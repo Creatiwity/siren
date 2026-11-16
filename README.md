@@ -172,27 +172,33 @@ GET /v3/unites_legales?q=<text>&sort=<field>&direction=<asc|desc>&limit=<number>
 #### Address geocoding (feature `geocoding`)
 
 Addresses are geocoded with [geocoder-core](https://github.com/Creatiwity/geocoder-core),
-a port of addok ranking like the BAN API, on an index built from the BAN
-export. Build with `cargo build --features geocoding` (the Docker image is),
-then point `GEOCODING_INDEX_PATH` to the index file, for `update` (which
-builds it) and `serve` (which reads it, and reloads it when it changes).
+a port of addok ranking like the BAN API, on an index of the BAN export.
+Build with `cargo build --features geocoding` (the Docker image is), then
+point `GEOCODING_INDEX_PATH` to the index file, for `update` (which
+downloads it) and `serve` (which reads it, and reloads it when it changes).
+
+The index is never built here (that takes ~5 GB of memory): the
+geocoder-core CI builds it daily from the BAN and publishes it with an
+Ed25519 signed manifest. `update` accepts it only when the manifest is
+signed by a trusted key, fits this build of geocoder-core (format and
+profile versions) and is not older than the local index, and when the file
+matches its size and SHA-256 and opens; only then it replaces the local one.
 
 ```
-sirene update geocoding           # build or refresh the index (skipped if the BAN export did not change)
-sirene update geocoding --force   # rebuild anyway
+sirene update geocoding           # download the index if a new one is published
+sirene update geocoding --force   # download it anyway
 sirene update all                 # database update, then the index (GEOCODING_WITH_UPDATE_ALL=false to skip it)
 ```
 
 | Variable | Default |
 |---|---|
 | `GEOCODING_INDEX_PATH` | none: geocoding disabled |
-| `GEOCODING_SOURCE_URL` | BAN export `adresses-addok-france.ndjson.gz` (URL or local path) |
-| `GEOCODING_SOURCE_FORMAT` | `addok` (`bano` also supported) |
+| `GEOCODING_INDEX_BASE_URL` | the geocoder-core CI's bucket |
+| `GEOCODING_INDEX_PUBLIC_KEYS` | the geocoder-core CI's key (comma separated, hex) |
 | `GEOCODING_WITH_UPDATE_ALL` | `true` |
 | `GEOCODING_RELOAD_INTERVAL_SECONDS` | `60` (`serve`) |
 
-The full index takes about 6 minutes and 5 GB of memory to build, and 2.7 GB
-on disk. The export is downloaded next to the index, then removed.
+The index takes 3.3 GB on disk, twice while a new one downloads.
 
 **Address endpoints**
 

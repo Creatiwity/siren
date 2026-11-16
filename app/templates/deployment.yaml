@@ -74,7 +74,7 @@ spec:
             {{- include "app.geocodingEnv" . | nindent 12 }}
             {{- include "app.commonEnv" (dict "root" .) | nindent 12 }}
           {{- if .Values.geocoding.enabled }}
-          # The index is only read here; the jobs rebuild it in place.
+          # The index is only read here; the jobs replace it (atomic rename).
           volumeMounts:
             - name: geocoding
               mountPath: {{ dir .Values.geocoding.indexPath }}
