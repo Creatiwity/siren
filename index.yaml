@@ -2,6 +2,16 @@ apiVersion: v1
 entries:
   siren:
   - apiVersion: v2
+    appVersion: v6.8.0
+    created: "2026-11-17T21:59:59.192514542Z"
+    description: A Helm chart for Siren
+    digest: 9bcd145465fb28760fc0d3bee38c4f57278848c5b1846accc0091683f50146c2
+    name: siren
+    type: application
+    urls:
+    - https://github.com/Creatiwity/siren/releases/download/siren-1.4.0/siren-1.4.0.tgz
+    version: 1.4.0
+  - apiVersion: v2
     appVersion: v6.7.1
     created: "2026-10-11T21:59:25.118891754Z"
     description: A Helm chart for Siren
@@ -51,4 +61,4 @@ entries:
     urls:
     - https://github.com/Creatiwity/siren/releases/download/siren-1.0.0/siren-1.0.0.tgz
     version: 1.0.0
-generated: "2026-10-11T21:59:25.118919005Z"
+generated: "2026-11-17T21:59:59.192538057Z"
