@@ -99,6 +99,11 @@ cronjob:
 # The index is never built here (~5 GiB for the BAN): the jobs download the
 # one the geocoder-core CI builds daily from the BAN and signs, and accept it
 # only when signed by a trusted key and matching its SHA-256.
+# The API memory-maps the index (~3.3 GB) and copies only its FSTs (~100 MB)
+# to the heap: add that to the API memory, and leave room above it, since the
+# mapped pages read by searches are charged to the pod's memory cgroup. A
+# tight limit does not kill the pod, it evicts them: searches then read the
+# volume.
 geocoding:
   enabled: false
   indexPath: /data/geocoding/index.bin
@@ -109,7 +114,8 @@ geocoding:
   # geocoder-core CI's.
   publicKeys: ""
   # Refresh the index after the nightly `update all` (nothing downloaded when
-  # the published index did not change).
+  # the published index did not change). false: the update CronJob neither
+  # mounts the volume nor joins its node; unsuspend the -geocoding CronJob.
   withUpdateAll: true
   reloadIntervalSeconds: 60
   # `<fullname>-geocoding` CronJob running `update geocoding` only. Suspended by
@@ -118,6 +124,11 @@ geocoding:
   # or unsuspend it to refresh on its own schedule.
   cronSchedule: "0 3 * * *"
   suspend: true
+  # Resources of that CronJob (a download: a few tens of MB of memory).
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
   persistence:
     # Use an existing claim instead of creating one.
     existingClaim: ""

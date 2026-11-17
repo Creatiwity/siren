@@ -2,7 +2,7 @@
      default: a template for the first download right after install,
        kubectl create job --from=cronjob/<fullname>-geocoding <fullname>-geocoding-init
      The nightly `update all` keeps the index fresh afterwards
-     (geocoding.withUpdateAll). */}}
+     (geocoding.withUpdateAll), or unsuspend it to check on its own schedule. */}}
 {{- if .Values.geocoding.enabled -}}
 apiVersion: batch/v1
 kind: CronJob
@@ -25,7 +25,7 @@ spec:
       template:
         metadata:
           labels:
-            {{- include "app.jobPodLabels" (dict "root" . "component" "geocoding") | nindent 12 }}
+            {{- include "app.jobPodLabels" (dict "root" . "component" "geocoding" "geocoding" true) | nindent 12 }}
         spec:
           serviceAccountName: {{ include "app.serviceAccountName" . }}
           {{- include "app.podCommon" (dict "root" . "jobs" true "geocoding" true) | nindent 10 }}
@@ -44,7 +44,7 @@ spec:
                 {{- include "app.geocodingEnv" . | nindent 16 }}
                 {{- include "app.commonEnv" (dict "root" .) | nindent 16 }}
               args: ["update", "geocoding"]
-              {{- with .Values.updateResources }}
+              {{- with .Values.geocoding.resources }}
               resources:
                 {{- toYaml . | nindent 16 }}
               {{- end }}

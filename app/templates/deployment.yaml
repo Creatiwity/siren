@@ -27,6 +27,9 @@ spec:
       labels:
         {{- include "app.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: api
+        {{- if .Values.geocoding.enabled }}
+        creatiwity.net/geocoding-volume: "true"
+        {{- end }}
         {{- with .Values.podLabels }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
@@ -34,8 +37,9 @@ spec:
       serviceAccountName: {{ include "app.serviceAccountName" . }}
       # Must exceed shutdownDelaySeconds plus the longest request to drain.
       terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
-      # ReadWriteOnce geocoding volume (persistence.sameNode): every API pod on
-      # the node it is attached to, including the new ones of a rolling update.
+      # ReadWriteOnce geocoding volume (persistence.sameNode): every pod mounting
+      # it on the node it is attached to, including the new ones of a rolling
+      # update.
       {{- include "app.podCommon" (dict "root" . "geocoding" true) | nindent 6 }}
       {{- with .Values.topologySpreadConstraints }}
       topologySpreadConstraints:

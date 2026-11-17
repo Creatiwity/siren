@@ -202,11 +202,14 @@ envFrom:
 
 {{/*
 Labels of the job pods: never the selector labels, or the Service would pick
-them up (and the geocoding pod affinity would target them)
+them up. (dict "root" . "component" <name> "geocoding" <bool>)
 */}}
 {{- define "app.jobPodLabels" -}}
 app.kubernetes.io/instance: {{ .root.Release.Name }}
 app.kubernetes.io/component: {{ .component }}
+{{- if .geocoding }}
+creatiwity.net/geocoding-volume: "true"
+{{- end }}
 {{- with .root.Values.podLabels }}
 {{ toYaml . }}
 {{- end }}
@@ -216,8 +219,11 @@ app.kubernetes.io/component: {{ .component }}
 Pod spec fields shared by every workload
   (dict "root" . "jobs" <bool> "geocoding" <bool>)
 - jobs: scheduling from `jobs.*`, falling back to the top-level values.
-- geocoding: joins the node of the API pods when the ReadWriteOnce geocoding
-  volume must be shared (geocoding.persistence.sameNode).
+- geocoding: the pod mounts the geocoding volume. When it is ReadWriteOnce
+  (geocoding.persistence.sameNode), the pod joins the node of the other pods
+  mounting it: the affinity targets the geocoding-volume label, not the API
+  selector, so that API pods of an older release without the volume, spread
+  over other nodes, never attract the new ones (Multi-Attach error).
 */}}
 {{- define "app.podCommon" -}}
 {{- $v := .root.Values -}}
@@ -231,7 +237,7 @@ Pod spec fields shared by every workload
 {{- $affinity = deepCopy ($jobs.affinity | default $affinity) -}}
 {{- end -}}
 {{- if and .geocoding $v.geocoding.enabled $v.geocoding.persistence.sameNode -}}
-{{- $term := dict "labelSelector" (dict "matchLabels" (include "app.selectorLabels" .root | fromYaml)) "topologyKey" "kubernetes.io/hostname" -}}
+{{- $term := dict "labelSelector" (dict "matchLabels" (include "app.geocodingPodLabels" .root | fromYaml)) "topologyKey" "kubernetes.io/hostname" -}}
 {{- $podAffinity := get $affinity "podAffinity" | default dict -}}
 {{- $required := get $podAffinity "requiredDuringSchedulingIgnoredDuringExecution" | default list -}}
 {{- $_ := set $podAffinity "requiredDuringSchedulingIgnoredDuringExecution" (append $required $term) -}}
@@ -274,6 +280,11 @@ When the migration hook owns the schema, the other workloads only check it
 {{/*
 Geocoding: claim name, environment and volume of the index
 */}}
+{{- define "app.geocodingPodLabels" -}}
+app.kubernetes.io/instance: {{ .Release.Name }}
+creatiwity.net/geocoding-volume: "true"
+{{- end }}
+
 {{- define "app.geocodingClaim" -}}
 {{- .Values.geocoding.persistence.existingClaim | default (printf "%s-geocoding" (include "app.fullname" .)) }}
 {{- end }}
