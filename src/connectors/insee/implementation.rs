@@ -9,9 +9,14 @@ use crate::models::etablissement::common::EtablissementInsertable;
 use crate::models::lien_succession::common::LienSuccession;
 use crate::models::unite_legale::common::UniteLegaleInsertable;
 use chrono::NaiveDateTime;
+use reqwest::StatusCode;
+use std::time::Duration;
+use tracing::warn;
 
 const MAX_CALL: u8 = 20;
 const MAX_DURATION: std::time::Duration = std::time::Duration::from_secs(60);
+const MAX_RETRIES: u32 = 3;
+const RETRY_DELAY: Duration = Duration::from_secs(10);
 const BASE_URL: &str = "https://api.insee.fr/api-sirene/3.11";
 pub const INITIAL_CURSOR: &str = "*";
 
@@ -170,6 +175,18 @@ async fn get_daily_data<T: InseeResponse>(
     start_timestamp: NaiveDateTime,
     cursor: String,
 ) -> Result<(Option<String>, Option<T>), InseeUpdate> {
+    with_retry(RETRY_DELAY, || {
+        fetch_daily_data::<T>(client, config, start_timestamp, &cursor)
+    })
+    .await
+}
+
+async fn fetch_daily_data<T: InseeResponse>(
+    client: &reqwest::Client,
+    config: &EndpointConfig,
+    start_timestamp: NaiveDateTime,
+    cursor: &str,
+) -> Result<(Option<String>, Option<T>), InseeUpdate> {
     let url = format!("{}/{}", BASE_URL, config.route);
 
     let response = match client
@@ -181,7 +198,7 @@ async fn get_daily_data<T: InseeResponse>(
                 start_timestamp.format("%Y-%m-%dT%H:%M:%S")
             ),
             nombre: 1000,
-            curseur: cursor,
+            curseur: cursor.to_string(),
             tri: config
                 .sorting
                 .then_some(format!("{} asc", config.query_field)),
@@ -218,6 +235,14 @@ async fn get_total(
     config: &EndpointConfig,
     start_timestamp: NaiveDateTime,
 ) -> Result<u32, InseeUpdate> {
+    with_retry(RETRY_DELAY, || fetch_total(client, config, start_timestamp)).await
+}
+
+async fn fetch_total(
+    client: &reqwest::Client,
+    config: &EndpointConfig,
+    start_timestamp: NaiveDateTime,
+) -> Result<u32, InseeUpdate> {
     let url = format!("{}/{}", BASE_URL, config.route);
 
     let response = client
@@ -237,4 +262,81 @@ async fn get_total(
         .await?;
 
     Ok(response.header.total)
+}
+
+fn is_transient(error: &reqwest::Error) -> bool {
+    error
+        .status()
+        .is_none_or(|status| status.is_server_error() || status == StatusCode::TOO_MANY_REQUESTS)
+}
+
+async fn with_retry<T, F, Fut>(delay: Duration, mut call: F) -> Result<T, InseeUpdate>
+where
+    F: FnMut() -> Fut,
+    Fut: Future<Output = Result<T, InseeUpdate>>,
+{
+    let mut attempt = 0;
+
+    loop {
+        match call().await {
+            Err(InseeUpdate::Network { source })
+                if attempt < MAX_RETRIES && is_transient(&source) =>
+            {
+                attempt += 1;
+                warn!("INSEE request failed ({source}), retry {attempt}/{MAX_RETRIES}");
+                tokio::time::sleep(delay * attempt).await;
+            }
+            result => return result,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::cell::Cell;
+    use std::time::Duration;
+
+    async fn connection_refused() -> reqwest::Error {
+        reqwest::Client::new()
+            .get("http://127.0.0.1:9/")
+            .send()
+            .await
+            .expect_err("nothing listens on port 9")
+    }
+
+    #[tokio::test]
+    async fn with_retry_recovers_from_transient_network_errors() {
+        let calls = Cell::new(0);
+
+        let result = with_retry(Duration::ZERO, || async {
+            calls.set(calls.get() + 1);
+            if calls.get() < 3 {
+                Err(InseeUpdate::Network {
+                    source: connection_refused().await,
+                })
+            } else {
+                Ok(calls.get())
+            }
+        })
+        .await;
+
+        assert_eq!(result.unwrap(), 3);
+    }
+
+    #[tokio::test]
+    async fn with_retry_gives_up_after_max_retries() {
+        let calls = Cell::new(0);
+
+        let result: Result<(), InseeUpdate> = with_retry(Duration::ZERO, || async {
+            calls.set(calls.get() + 1);
+            Err(InseeUpdate::Network {
+                source: connection_refused().await,
+            })
+        })
+        .await;
+
+        assert!(result.is_err());
+        assert_eq!(calls.get(), MAX_RETRIES + 1);
+    }
 }

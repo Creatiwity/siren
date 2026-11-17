@@ -5,7 +5,7 @@ use super::common::Action;
 use crate::models::group_metadata::common::GroupType;
 use crate::{connectors::Connectors, models::group_metadata};
 use async_trait::async_trait;
-use tracing::debug;
+use tracing::{debug, info};
 
 pub struct UpdateAction {
     pub force: bool,
@@ -27,7 +27,7 @@ impl Action for UpdateAction {
         let remote_file = RemoteFile::new(metadata.url.clone()).await?;
         let last_modified = remote_file.last_modified;
 
-        debug!(
+        info!(
             "Will verify dates before importing, last imported metadata {:?}, last modified {}",
             metadata.last_imported_timestamp, last_modified
         );

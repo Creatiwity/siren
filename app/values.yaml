@@ -34,7 +34,8 @@ inseeCredentials:
 sentryDsn:
 cronSchedule: "0 4 * * *"
 tokioWorkerThreads: 10
-# Resources of the update CronJob.
+# Resources of the update CronJobs. Geocoding only downloads its prebuilt
+# index (a few tens of MB of memory): nothing to add for it.
 updateResources:
   requests:
     cpu: 500m
@@ -91,6 +92,58 @@ cronjob:
   failedJobsHistoryLimit: 3
   # IANA name, e.g. Europe/Paris. Cluster time zone (usually UTC) when empty.
   timeZone: ""
+
+# Address geocoding: `address` filter on establishment searches and the
+# /v3/adresses endpoints. The index file lives on a volume shared by the API
+# (read only, reloaded when the file changes) and the jobs refreshing it.
+# The index is never built here (~5 GiB for the BAN): the jobs download the
+# one the geocoder-core CI builds daily from the BAN and signs, and accept it
+# only when signed by a trusted key and matching its SHA-256.
+# The API memory-maps the index (~3.3 GB) and copies only its FSTs (~100 MB)
+# to the heap: add that to the API memory, and leave room above it, since the
+# mapped pages read by searches are charged to the pod's memory cgroup. A
+# tight limit does not kill the pod, it evicts them: searches then read the
+# volume.
+geocoding:
+  enabled: false
+  indexPath: /data/geocoding/index.bin
+  # Where the prebuilt indexes are published. Empty: the geocoder-core CI's
+  # bucket.
+  indexBaseUrl: ""
+  # Public keys trusted to sign them, comma separated (hex). Empty: the
+  # geocoder-core CI's.
+  publicKeys: ""
+  # Refresh the index after the nightly `update all` (nothing downloaded when
+  # the published index did not change). false: the update CronJob neither
+  # mounts the volume nor joins its node; unsuspend the -geocoding CronJob.
+  withUpdateAll: true
+  reloadIntervalSeconds: 60
+  # `<fullname>-geocoding` CronJob running `update geocoding` only. Suspended by
+  # default: use it for the first download right after install,
+  #   kubectl create job --from=cronjob/<fullname>-geocoding <fullname>-geocoding-init
+  # or unsuspend it to refresh on its own schedule.
+  cronSchedule: "0 3 * * *"
+  suspend: true
+  # Resources of that CronJob (a download: a few tens of MB of memory).
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+  persistence:
+    # Use an existing claim instead of creating one.
+    existingClaim: ""
+    storageClass: ""
+    # ReadWriteOnce (block storage, e.g. OVH csi-cinder) is attached to one
+    # node at a time, but every pod on that node can mount it: with sameNode,
+    # the jobs refreshing the index are scheduled next to an API pod. Fits a
+    # single API replica (or replicas pinned to one node).
+    # For API replicas spread over nodes, use a ReadWriteMany class (NFS)
+    # and set sameNode to false.
+    accessModes:
+      - ReadWriteOnce
+    sameNode: true
+    # Index (~3.3 GB) + the next one while it downloads (~3.3 GB).
+    size: 10Gi
 
 # Database migrations, applied by a Job run as a pre-install/pre-upgrade hook.
 # The API and the updater then start with SKIP_MIGRATIONS=true: they only check,
@@ -163,11 +216,15 @@ podLabels: {}
 
 priorityClassName: ""
 
-# Distroless image: its `nonroot` user (65532) has no shell and owns nothing.
+# Distroless image: its `nonroot` user (65532) has no shell and owns nothing
+# but what fsGroup grants, here the geocoding volume.
 podSecurityContext:
   runAsNonRoot: true
   runAsUser: 65532
   runAsGroup: 65532
+  fsGroup: 65532
+  # Skips the recursive chown of the geocoding volume when it already matches.
+  fsGroupChangePolicy: OnRootMismatch
   seccompProfile:
     type: RuntimeDefault
 
@@ -284,8 +341,10 @@ auth:
     #      request_headers: [apikey]
     #      upstream_headers: [x-user-id, x-tier]
 
-# Requests only by default: a CPU limit throttles the Tokio workers. Set the
-# memory limit once measured.
+# Requests only by default: a CPU limit throttles the Tokio workers, and the
+# memory footprint depends on geocoding (the index is memory-mapped, only its
+# FSTs are copied in memory, twice during a reload), so set the memory limit
+# once measured.
 resources:
   requests:
     cpu: 100m
@@ -331,15 +390,15 @@ tolerations: []
 affinity: {}
 
 # Spread the API pods, e.g. over nodes or zones. labelSelector defaults to the
-# API pods.
+# API pods. Moot with geocoding.persistence.sameNode, which keeps them together.
 topologySpreadConstraints: []
 #  - maxSkew: 1
 #    topologyKey: kubernetes.io/hostname
 #    whenUnsatisfiable: ScheduleAnyway
 
-# Scheduling of the update CronJob and the migration hook. Each empty field
-# falls back to its top-level counterpart, e.g. to run updates on high-memory
-# nodes.
+# Scheduling of the update CronJobs and the migration hook. Each empty field
+# falls back to its top-level counterpart. With geocoding.persistence.sameNode,
+# the update jobs must still be able to land on the API node.
 jobs:
   nodeSelector: {}
   tolerations: []

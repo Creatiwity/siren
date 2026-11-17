@@ -56,9 +56,11 @@ jobs:
             target/
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
+      # geocoding is compiled in; it stays inactive until GEOCODING_INDEX_PATH
+      # is set (Helm: geocoding.enabled).
       - name: Build for MUSL
         run: |
-          cargo build --release
+          cargo build --release --features geocoding
           cp ./target/x86_64-unknown-linux-musl/release/sirene ./dist
           strip ./dist/sirene
 

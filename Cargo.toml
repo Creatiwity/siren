@@ -1,10 +1,15 @@
 [package]
 name = "sirene"
-version = "6.7.1"
+version = "6.8.0"
 authors = ["Julien Blatecky <julien.blatecky@creatiwity.net>"]
 edition = "2024"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[features]
+# Address geocoding: index sync (`update geocoding`), `address` search filter
+# and the /v3/adresses endpoints.
+geocoding = ["dep:geocoder-core"]
 
 [dependencies]
 async-trait = "0.1"
@@ -23,6 +28,7 @@ diesel-async = { version = "0.9", features = ["postgres", "deadpool"] }
 diesel_migrations = { version = "2.3", features = ["postgres"] }
 dotenv = "0.15"
 futures = "0.3"
+geocoder-core = { version = "0.2", default-features = false, features = ["signed"], optional = true }
 jemallocator = "0.5"
 openssl-sys = { version = "0.9", features = ["vendored"] }
 postgis_diesel = { version = "3.1", features = ["serde"] }

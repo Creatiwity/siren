@@ -202,11 +202,14 @@ envFrom:
 
 {{/*
 Labels of the job pods: never the selector labels, or the Service would pick
-them up
+them up. (dict "root" . "component" <name> "geocoding" <bool>)
 */}}
 {{- define "app.jobPodLabels" -}}
 app.kubernetes.io/instance: {{ .root.Release.Name }}
 app.kubernetes.io/component: {{ .component }}
+{{- if .geocoding }}
+creatiwity.net/geocoding-volume: "true"
+{{- end }}
 {{- with .root.Values.podLabels }}
 {{ toYaml . }}
 {{- end }}
@@ -214,8 +217,13 @@ app.kubernetes.io/component: {{ .component }}
 
 {{/*
 Pod spec fields shared by every workload
-  (dict "root" . "jobs" <bool>)
+  (dict "root" . "jobs" <bool> "geocoding" <bool>)
 - jobs: scheduling from `jobs.*`, falling back to the top-level values.
+- geocoding: the pod mounts the geocoding volume. When it is ReadWriteOnce
+  (geocoding.persistence.sameNode), the pod joins the node of the other pods
+  mounting it: the affinity targets the geocoding-volume label, not the API
+  selector, so that API pods of an older release without the volume, spread
+  over other nodes, never attract the new ones (Multi-Attach error).
 */}}
 {{- define "app.podCommon" -}}
 {{- $v := .root.Values -}}
@@ -227,6 +235,13 @@ Pod spec fields shared by every workload
 {{- $nodeSelector = $jobs.nodeSelector | default $nodeSelector -}}
 {{- $tolerations = $jobs.tolerations | default $tolerations -}}
 {{- $affinity = deepCopy ($jobs.affinity | default $affinity) -}}
+{{- end -}}
+{{- if and .geocoding $v.geocoding.enabled $v.geocoding.persistence.sameNode -}}
+{{- $term := dict "labelSelector" (dict "matchLabels" (include "app.geocodingPodLabels" .root | fromYaml)) "topologyKey" "kubernetes.io/hostname" -}}
+{{- $podAffinity := get $affinity "podAffinity" | default dict -}}
+{{- $required := get $podAffinity "requiredDuringSchedulingIgnoredDuringExecution" | default list -}}
+{{- $_ := set $podAffinity "requiredDuringSchedulingIgnoredDuringExecution" (append $required $term) -}}
+{{- $_ := set $affinity "podAffinity" $podAffinity -}}
 {{- end -}}
 automountServiceAccountToken: {{ $v.serviceAccount.automount }}
 {{- with $v.imagePullSecrets }}
@@ -260,6 +275,52 @@ When the migration hook owns the schema, the other workloads only check it
 {{- define "app.skipMigrationsEnv" -}}
 - name: "SKIP_MIGRATIONS"
   value: "{{ .Values.migrations.enabled }}"
+{{- end }}
+
+{{/*
+Geocoding: claim name, environment and volume of the index
+*/}}
+{{- define "app.geocodingPodLabels" -}}
+app.kubernetes.io/instance: {{ .Release.Name }}
+creatiwity.net/geocoding-volume: "true"
+{{- end }}
+
+{{- define "app.geocodingClaim" -}}
+{{- .Values.geocoding.persistence.existingClaim | default (printf "%s-geocoding" (include "app.fullname" .)) }}
+{{- end }}
+
+{{- define "app.geocodingEnv" -}}
+{{- if .Values.geocoding.enabled }}
+- name: "GEOCODING_INDEX_PATH"
+  value: {{ .Values.geocoding.indexPath | quote }}
+{{- with .Values.geocoding.indexBaseUrl }}
+- name: "GEOCODING_INDEX_BASE_URL"
+  value: {{ . | quote }}
+{{- end }}
+{{- with .Values.geocoding.publicKeys }}
+- name: "GEOCODING_INDEX_PUBLIC_KEYS"
+  value: {{ . | quote }}
+{{- end }}
+- name: "GEOCODING_WITH_UPDATE_ALL"
+  value: "{{ .Values.geocoding.withUpdateAll }}"
+- name: "GEOCODING_RELOAD_INTERVAL_SECONDS"
+  value: "{{ .Values.geocoding.reloadIntervalSeconds }}"
+{{- end }}
+{{- end }}
+
+{{- define "app.geocodingVolumeMount" -}}
+{{- if .Values.geocoding.enabled }}
+- name: geocoding
+  mountPath: {{ dir .Values.geocoding.indexPath }}
+{{- end }}
+{{- end }}
+
+{{- define "app.geocodingVolume" -}}
+{{- if .Values.geocoding.enabled }}
+- name: geocoding
+  persistentVolumeClaim:
+    claimName: {{ include "app.geocodingClaim" . }}
+{{- end }}
 {{- end }}
 
 {{/*

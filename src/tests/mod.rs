@@ -6,6 +6,7 @@
 //!
 //!   SIRENE_TEST_DATABASE_URL="postgresql://…" cargo test
 
+mod position;
 mod search;
 mod staging;
 
