@@ -169,6 +169,65 @@ GET /v3/unites_legales?q=<text>&sort=<field>&direction=<asc|desc>&limit=<number>
 - `date_creation`: Filter by creation date (legal units only)
 - `date_debut`: Filter by start date (legal units only)
 
+#### Address geocoding (feature `geocoding`)
+
+Addresses are geocoded with [geocoder-core](https://github.com/Creatiwity/geocoder-core),
+a port of addok ranking like the BAN API, on an index of the BAN export.
+Build with `cargo build --features geocoding` (the Docker image is), then
+point `GEOCODING_INDEX_PATH` to the index file, for `update` (which
+downloads it) and `serve` (which reads it, and reloads it when it changes).
+
+The index is never built here (that takes ~5 GB of memory): the
+geocoder-core CI builds it daily from the BAN and publishes it with an
+Ed25519 signed manifest. `update` accepts it only when the manifest is
+signed by a trusted key, fits this build of geocoder-core (format and
+profile versions) and is not older than the local index, and when the file
+matches its size and SHA-256 and opens; only then it replaces the local one.
+
+```
+sirene update geocoding           # download the index if a new one is published
+sirene update geocoding --force   # download it anyway
+sirene update all                 # database update, then the index (GEOCODING_WITH_UPDATE_ALL=false to skip it)
+```
+
+| Variable | Default |
+|---|---|
+| `GEOCODING_INDEX_PATH` | none: geocoding disabled |
+| `GEOCODING_INDEX_BASE_URL` | the geocoder-core CI's bucket |
+| `GEOCODING_INDEX_PUBLIC_KEYS` | the geocoder-core CI's key (comma separated, hex) |
+| `GEOCODING_WITH_UPDATE_ALL` | `true` |
+| `GEOCODING_RELOAD_INTERVAL_SECONDS` | `60` (`serve`) |
+
+The index takes 3.3 GB on disk, twice while a new one downloads.
+
+**Address endpoints**
+
+```
+GET /v3/adresses/autocomplete?q=<text>   # type-ahead: the last word may be incomplete
+GET /v3/adresses/search?q=<address>      # geocode a full address
+```
+
+Optional: `limit` (1–20, default 5), `lat` + `lng` (favour nearby addresses),
+`type`, `postcode`, `citycode` (comma-separated). Each address has `label`,
+`score`, `type` (`housenumber`, `street`, `locality`, `municipality`), `name`,
+`housenumber`, `street`, `postcode`, `city`, `citycode`, `context`, `lat`,
+`lng`. 503 until an index is loaded, 501 when geocoding is not configured.
+
+**Searching establishments by address**
+
+`GET /v3/etablissements?address=42 rue de rivoli paris` geocodes the address
+and narrows the search around it: 100 m for a housenumber, 1 km for a street or
+a locality (`radius` overrides both), the municipality's `code_commune` for a
+municipality (every arrondissement for Paris, Lyon, Marseille). Other filters
+and `sort=distance` still apply. The response gets an `adresse` object: the
+geocoded address, its score, `meets_min_score` and the `filter` applied.
+
+- `geocoding_min_score`: minimum score (default 0.5);
+- `geocoding_mode`: `threshold_or_best` (default, the best result even below
+  the minimum), `threshold` (below it, no establishment is returned) or `best`
+  (ignore the score);
+- `geocoding_type`: restrict the address to some types, comma-separated.
+
 **Maintenance**
 
 _This API is enabled only if you have provided a non-empty API_KEY when starting the `serve` process: otherwise `/admin` is not served (404) and is left out of the OpenAPI documentation._
