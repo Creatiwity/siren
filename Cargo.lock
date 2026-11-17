@@ -3446,7 +3446,7 @@ checksum = "8ee5873ec9cce0195efcb7a4e9507a04cd49aec9c83d0389df45b1ef7ba2e649"
 
 [[package]]
 name = "sirene"
-version = "6.7.1"
+version = "6.8.0"
 dependencies = [
  "async-trait",
  "axum",
