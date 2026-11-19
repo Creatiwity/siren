@@ -195,6 +195,9 @@ pub struct EtablissementSearchParams {
     /// Comma-separated fields to facet on: `etat_administratif`, `code_postal`,
     /// `code_commune`, `activite_principale`, `etablissement_siege`.
     pub facette: Option<String>,
+    /// Default: `relevance` with `q`, otherwise `distance` with lat/lng/radius,
+    /// otherwise `date_creation`. With `address` resolved to a radius
+    /// (housenumber, street, locality): `distance`, even with `q`.
     pub sort: Option<EtablissementSortField>,
     pub direction: Option<SortDirection>,
     pub limit: Option<i64>,
@@ -260,6 +263,7 @@ pub struct EtablissementSearchOutput {
     pub results: Vec<EtablissementSearchResult>,
     pub total: i64,
     pub total_capped: bool,
+    pub has_next_page: bool,
     pub limit: i64,
     pub offset: i64,
     pub sort: EtablissementSortField,
@@ -273,9 +277,12 @@ pub struct EtablissementSearchOutput {
 pub struct EtablissementSearchResponse {
     pub etablissements: Vec<EtablissementSearchResultResponse>,
     pub total: i64,
-    /// `true` when `total` hit its ceiling: there are at least that many
-    /// results, without the exact count being computed.
+    /// `true` when `total` hit its ceiling (1,000): there are at least that
+    /// many results, without the exact count being computed.
     pub total_capped: bool,
+    /// `true` when at least one result follows this page, whatever `total`
+    /// says: exact, including past the `total` ceiling.
+    pub has_next_page: bool,
     pub limit: i64,
     pub offset: i64,
     pub sort: EtablissementSortField,

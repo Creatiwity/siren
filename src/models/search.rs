@@ -22,8 +22,13 @@ use crate::connectors::local::Connection;
 pub const MIN_QUERY_LENGTH: usize = 3;
 
 /// Counting stops here rather than walking every match; `total_capped` reports
-/// whether the ceiling was hit.
-pub const SEARCH_TOTAL_CAP: i64 = 10_000;
+/// whether the ceiling was hit. Facets are computed over the same subset.
+///
+/// The count reads one heap row per match: around a point in a city every
+/// search reached the former 10,000 ceiling, and that count alone took 2 s at
+/// p95 against 80 ms for the page (load test, November 2026). Whether more
+/// pages exist is answered exactly by `has_next_page`, not by this total.
+pub const SEARCH_TOTAL_CAP: i64 = 1_000;
 
 pub const FACET_VALUES_LIMIT: i64 = 20;
 
@@ -376,6 +381,15 @@ impl Binder {
     }
 }
 
+/// Page queries select `limit + 1` rows: this keeps `limit` of them and tells
+/// whether the extra one existed, i.e. whether a next page does.
+pub fn split_page<T>(rows: &mut Vec<T>, limit: i64) -> bool {
+    let limit = usize::try_from(limit).unwrap_or(0);
+    let has_next_page = rows.len() > limit;
+    rows.truncate(limit);
+    has_next_page
+}
+
 /// Returns `(total, capped)`. Ordering is irrelevant here, so the plain form
 /// works even when the main query goes through a lateral join.
 pub async fn capped_total(
@@ -491,6 +505,24 @@ mod tests {
         out
     }
 
+    #[test]
+    fn split_page_detecte_la_page_suivante() {
+        // limit + 1 rows fetched: one more page, and only limit are returned.
+        let mut rows = vec![1, 2, 3, 4];
+        assert!(split_page(&mut rows, 3));
+        assert_eq!(rows, vec![1, 2, 3]);
+
+        // Exactly limit: last page, even though it is full.
+        let mut rows = vec![1, 2, 3];
+        assert!(!split_page(&mut rows, 3));
+        assert_eq!(rows, vec![1, 2, 3]);
+
+        let mut rows = vec![1];
+        assert!(!split_page(&mut rows, 3));
+        let mut rows: Vec<i32> = Vec::new();
+        assert!(!split_page(&mut rows, 3));
+    }
+
     const SEARCH_MIGRATION: &str =
         include_str!("../../migrations/2026-09-15-120000_search_fts_commune/up.sql");
 
@@ -507,9 +539,8 @@ mod tests {
         }
     }
 
-    const COMMUNE_MIGRATION: &str = include_str!(
-        "../../migrations/2026-10-11-120000_search_fts_commune_composite/up.sql"
-    );
+    const COMMUNE_MIGRATION: &str =
+        include_str!("../../migrations/2026-10-11-120000_search_fts_commune_composite/up.sql");
 
     /// Text search restricted to a commune relies on the composite index. A
     /// divergence would bring back the commune-sized bitmap, with no error.

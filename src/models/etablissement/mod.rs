@@ -95,11 +95,9 @@ pub async fn search(
         .map(str::trim)
         .filter(|q| q.chars().count() >= search::MIN_QUERY_LENGTH);
 
-    let sort = params.sort.unwrap_or(if q.is_some() {
-        EtablissementSortField::Relevance
-    } else {
-        EtablissementSortField::DateCreation
-    });
+    let sort = params
+        .sort
+        .unwrap_or_else(|| default_sort(params, q.is_some()));
 
     let direction = params.direction.unwrap_or(match sort {
         // Nearest first, and export order follows the primary key.
@@ -127,6 +125,7 @@ pub async fn search(
                     results: Vec::new(),
                     total: 0,
                     total_capped: false,
+                    has_next_page: false,
                     limit,
                     offset,
                     sort,
@@ -332,6 +331,8 @@ async fn execute(
          {distance} AS meter_distance, {score} AS score"
     );
 
+    // One row more than the page: its presence is `has_next_page`.
+    let fetch = plan.limit + 1;
     let sql = match (&commune, lateral) {
         (Some((placeholder, _)), true) => {
             let mut inner = vec!["e.code_commune = codes.code_commune".to_string()];
@@ -344,8 +345,8 @@ async fn execute(
                  ) e \
                  ORDER BY {order_by} LIMIT {} OFFSET {}",
                 inner.join(" AND "),
-                plan.limit + plan.offset,
-                plan.limit,
+                fetch + plan.offset,
+                fetch,
                 plan.offset
             )
         }
@@ -353,16 +354,17 @@ async fn execute(
             "SELECT {projection} FROM etablissement e {} \
              ORDER BY {order_by} LIMIT {} OFFSET {}",
             where_clause(&conditions, commune.as_ref()),
-            plan.limit,
+            fetch,
             plan.offset
         ),
     };
 
-    let results = binder
+    let mut results = binder
         .apply(sql_query(sql).into_boxed())
         .load::<EtablissementSearchResult>(connection)
         .await
         .map_err(|error| -> Error { error.into() })?;
+    let has_next_page = search::split_page(&mut results, plan.limit);
 
     // The count and the facets always take the plain form, lateral or not.
     let filters = where_clause(&conditions, commune.as_ref());
@@ -378,10 +380,9 @@ async fn execute(
     )
     .await;
 
-    // A full page suggests more to come. Only primary-key order is total and
-    // stable enough to resume from.
+    // Only primary-key order is total and stable enough to resume from.
     let next_cursor = match plan.sort {
-        EtablissementSortField::Siret if results.len() as i64 == plan.limit => results
+        EtablissementSortField::Siret if has_next_page => results
             .last()
             .map(|last| search::encode_cursor(&last.siret)),
         _ => None,
@@ -391,6 +392,7 @@ async fn execute(
         results,
         total,
         total_capped,
+        has_next_page,
         limit: plan.limit,
         offset: plan.offset,
         sort: plan.sort,
@@ -410,6 +412,19 @@ fn where_clause(conditions: &[String], commune: Option<&(String, String)>) -> St
         String::new()
     } else {
         format!("WHERE {}", all.join(" AND "))
+    }
+}
+
+/// Sort applied when the caller gives none. Around a point without text, the
+/// nearest first: the GiST KNN walk stops after one page, where sorting by
+/// creation date reads every establishment in the circle (a 2 km radius in
+/// Paris ran past the 15 s gateway timeout).
+fn default_sort(params: &EtablissementSearchParams, has_text: bool) -> EtablissementSortField {
+    let has_point = params.lat.is_some() && params.lng.is_some() && params.radius.is_some();
+    match (has_text, has_point) {
+        (true, _) => EtablissementSortField::Relevance,
+        (false, true) => EtablissementSortField::Distance,
+        (false, false) => EtablissementSortField::DateCreation,
     }
 }
 
@@ -700,5 +715,52 @@ impl UpdatableModel for EtablissementModel {
 
     fn search_source(&self) -> Option<&'static str> {
         Some(search::SOURCE_ETABLISSEMENT)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn around_point() -> EtablissementSearchParams {
+        EtablissementSearchParams {
+            lat: Some(48.8566),
+            lng: Some(2.3522),
+            radius: Some(2000.0),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn default_sort_is_distance_around_a_point() {
+        assert!(matches!(
+            default_sort(&around_point(), false),
+            EtablissementSortField::Distance
+        ));
+    }
+
+    #[test]
+    fn default_sort_keeps_relevance_with_text() {
+        assert!(matches!(
+            default_sort(&around_point(), true),
+            EtablissementSortField::Relevance
+        ));
+    }
+
+    #[test]
+    fn default_sort_is_date_creation_without_point_or_text() {
+        assert!(matches!(
+            default_sort(&EtablissementSearchParams::default(), false),
+            EtablissementSortField::DateCreation
+        ));
+        // An incomplete point is rejected upstream; it never selects distance.
+        let partial = EtablissementSearchParams {
+            radius: None,
+            ..around_point()
+        };
+        assert!(matches!(
+            default_sort(&partial, false),
+            EtablissementSortField::DateCreation
+        ));
     }
 }
