@@ -506,6 +506,103 @@ async fn total_plafonne_signale() {
 }
 
 #[tokio::test]
+async fn page_suivante_au_dela_du_plafond_du_total() {
+    let mut connection = require_database!();
+
+    // The total stops at its ceiling; `has_next_page` must still see further.
+    let params = EtablissementSearchParams {
+        q: Some("sarl".to_string()),
+        limit: Some(20),
+        offset: Some(search::SEARCH_TOTAL_CAP),
+        ..etablissement_params()
+    };
+    let output = etablissement::search(&mut connection, &params)
+        .await
+        .unwrap();
+    assert!(output.total_capped);
+    assert_eq!(
+        output.results.len(),
+        20,
+        "une page au-dela du plafond existe"
+    );
+    assert!(
+        output.has_next_page,
+        "la page suivante doit etre annoncee au-dela du plafond du total"
+    );
+}
+
+#[tokio::test]
+async fn page_suivante_absente_sur_une_derniere_page_pleine() {
+    let mut connection = require_database!();
+
+    // A page exactly as long as the remaining results is the last one: the
+    // former "full page" heuristic announced a page that did not exist.
+    let all = EtablissementSearchParams {
+        q: Some("boulangerie du village".to_string()),
+        sort: Some(EtablissementSortField::Siret),
+        limit: Some(100),
+        ..etablissement_params()
+    };
+    let all = etablissement::search(&mut connection, &all).await.unwrap();
+    let count = all.results.len() as i64;
+    assert!(
+        count > 0 && count < 100,
+        "jeu de test attendu: 1 a 99 resultats"
+    );
+    assert!(!all.has_next_page);
+
+    let exact = EtablissementSearchParams {
+        limit: Some(count),
+        ..all_params_boulangerie()
+    };
+    let exact = etablissement::search(&mut connection, &exact)
+        .await
+        .unwrap();
+    assert_eq!(exact.results.len() as i64, count);
+    assert!(!exact.has_next_page, "derniere page pleine: pas de suite");
+    assert!(
+        exact.next_cursor.is_none(),
+        "derniere page pleine: pas de curseur"
+    );
+
+    if count > 1 {
+        let shorter = EtablissementSearchParams {
+            limit: Some(count - 1),
+            ..all_params_boulangerie()
+        };
+        let shorter = etablissement::search(&mut connection, &shorter)
+            .await
+            .unwrap();
+        assert!(shorter.has_next_page);
+        assert!(shorter.next_cursor.is_some());
+    }
+}
+
+fn all_params_boulangerie() -> EtablissementSearchParams {
+    EtablissementSearchParams {
+        q: Some("boulangerie du village".to_string()),
+        sort: Some(EtablissementSortField::Siret),
+        ..etablissement_params()
+    }
+}
+
+#[tokio::test]
+async fn unite_legale_page_suivante() {
+    let mut connection = require_database!();
+
+    let params = UniteLegaleSearchParams {
+        sort: Some(UniteLegaleSortField::Siren),
+        limit: Some(10),
+        ..unite_legale_params()
+    };
+    let output = unite_legale::search(&mut connection, &params)
+        .await
+        .unwrap();
+    assert_eq!(output.results.len(), 10);
+    assert!(output.has_next_page);
+}
+
+#[tokio::test]
 async fn unite_legale_recherche_texte_et_facettes() {
     let mut connection = require_database!();
 
