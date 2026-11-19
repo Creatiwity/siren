@@ -179,6 +179,7 @@ pub struct UniteLegaleSearchOutput {
     pub results: Vec<UniteLegaleSearchResult>,
     pub total: i64,
     pub total_capped: bool,
+    pub has_next_page: bool,
     pub limit: i64,
     pub offset: i64,
     pub sort: UniteLegaleSortField,
@@ -192,9 +193,12 @@ pub struct UniteLegaleSearchOutput {
 pub struct UniteLegaleSearchResponse {
     pub unites_legales: Vec<UniteLegaleSearchResultResponse>,
     pub total: i64,
-    /// `true` when `total` hit its ceiling: there are at least that many
-    /// results, without the exact count being computed.
+    /// `true` when `total` hit its ceiling (1,000): there are at least that
+    /// many results, without the exact count being computed.
     pub total_capped: bool,
+    /// `true` when at least one result follows this page, whatever `total`
+    /// says: exact, including past the `total` ceiling.
+    pub has_next_page: bool,
     pub limit: i64,
     pub offset: i64,
     pub sort: UniteLegaleSortField,

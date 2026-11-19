@@ -154,6 +154,7 @@ async fn search_etablissements(
         results,
         total,
         total_capped,
+        has_next_page,
         limit,
         offset,
         sort,
@@ -186,6 +187,7 @@ async fn search_etablissements(
             .collect(),
         total,
         total_capped,
+        has_next_page,
         limit,
         offset,
         sort,
@@ -277,6 +279,9 @@ async fn resolve_address(
             params.lat = Some(*lat);
             params.lng = Some(*lng);
             params.radius = Some(*radius);
+            // Around an address, nearest first, `q` or not: the address is
+            // what the caller is looking around.
+            params.sort.get_or_insert(EtablissementSortField::Distance);
         }
         AddressFilter::Commune { code_commune } => {
             params.code_commune = Some(code_commune.join(","));

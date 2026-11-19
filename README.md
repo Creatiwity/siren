@@ -157,7 +157,8 @@ GET /v3/unites_legales?q=<text>&sort=<field>&direction=<asc|desc>&limit=<number>
 - `limit`: Results per page (default: 20, max: 100)
 - `offset`: Pagination offset (default: 0, max: 10000)
 
-> **`total` field**: exact count for filter-only queries; capped at 10,000 for text searches (`q`) — if `total == 10000` there may be more results.
+> **`total` field**: capped at 1,000 (`total_capped: true` when reached). Use `has_next_page` to know whether another page exists: it is exact, including beyond the `total` ceiling.
+> **Default sort**: `relevance` with `q`, otherwise `distance` with `lat`/`lng`/`radius` (or `address`, even with `q`), otherwise `date_creation`.
 - `etat_administratif`: Filter by administrative status (A=active, F=closed)
 - `code_postal`: Filter by postal code
 - `siren`: Filter by SIREN (establishments only)
@@ -300,7 +301,7 @@ cargo run help
 - **Geographic search**: Radius filtering and distance-based sorting using PostGIS
 - **Field filtering**: Filter by administrative status, activity codes, dates, etc.
 - **Flexible sorting**: By relevance, distance, or dates
-- **Pagination**: Efficient offset/limit pagination — exact total for filter-only queries, capped at 10,000 for text searches (`q`) to avoid full-table counts
+- **Pagination**: Efficient offset/limit pagination — `total` capped at 1,000 to avoid large counts, exact `has_next_page` from fetching one extra row
 
 ### Technical Features
 - **PostgreSQL extensions**: PostGIS for spatial data, pg_trgm + unaccent for full-text search
@@ -419,8 +420,8 @@ OpenAPI ; tout autre champ donne un 400 plutôt qu'un silence.
 {
   "facettes": {
     "activite_principale": [
-      { "valeur": "10.71C", "nombre": 7314 },
-      { "valeur": "10.71A", "nombre": 380 }
+      { "valeur": "10.71C", "nombre": 912 },
+      { "valeur": "10.71A", "nombre": 88 }
     ]
   }
 }
@@ -428,9 +429,15 @@ OpenAPI ; tout autre champ donne un 400 plutôt qu'un silence.
 
 ### Comptage
 
-`total` est plafonné à 10 000 : au-delà, le compte exact coûterait un parcours
-complet. `total_capped` vaut `true` quand ce plafond est atteint, pour que le
-client distingue « exactement 10 000 » de « au moins 10 000 ».
+`total` est plafonné à 1 000 : compter coûte une lecture de ligne par résultat,
+et autour d'un point en ville le comptage à 10 000 prenait 2 s au p95 quand la
+page en prenait 80 ms. `total_capped` vaut `true` quand ce plafond est atteint,
+pour que le client distingue « exactement 1 000 » de « au moins 1 000 ». Les
+facettes sont calculées sur le même sous-ensemble de 1 000 lignes au plus.
+
+`has_next_page` dit s'il existe une page suivante, de façon exacte : la requête
+lit `limit + 1` lignes et n'en rend que `limit`. Il reste juste au-delà du
+plafond de `total` ; c'est lui, pas `total`, qui doit piloter la pagination.
 
 ### Pagination
 
@@ -444,7 +451,7 @@ GET /v3/etablissements?sort=siret&limit=1000
 GET /v3/etablissements?sort=siret&limit=1000&cursor=MDA1NTgwMTIxMDAxMDA
 ```
 
-`next_cursor` est absent sur la dernière page. Le curseur n'encode que la
+`next_cursor` est absent sur la dernière page, y compris quand elle est pleine. Le curseur n'encode que la
 dernière clé primaire rendue : il n'est valide que rejoué avec les mêmes
 filtres. Un curseur illisible donne un 400, jamais un retour silencieux à la
 première page.
