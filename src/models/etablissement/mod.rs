@@ -53,6 +53,28 @@ pub async fn get_siege_with_siren(
         .map_err(|error| error.into())
 }
 
+/// Re-derives `etablissement_siege` from `unite_legale.nic_siege`.
+///
+/// Insee moves a head office by changing `nicSiegeUniteLegale`, and leaves the
+/// `dateDernierTraitementEtablissement` of the new head office untouched. The
+/// daily establishment sync, keyed on that date, never brings the flag: without
+/// this, the legal unit is left with no head office until the next stock.
+pub async fn realign_sieges(
+    connection: &mut diesel_async::AsyncPgConnection,
+    sirens: &[&str],
+) -> QueryResult<usize> {
+    sql_query(
+        "UPDATE etablissement e \
+         SET etablissement_siege = (e.nic = u.nic_siege) \
+         FROM unite_legale u \
+         WHERE u.siren = ANY($1) AND e.siren = u.siren AND u.nic_siege IS NOT NULL \
+           AND e.etablissement_siege <> (e.nic = u.nic_siege)",
+    )
+    .bind::<diesel::sql_types::Array<diesel::sql_types::Text>, _>(sirens)
+    .execute(connection)
+    .await
+}
+
 /// Resolved parameters of one search execution.
 struct SearchPlan<'a> {
     text: search::TextMatch<'a>,
