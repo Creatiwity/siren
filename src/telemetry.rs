@@ -50,3 +50,18 @@ pub fn exit(code: i32) -> ! {
 }
 
 const FLUSH_TIMEOUT: Duration = Duration::from_secs(2);
+
+/// `spawn_blocking` keeping the caller's span and Sentry hub: without them,
+/// the spans opened in the closure (geocoder-core's `geocoder.search`,
+/// `geocoder.open`) start transactions of their own instead of nesting in
+/// the request's or the job's.
+#[cfg(feature = "geocoding")]
+pub fn spawn_blocking<F, R>(f: F) -> tokio::task::JoinHandle<R>
+where
+    F: FnOnce() -> R + Send + 'static,
+    R: Send + 'static,
+{
+    let span = tracing::Span::current();
+    let hub = sentry::Hub::current();
+    tokio::task::spawn_blocking(move || sentry::Hub::run(hub, || span.in_scope(f)))
+}

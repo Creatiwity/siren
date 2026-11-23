@@ -507,9 +507,8 @@ mod tests {
         }
     }
 
-    const COMMUNE_MIGRATION: &str = include_str!(
-        "../../migrations/2026-10-11-120000_search_fts_commune_composite/up.sql"
-    );
+    const COMMUNE_MIGRATION: &str =
+        include_str!("../../migrations/2026-10-11-120000_search_fts_commune_composite/up.sql");
 
     /// Text search restricted to a commune relies on the composite index. A
     /// divergence would bring back the commune-sized bitmap, with no error.

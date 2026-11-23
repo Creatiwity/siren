@@ -358,7 +358,7 @@ async fn download_checked(
 
     // Format, profile and FST checksums, before it replaces anything.
     let path = target.to_path_buf();
-    let documents = tokio::task::spawn_blocking(move || {
+    let documents = crate::telemetry::spawn_blocking(move || {
         geocoder_core::Geocoder::open(&path).map(|g| g.meta().documents as usize)
     })
     .await??;
