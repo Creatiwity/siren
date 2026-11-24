@@ -1338,9 +1338,9 @@ dependencies = [
 
 [[package]]
 name = "geocoder-core"
-version = "0.3.0"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c6040ae8ada846d3fbd19d8f3e909b54f31ee9bf2798426daf451419dcecebae"
+checksum = "452fcd32e8feebf66126650a2d49843d895ac75116e6a12c49c5e570a7a368d3"
 dependencies = [
  "byteorder",
  "csv",
