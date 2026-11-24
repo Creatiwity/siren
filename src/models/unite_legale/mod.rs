@@ -477,7 +477,9 @@ impl UpdatableModel for UniteLegaleModel {
 
         let mut connection = connectors.local.pool.get().await?;
 
-        let updated_count = diesel::insert_into(dsl::unite_legale)
+        let sirens: Vec<&str> = unites_legales.iter().map(|u| u.siren.as_str()).collect();
+
+        let upsert = diesel::insert_into(dsl::unite_legale)
             .values(&unites_legales)
             .on_conflict(dsl::siren)
             .do_update()
@@ -516,8 +518,17 @@ impl UpdatableModel for UniteLegaleModel {
                 dsl::economie_sociale_solidaire.eq(excluded(dsl::economie_sociale_solidaire)),
                 dsl::societe_mission.eq(excluded(dsl::societe_mission)),
                 dsl::caractere_employeur.eq(excluded(dsl::caractere_employeur)),
-            ))
-            .execute(&mut connection)
+            ));
+
+        // Same transaction: a sync killed in between would resume past these
+        // legal units and leave their head office stale.
+        let updated_count = connection
+            .transaction(async |conn| {
+                let updated_count = upsert.execute(conn).await?;
+                super::etablissement::realign_sieges(conn, &sirens).await?;
+
+                diesel::QueryResult::Ok(updated_count)
+            })
             .await?;
 
         Ok((next_cursor, updated_count))
