@@ -46,6 +46,26 @@ pub struct Adresse {
     pub context: Option<String>,
     pub lat: f64,
     pub lng: f64,
+    /// The CEDEX line of the query, as written (upper case, no accents). The
+    /// other fields are the geographic address it was found at; this line is
+    /// what mail needs. Present only when the query had one, known or not.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cedex: Option<Cedex>,
+    /// The address to write on mail: the street part, then the CEDEX line
+    /// ("1 Avenue du Général de Gaulle 92074 PARIS LA DEFENSE CEDEX"). Only
+    /// with `cedex`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub postal_label: Option<String>,
+}
+
+/// A CEDEX line: "92074 PARIS LA DEFENSE CEDEX".
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
+pub struct Cedex {
+    /// "92074"; absent when the query gave none ("Libourne Cedex").
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub code: Option<String>,
+    /// "PARIS LA DEFENSE CEDEX", with its number if any ("PARIS CEDEX 12").
+    pub label: String,
 }
 
 fn first_str(doc: &Value, key: &str) -> Option<String> {
@@ -86,6 +106,11 @@ impl From<&SearchResult> for Adresse {
             context: first_str(doc, "context"),
             lat: r.lat,
             lng: r.lon,
+            cedex: r.postal.as_ref().map(|p| Cedex {
+                code: p.code.clone(),
+                label: p.label.clone(),
+            }),
+            postal_label: r.postal_label.clone(),
         }
     }
 }
@@ -194,7 +219,34 @@ mod tests {
             lon: 2.35,
             distance_km: None,
             doc,
+            postal: None,
+            postal_label: None,
         }
+    }
+
+    #[test]
+    fn the_cedex_line_is_given_back() {
+        let mut r = result(0.97, street(), Some("1"));
+        r.postal = Some(geocoder_core::profile::PostalLine {
+            code: Some("75192".into()),
+            label: "PARIS CEDEX 04".into(),
+        });
+        r.postal_label = Some("1 Rue de Rivoli 75192 PARIS CEDEX 04".into());
+        let a = Adresse::from(&r);
+        assert_eq!(a.postcode.as_deref(), Some("75004"));
+        assert_eq!(
+            a.cedex,
+            Some(Cedex {
+                code: Some("75192".into()),
+                label: "PARIS CEDEX 04".into()
+            })
+        );
+        let json = serde_json::to_value(&a).unwrap();
+        assert_eq!(json["cedex"]["code"], "75192");
+        assert_eq!(json["postal_label"], "1 Rue de Rivoli 75192 PARIS CEDEX 04");
+        // Without one, neither field appears.
+        let json = serde_json::to_value(Adresse::from(&result(0.97, street(), None))).unwrap();
+        assert!(json.get("cedex").is_none() && json.get("postal_label").is_none());
     }
 
     fn street() -> Value {
