@@ -97,6 +97,9 @@ pub async fn run(addr: SocketAddr, context: Context, shutdown_delay: Duration) {
         .layer(cors_layer())
         .merge(Scalar::with_url("/scalar", api))
         .layer(tower_http::compression::CompressionLayer::new())
+        // Inside the Sentry transaction, the route matched; the Sentry layer
+        // skips this span.
+        .layer(middleware::from_fn(trace::otel_request_middleware))
         .layer(tower_http::trace::TraceLayer::new_for_http().on_failure(on_failure))
         .layer(SentryHttpLayer::new().enable_transaction())
         .layer(middleware::from_fn(trace::siren_context_middleware))

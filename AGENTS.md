@@ -113,7 +113,7 @@ See `.env.sample`. Key variables:
 - `INSEE_CREDENTIALS`: API key for daily sync (from portail-api.insee.fr)
 - `API_KEY`: Required for `/admin` endpoints
 - `SENTRY_DSN`: Optional error tracking
-- `OTEL_EXPORTER_OTLP_ENDPOINT` (plus the standard `OTEL_*`): exports spans and logs over OTLP/HTTP, each log with its trace; `OTEL_LOGS_EXPORTER=none` for spans only (`src/telemetry.rs`)
+- `OTEL_EXPORTER_OTLP_ENDPOINT` (plus the standard `OTEL_*`): exports spans and logs over OTLP/HTTP, each log with its trace; `OTEL_LOGS_EXPORTER=none` for spans only (`src/telemetry.rs`). Each request is an `http.server` span joining the caller's `traceparent` (`otel_request_middleware`, skipped by the Sentry layer). Sampling is separate: `SENTRY_TRACES_SAMPLE_RATE` (none yet, siren samples 1.0) for Sentry, `OTEL_TRACES_SAMPLER=parentbased_traceidratio` + `OTEL_TRACES_SAMPLER_ARG` for OTLP (all by default); logs are not sampled
 - `LOG_FORMAT`: stdout logs, `text` (default), `json` or `none`; `RUST_LOG` filters every output
 
 ## Testing

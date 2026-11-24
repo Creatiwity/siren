@@ -88,3 +88,6 @@ incremental = false
 lto = "thin"        # ThinLTO pour réduire la taille binaire sans sacrifier les perfs
 codegen-units = 1   # Meilleure optimisation (mais compilation plus lente)
 
+
+[dev-dependencies]
+tower = { version = "0.5", features = ["util"] }

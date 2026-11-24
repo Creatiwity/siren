@@ -54,6 +54,11 @@ struct Otlp {
 /// otherwise.
 static OTLP: OnceLock<Otlp> = OnceLock::new();
 
+/// Name of the request span made for OpenTelemetry only
+/// (`otel_request_middleware`): the Sentry layer skips it, `SentryHttpLayer`
+/// makes the request's transaction.
+pub const OTEL_REQUEST_SPAN: &str = "http.server";
+
 /// Sets the global subscriber: stdout, Sentry, and OTLP when an endpoint is
 /// configured. Needs a Tokio runtime (batch export).
 pub fn init() {
@@ -72,7 +77,15 @@ pub fn init() {
     tracing_subscriber::registry()
         .with(EnvFilter::from_default_env())
         .with(stdout)
-        .with(sentry::integrations::tracing::layer())
+        // The OpenTelemetry request span is left out: SentryHttpLayer
+        // already makes the request's transaction.
+        .with(sentry::integrations::tracing::layer().span_filter(|meta| {
+            meta.name() != OTEL_REQUEST_SPAN
+                && matches!(
+                    *meta.level(),
+                    tracing::Level::ERROR | tracing::Level::WARN | tracing::Level::INFO
+                )
+        }))
         .with(traces)
         .with(logs)
         .init();
