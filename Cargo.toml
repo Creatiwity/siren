@@ -63,19 +63,21 @@ tower-http = { version = "0.7", features = [
   "compression-full",
 ] }
 opentelemetry = { version = "0.32", features = ["trace"] }
-opentelemetry_sdk = { version = "0.32", features = ["rt-tokio"] }
+opentelemetry_sdk = { version = "0.32", features = ["rt-tokio", "logs"] }
+opentelemetry-appender-tracing = "0.32"
 # `reqwest-blocking-client` is the HTTP client itself: `reqwest-rustls` only
 # brings TLS, and without a client the exporter cannot be built. Blocking,
 # since the batch processor exports from its own thread, outside Tokio.
 opentelemetry-otlp = { version = "0.32", default-features = false, features = [
   "trace",
+  "logs",
   "http-proto",
   "reqwest-blocking-client",
   "reqwest-rustls",
 ] }
 tracing = "0.1"
 tracing-opentelemetry = "0.33"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 utoipa = { version = "5.5", features = ["axum_extras", "chrono"] }
 utoipa-axum = "0.2"
 utoipa-scalar = { version = "0.3", features = ["axum"] }
