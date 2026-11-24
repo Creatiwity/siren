@@ -113,6 +113,8 @@ See `.env.sample`. Key variables:
 - `INSEE_CREDENTIALS`: API key for daily sync (from portail-api.insee.fr)
 - `API_KEY`: Required for `/admin` endpoints
 - `SENTRY_DSN`: Optional error tracking
+- `OTEL_EXPORTER_OTLP_ENDPOINT` (plus the standard `OTEL_*`): exports spans and logs over OTLP/HTTP, each log with its trace; `OTEL_LOGS_EXPORTER=none` for spans only (`src/telemetry.rs`)
+- `LOG_FORMAT`: stdout logs, `text` (default), `json` or `none`; `RUST_LOG` filters every output
 
 ## Testing
 
