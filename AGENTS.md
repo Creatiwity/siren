@@ -47,6 +47,7 @@ cargo run -- update etablissements
 Address geocoding with the `geocoder-core` crate (crates.io, feature `signed`), which reproduces the BAN API ranking. Everything is behind `#[cfg(feature = "geocoding")]`; `cargo clippy --all-features` covers it, plain `cargo check` covers the build without it.
 - `sync`: `update geocoding` (and after `update all` unless `GEOCODING_WITH_UPDATE_ALL=false`) downloads the prebuilt index published by the geocoder-core CI (`GEOCODING_INDEX_BASE_URL`, `<base>/v<format>/fr.json` then the file it names) next to `GEOCODING_INDEX_PATH`. Never builds (~5 GB of memory). The manifest must be Ed25519 signed by a trusted key (`TRUSTED_KEYS`, `GEOCODING_INDEX_PUBLIC_KEYS`), match the geocoder-core version compiled in (format, `fr` profile version: keep the dependency in step with the CI that publishes) and not be older than the local index; the file must match its size and SHA-256 and open before the atomic rename. `<index>.source.json` keeps its hash to skip unchanged indexes.
 - `handle`: `GeocoderHandle`, held by the serve `Context`, reloads the index when the file's modification time changes (`GEOCODING_RELOAD_INTERVAL_SECONDS`).
+- CEDEX: geocoder-core (0.4+) searches a CEDEX address ("92074 Paris La Défense Cedex") at the municipality the code serves (a table built into the published `fr` index), and gives the line back as typed: `Adresse.cedex` (`code`, `label`) and `postal_label` (the address to write on mail), even for an unknown code. The other fields stay geographic.
 - `address`: `Adresse` (API shape), the `geocoding_mode` selection (`threshold_or_best`, `threshold`, `best`) and `filter_for` (housenumber 100 m, street/locality 1 km, municipality → `code_commune`, with Paris/Lyon/Marseille arrondissements).
 Routes: `/v3/adresses/autocomplete`, `/v3/adresses/search`, and the `address` parameter of `/v3/etablissements` (response field `adresse`). 503 while no index is loaded, 501 without `GEOCODING_INDEX_PATH`. Helm: `geocoding.*` (PVC shared by the API and the jobs, suspended `-geocoding` CronJob for the first download). The default is ReadWriteOnce with `persistence.sameNode`: a required pod affinity puts the API pods and the jobs on one node, since block storage (OVH csi-cinder) cannot be attached to several; use a ReadWriteMany class and `sameNode: false` to spread API replicas.
 
@@ -113,6 +114,8 @@ See `.env.sample`. Key variables:
 - `INSEE_CREDENTIALS`: API key for daily sync (from portail-api.insee.fr)
 - `API_KEY`: Required for `/admin` endpoints
 - `SENTRY_DSN`: Optional error tracking
+- `OTEL_EXPORTER_OTLP_ENDPOINT` (plus the standard `OTEL_*`): exports spans and logs over OTLP/HTTP, each log with its trace; `OTEL_LOGS_EXPORTER=none` for spans only (`src/telemetry.rs`). Each request is an `http.server` span joining the caller's `traceparent` (`otel_request_middleware`, skipped by the Sentry layer). Sampling is separate: Sentry keeps every trace (`traces_sample_rate(1.0)` in `main.rs`), OTLP follows `OTEL_TRACES_SAMPLER=parentbased_traceidratio` + `OTEL_TRACES_SAMPLER_ARG` (all by default); logs are not sampled
+- `LOG_FORMAT`: stdout logs, `text` (default), `json` or `none`; `RUST_LOG` filters every output
 
 ## Testing
 

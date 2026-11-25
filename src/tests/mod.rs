@@ -8,6 +8,7 @@
 
 mod position;
 mod search;
+mod siege;
 mod staging;
 
 use diesel_async::AsyncPgConnection;

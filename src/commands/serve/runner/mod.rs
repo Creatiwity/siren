@@ -21,7 +21,8 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
-use tracing::info;
+use tower_http::classify::ServerErrorsFailureClass;
+use tracing::{error, info, warn};
 use utoipa::OpenApi;
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_scalar::{Scalar, Servable};
@@ -40,6 +41,19 @@ use utoipa_scalar::{Scalar, Servable};
     )
 )]
 struct ApiDoc;
+
+/// A 503 is expected (geocoding index not loaded yet): a warning. Other
+/// server errors stay errors. Logged under this crate's target, so that
+/// `RUST_LOG=sirene=info` keeps them.
+fn on_failure(class: ServerErrorsFailureClass, latency: Duration, _span: &tracing::Span) {
+    let latency = latency.as_millis();
+    match class {
+        ServerErrorsFailureClass::StatusCode(axum::http::StatusCode::SERVICE_UNAVAILABLE) => {
+            warn!(latency_ms = latency, "response unavailable (503)")
+        }
+        class => error!(latency_ms = latency, "response failed: {class}"),
+    }
+}
 
 pub async fn run(addr: SocketAddr, context: Context, shutdown_delay: Duration) {
     let shutting_down = context.shutting_down.clone();
@@ -83,7 +97,10 @@ pub async fn run(addr: SocketAddr, context: Context, shutdown_delay: Duration) {
         .layer(cors_layer())
         .merge(Scalar::with_url("/scalar", api))
         .layer(tower_http::compression::CompressionLayer::new())
-        .layer(tower_http::trace::TraceLayer::new_for_http())
+        // Inside the Sentry transaction, the route matched; the Sentry layer
+        // skips this span.
+        .layer(middleware::from_fn(trace::otel_request_middleware))
+        .layer(tower_http::trace::TraceLayer::new_for_http().on_failure(on_failure))
         .layer(SentryHttpLayer::new().enable_transaction())
         .layer(middleware::from_fn(trace::siren_context_middleware))
         .layer(NewSentryLayer::new_from_top())

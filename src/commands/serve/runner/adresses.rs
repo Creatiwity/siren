@@ -19,7 +19,8 @@ const DEFAULT_LIMIT: usize = 5;
 const MAX_LIMIT: usize = 20;
 
 /// Geocode off the async runtime: the index is memory mapped, a query may
-/// fault pages in.
+/// fault pages in. geocoder-core's `geocoder.search` span nests in the
+/// request's transaction.
 pub async fn geocode(
     context: &Context,
     query: String,
@@ -31,7 +32,7 @@ pub async fn geocode(
             None => Error::GeocodingDisabled,
         });
     };
-    tokio::task::spawn_blocking(move || geocoder.search(&query, opts))
+    crate::telemetry::spawn_blocking(move || geocoder.search(&query, opts))
         .await
         .map_err(|_| Error::GeocodingUnavailable)
 }

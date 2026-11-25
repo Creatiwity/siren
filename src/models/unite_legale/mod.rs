@@ -253,14 +253,17 @@ async fn execute(
          u.activite_principale, u.categorie_juridique, u.categorie_entreprise, \
          {score} AS score \
          FROM unite_legale u {where_clause} ORDER BY {order_by} LIMIT {} OFFSET {}",
-        plan.limit, plan.offset
+        // One row more than the page: its presence is `has_next_page`.
+        plan.limit + 1,
+        plan.offset
     );
 
-    let results = binder
+    let mut results = binder
         .apply(sql_query(sql).into_boxed())
         .load::<UniteLegaleSearchResult>(connection)
         .await
         .map_err(|error| -> Error { error.into() })?;
+    let has_next_page = search::split_page(&mut results, plan.limit);
 
     let (total, total_capped) =
         search::capped_total(connection, &binder, "unite_legale", "u", &where_clause).await;
@@ -274,10 +277,9 @@ async fn execute(
     )
     .await;
 
-    // A full page suggests more to come. Only primary-key order is total and
-    // stable enough to resume from.
+    // Only primary-key order is total and stable enough to resume from.
     let next_cursor = match plan.sort {
-        UniteLegaleSortField::Siren if results.len() as i64 == plan.limit => results
+        UniteLegaleSortField::Siren if has_next_page => results
             .last()
             .map(|last| search::encode_cursor(&last.siren)),
         _ => None,
@@ -287,6 +289,7 @@ async fn execute(
         results,
         total,
         total_capped,
+        has_next_page,
         limit: plan.limit,
         offset: plan.offset,
         sort: plan.sort,
@@ -474,7 +477,9 @@ impl UpdatableModel for UniteLegaleModel {
 
         let mut connection = connectors.local.pool.get().await?;
 
-        let updated_count = diesel::insert_into(dsl::unite_legale)
+        let sirens: Vec<&str> = unites_legales.iter().map(|u| u.siren.as_str()).collect();
+
+        let upsert = diesel::insert_into(dsl::unite_legale)
             .values(&unites_legales)
             .on_conflict(dsl::siren)
             .do_update()
@@ -513,8 +518,17 @@ impl UpdatableModel for UniteLegaleModel {
                 dsl::economie_sociale_solidaire.eq(excluded(dsl::economie_sociale_solidaire)),
                 dsl::societe_mission.eq(excluded(dsl::societe_mission)),
                 dsl::caractere_employeur.eq(excluded(dsl::caractere_employeur)),
-            ))
-            .execute(&mut connection)
+            ));
+
+        // Same transaction: a sync killed in between would resume past these
+        // legal units and leave their head office stale.
+        let updated_count = connection
+            .transaction(async |conn| {
+                let updated_count = upsert.execute(conn).await?;
+                super::etablissement::realign_sieges(conn, &sirens).await?;
+
+                diesel::QueryResult::Ok(updated_count)
+            })
             .await?;
 
         Ok((next_cursor, updated_count))
